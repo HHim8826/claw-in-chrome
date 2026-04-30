@@ -248,6 +248,7 @@
     }
     cachedConfig = normalizeConfig(await readStoredProviderConfig());
     hasLoadedConfig = true;
+    globalThis.__customProviderEnabled__ = !!(cachedConfig?.apiKey && cachedConfig?.baseUrl);
     return cachedConfig;
   }
   async function getConfig() {

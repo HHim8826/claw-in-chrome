@@ -1902,7 +1902,7 @@ const rr = a.memo(({
       })
     }), l.jsxs("div", {
       className: Y("transition-colors rounded-lg", Xs, {
-        "bg-bg-000": n
+        "": n
       }),
       children: [t && l.jsxs("div", {
         className: "flex flex-row items-center py-1",
@@ -52219,8 +52219,8 @@ const FR = ({
   }(e.windows, t);
   const v = y?.resets_at || (e.type !== "within_limit" ? e.resetsAt : undefined);
   const x = v ? vR.fromSeconds(v) : null;
-  const b = e.type === "exceeded_limit" || e.type === "approaching_limit" && e.remaining === 0;
-  const w = !m && (b && !f.isActive || f.isBlocking);
+  const b = !globalThis.__customProviderEnabled__ && (e.type === "exceeded_limit" || e.type === "approaching_limit" && e.remaining === 0);
+  const w = !globalThis.__customProviderEnabled__ && !m && (b && !f.isActive || f.isBlocking);
   const k = !o && d !== "max_20x";
   const C = () => (c || u) && (c && !u || d === "max_5x") ? p.UPGRADE_MAX : p.UPGRADE_GENERIC;
   const _ = () => (c || u) && c && !u ? "Subscribe to Max" : "Upgrade";
@@ -52248,7 +52248,7 @@ const FR = ({
   a.useEffect(() => {
     n?.(!m && w);
   }, [m, w, n]);
-  if (m) {
+  if (m || globalThis.__customProviderEnabled__) {
     return null;
   }
   if (!w && r) {
