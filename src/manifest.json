@@ -68,7 +68,7 @@
     "unlimitedStorage",
     "downloads"
   ],
-  "version": "1.0.67.0",
+  "version": "1.0.67.1",
   "web_accessible_resources": [
     {
       "matches": ["https://*.claude.ai/*", "https://claude.ai/*"],
