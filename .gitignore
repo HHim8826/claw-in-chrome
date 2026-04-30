@@ -23,4 +23,5 @@ custom-build-badge.css
 /不同版本
 知识.md
 AGENTS.md
-tmp.log
+tmp.log.worktrees/
+
