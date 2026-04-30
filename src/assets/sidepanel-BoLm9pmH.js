@@ -81415,7 +81415,7 @@ function YY({
                     children: [l.jsx("button", {
                       className: "px-4 py-2.5 rounded-[14px] bg-text-100 hover:bg-text-200 active:bg-text-000 text-bg-100 font-button transition-all hover:shadow-md",
                       onClick: () => chrome.tabs.create({
-                        url: chrome.runtime.getURL("options.HTML#options?provider=true")
+                        url: chrome.runtime.getURL("options/options.html#options?provider=true")
                       }),
                       children: __cpGetLocalizedProviderPromptActionText(ye?.locale)
                     }), l.jsx("button", {
@@ -85958,7 +85958,7 @@ function UX({
       currentWindow: true
     });
     const s = n?.id || t;
-    const r = chrome.runtime.getURL(`options.HTML#permissions?requestMicrophone=true&returnTabId=${s}`);
+    const r = chrome.runtime.getURL(`options/options.html#permissions?requestMicrophone=true&returnTabId=${s}`);
     chrome.tabs.create({
       url: r
     });
@@ -86760,7 +86760,7 @@ if (!GX) {
         }
         o(s, e);
         t = {
-          workerScript: "gif.worker.js",
+          workerScript: "visualizer/gif.worker.js",
           workers: 2,
           repeat: 0,
           background: "#fff",
@@ -98246,7 +98246,7 @@ function o1() {
           children: [l.jsx("button", {
             className: "px-4 py-2.5 rounded-[14px] bg-text-100 hover:bg-text-200 active:bg-text-000 text-bg-100 font-button transition-all hover:shadow-md",
             onClick: () => chrome.tabs.create({
-              url: chrome.runtime.getURL("options.HTML#options?provider=true")
+              url: chrome.runtime.getURL("options/options.html#options?provider=true")
             }),
             children: __cpGetLocalizedProviderPromptActionText(n?.locale)
           }), l.jsx("button", {
