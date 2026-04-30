@@ -525,7 +525,7 @@ async function generateGif(frames, options = {}) {
       quality: options.quality || 10,
       width,
       height,
-      workerScript: chrome.runtime.getURL("gif.worker.js"),
+      workerScript: chrome.runtime.getURL("visualizer/gif.worker.js"),
       repeat: 0,
       debug: true,
     });

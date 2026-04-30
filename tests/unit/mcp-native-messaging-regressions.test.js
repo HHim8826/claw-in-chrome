@@ -4,18 +4,15 @@ const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
 const mcpPermissionsBundlePath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "mcpPermissions-qqAoJjJ8.js",
 );
 const permissionManagerBundlePath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "PermissionManager-9s959502.js",
 );
 const sidepanelBundlePath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "sidepanel-BoLm9pmH.js",
 );
 

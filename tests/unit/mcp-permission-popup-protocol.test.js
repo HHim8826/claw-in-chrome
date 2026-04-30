@@ -4,8 +4,8 @@ const path = require("node:path");
 const { runScriptInSandbox } = require("../helpers/chrome-test-utils");
 
 const rootDir = path.join(__dirname, "..", "..");
-const contractPath = path.join(rootDir, "claw-contract.js");
-const protocolPath = path.join(rootDir, "mcp-permission-popup-protocol.js");
+const contractPath = path.join(rootDir, "src", "shared", "claw-contract.js");
+const protocolPath = path.join(rootDir, "src", "shared", "mcp-permission-popup-protocol.js");
 
 function createSandbox(overrides = {}) {
   const sandbox = {
@@ -95,7 +95,7 @@ async function testProtocolBuildsResponseAndPopupWindowPayloads() {
   });
   assert.equal(
     popupUrl,
-    "chrome-extension://test-extension-id/sidepanel.html?tabId=12&mcpPermissionOnly=true&requestId=req-1"
+    "chrome-extension://test-extension-id/sidepanel/sidepanel.html?tabId=12&mcpPermissionOnly=true&requestId=req-1"
   );
 
   const requestOnlyPopupUrl = protocol.buildPopupUrl(createRuntimeUrl, {
@@ -103,7 +103,7 @@ async function testProtocolBuildsResponseAndPopupWindowPayloads() {
   });
   assert.equal(
     requestOnlyPopupUrl,
-    "chrome-extension://test-extension-id/sidepanel.html?mcpPermissionOnly=true&requestId=req-only"
+    "chrome-extension://test-extension-id/sidepanel/sidepanel.html?mcpPermissionOnly=true&requestId=req-only"
   );
 
   const popupWindowOptions = protocol.createPopupWindowOptions(createRuntimeUrl, {

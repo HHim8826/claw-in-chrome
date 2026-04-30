@@ -2,7 +2,7 @@
   if (globalThis.__CP_GITHUB_UPDATE_SHARED__) {
     return;
   }
-  const REPO_OWNER = "S-Trespassing";
+  const REPO_OWNER = "HHim8826";
   const REPO_NAME = "claw-in-chrome";
   const RELEASES_BASE_URL = `https://github.com/${REPO_OWNER}/${REPO_NAME}/releases`;
   const LATEST_JSON_URL = `${RELEASES_BASE_URL}/latest/download/latest.json`;

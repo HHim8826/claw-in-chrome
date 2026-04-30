@@ -8,12 +8,12 @@ const packageListPath = path.join(__dirname, "..", "..", ".github", "release-pac
 const packageJsonPath = path.join(__dirname, "..", "..", "package.json");
 const buildReleaseImportScriptPath = path.join(__dirname, "..", "..", "scripts", "build-release-import.ps1");
 const checkScriptPath = path.join(__dirname, "..", "..", "scripts", "check-release-package.js");
-const optionsHtmlPath = path.join(__dirname, "..", "..", "options.html");
-const sidepanelHtmlPath = path.join(__dirname, "..", "..", "sidepanel.html");
-const pairingHtmlPath = path.join(__dirname, "..", "..", "pairing.html");
-const offscreenHtmlPath = path.join(__dirname, "..", "..", "offscreen.html");
-const gifViewerHtmlPath = path.join(__dirname, "..", "..", "gif_viewer.html");
-const serviceWorkerLoaderPath = path.join(__dirname, "..", "..", "service-worker-loader.js");
+const optionsHtmlPath = path.join(__dirname, "..", "..", "src", "options", "options.html");
+const sidepanelHtmlPath = path.join(__dirname, "..", "..", "src", "sidepanel", "sidepanel.html");
+const pairingHtmlPath = path.join(__dirname, "..", "..", "src", "pages", "pairing.html");
+const offscreenHtmlPath = path.join(__dirname, "..", "..", "src", "offscreen", "offscreen.html");
+const gifViewerHtmlPath = path.join(__dirname, "..", "..", "src", "visualizer", "gif_viewer.html");
+const serviceWorkerLoaderPath = path.join(__dirname, "..", "..", "src", "background", "service-worker-loader.js");
 const workflowSource = fs.readFileSync(workflowPath, "utf8");
 const packageListSource = fs.readFileSync(packageListPath, "utf8");
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
@@ -62,16 +62,22 @@ function getLocalHtmlScriptDependencies(htmlSource) {
   return dependencies;
 }
 
-function getLocalImportedModules(source) {
+function getLocalImportedModules(source, sourceFilePath) {
   const dependencies = new Set();
-  const pattern = /import\s+["']\.\/([^"']+)["'];/g;
+  const pattern = /import\s+["']((?:\.\/|\.\.\/)[^"']+)["'];/g;
+  const srcRoot = path.join(__dirname, "..", "..", "src");
+  const sourceDir = path.dirname(sourceFilePath);
   let match = null;
   while ((match = pattern.exec(source))) {
-    const target = String(match[1] || "").trim();
-    if (!target || target.startsWith("assets/")) {
+    const raw = String(match[1] || "").trim();
+    if (!raw) {
       continue;
     }
-    dependencies.add(target);
+    const resolved = path.relative(srcRoot, path.resolve(sourceDir, raw)).replace(/\\/g, "/");
+    if (resolved.startsWith("assets/")) {
+      continue;
+    }
+    dependencies.add(resolved);
   }
   return dependencies;
 }
@@ -84,10 +90,10 @@ function testPackageListIncludesRuntimeDependencies() {
     ...getLocalShellDependencies(pairingHtml),
     ...getLocalHtmlScriptDependencies(offscreenHtml),
     ...getLocalHtmlScriptDependencies(gifViewerHtml),
-    ...getLocalImportedModules(serviceWorkerLoaderSource),
-    "github-update-worker-runtime.js",
-    "service-worker-runtime.js",
-    "options-update-enhancer.js"
+    ...getLocalImportedModules(serviceWorkerLoaderSource, serviceWorkerLoaderPath),
+    "background/github-update-worker-runtime.js",
+    "background/service-worker-runtime.js",
+    "options/options-update-enhancer.js"
   ]);
 
   for (const dependency of requiredDependencies) {

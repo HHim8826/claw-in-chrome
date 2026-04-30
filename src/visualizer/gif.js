@@ -386,7 +386,7 @@
             var frameDefaults;
             extend(GIF, superClass);
             defaults = {
-              workerScript: "gif.worker.js",
+              workerScript: "visualizer/gif.worker.js",
               workers: 2,
               repeat: 0,
               background: "#fff",

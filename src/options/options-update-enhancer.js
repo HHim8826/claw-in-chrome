@@ -55,11 +55,17 @@
       zhPageHints: [
         "Claw in Chrome 设置",
         "Claude in Chrome 设置",
+        "Claw in Chrome 設置",
+        "Claude in Chrome 設置",
         "权限",
+        "權限",
         "快捷方式",
         "选项",
+        "選項",
         "扩展更新",
+        "擴展更新",
         "自动检查更新",
+        "自動檢查更新",
       ],
       enPagePatterns: [
         /\bPermissions\b/i,
@@ -670,7 +676,7 @@
   }
 
   function findUpdatePanel() {
-    const strings = getStrings();
+    const knownTitles = ["Extension updates", "扩展更新", "擴展更新"];
     return (
       Array.from(document.querySelectorAll("section")).find(function (section) {
         const heading = section.querySelector("h3");
@@ -678,10 +684,12 @@
           return false;
         }
         const title = String(heading.textContent || "").trim();
-        return (
-          title === strings.title &&
-          String(section.textContent || "").includes(strings.autoCheckLabel)
-        );
+        const autoCheckFound =
+          String(section.textContent || "").includes("Auto-check updates") ||
+          String(section.textContent || "").includes("自动检查更新") ||
+          String(section.textContent || "").includes("自動檢查更新");
+
+        return knownTitles.includes(title) && autoCheckFound;
       }) || null
     );
   }

@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const permissionManagerPath = path.join(__dirname, "..", "..", "assets", "PermissionManager-9s959502.js");
-const optionsChunkPath = path.join(__dirname, "..", "..", "assets", "useStorageState-hbwNMVUA.js");
+const permissionManagerPath = path.join(__dirname, "..", "..", "src", "assets", "PermissionManager-9s959502.js");
+const optionsChunkPath = path.join(__dirname, "..", "..", "src", "assets", "useStorageState-hbwNMVUA.js");
 const permissionManagerSource = fs.readFileSync(permissionManagerPath, "utf8");
 const optionsChunkSource = fs.readFileSync(optionsChunkPath, "utf8");
 

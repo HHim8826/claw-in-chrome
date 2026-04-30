@@ -4,8 +4,7 @@ const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
 const mcpPermissionsBundlePath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "mcpPermissions-qqAoJjJ8.js",
 );
 

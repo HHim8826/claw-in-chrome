@@ -7,8 +7,8 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const sharedPath = path.join(__dirname, "..", "..", "github-update-shared.js");
-const runtimePath = path.join(__dirname, "..", "..", "github-update-worker-runtime.js");
+const sharedPath = path.join(__dirname, "..", "..", "src", "shared", "github-update-shared.js");
+const runtimePath = path.join(__dirname, "..", "..", "src", "background", "github-update-worker-runtime.js");
 
 function createGithubRuntimeHarness(options = {}) {
   const chromeMock = createChromeMock({

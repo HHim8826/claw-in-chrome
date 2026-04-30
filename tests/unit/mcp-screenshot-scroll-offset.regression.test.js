@@ -6,6 +6,7 @@ const bundlePath = path.join(
   __dirname,
   "..",
   "..",
+  "src",
   "assets",
   "mcpPermissions-qqAoJjJ8.js",
 );

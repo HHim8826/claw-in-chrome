@@ -8,18 +8,18 @@ const {
 } = require("../helpers/chrome-test-utils");
 
 const rootDir = path.join(__dirname, "..", "..");
-const contractPath = path.join(rootDir, "claw-contract.js");
-const mcpPermissionPopupProtocolPath = path.join(rootDir, "mcp-permission-popup-protocol.js");
-const modelsPath = path.join(rootDir, "custom-provider-models.js");
-const githubUpdateSharedPath = path.join(rootDir, "github-update-shared.js");
-const detachedWindowRuntimePath = path.join(rootDir, "service-worker-detached-window-runtime.js");
-const runtimePath = path.join(rootDir, "service-worker-runtime.js");
-const loaderPath = path.join(rootDir, "service-worker-loader.js");
-const manifestPath = path.join(rootDir, "manifest.json");
-const sidepanelHtmlPath = path.join(rootDir, "sidepanel.html");
-const optionsHtmlPath = path.join(rootDir, "options.html");
-const pairingHtmlPath = path.join(rootDir, "pairing.html");
-const offscreenHtmlPath = path.join(rootDir, "offscreen.html");
+const contractPath = path.join(rootDir, "src", "shared", "claw-contract.js");
+const mcpPermissionPopupProtocolPath = path.join(rootDir, "src", "shared", "mcp-permission-popup-protocol.js");
+const modelsPath = path.join(rootDir, "src", "shared", "custom-provider-models.js");
+const githubUpdateSharedPath = path.join(rootDir, "src", "shared", "github-update-shared.js");
+const detachedWindowRuntimePath = path.join(rootDir, "src", "background", "service-worker-detached-window-runtime.js");
+const runtimePath = path.join(rootDir, "src", "background", "service-worker-runtime.js");
+const loaderPath = path.join(rootDir, "src", "background", "service-worker-loader.js");
+const manifestPath = path.join(rootDir, "src", "manifest.json");
+const sidepanelHtmlPath = path.join(rootDir, "src", "sidepanel", "sidepanel.html");
+const optionsHtmlPath = path.join(rootDir, "src", "options", "options.html");
+const pairingHtmlPath = path.join(rootDir, "src", "pages", "pairing.html");
+const offscreenHtmlPath = path.join(rootDir, "src", "offscreen", "offscreen.html");
 const releaseWorkflowPath = path.join(rootDir, ".github", "workflows", "release-extension.yml");
 const releasePackageListPath = path.join(
   rootDir,
@@ -302,10 +302,10 @@ async function testShellEntryPointsLoadContractBeforeRecoveredModules() {
   const offscreenContractIndex = indexOfOrFail(offscreenHtml, "claw-contract.js", "offscreen.html");
   assert.ok(offscreenContractIndex < indexOfOrFail(offscreenHtml, "offscreen.js", "offscreen.html"));
 
-  const loaderContractIndex = indexOfOrFail(loaderSource, 'import "./claw-contract.js";', "service-worker-loader.js");
-  const loaderBindingIndex = indexOfOrFail(loaderSource, 'import "./native-host-binding.js";', "service-worker-loader.js");
-  const loaderProtocolIndex = indexOfOrFail(loaderSource, 'import "./mcp-permission-popup-protocol.js";', "service-worker-loader.js");
-  const loaderBundleIndex = indexOfOrFail(loaderSource, 'import "./assets/service-worker.ts-H0DVM1LS.js";', "service-worker-loader.js");
+  const loaderContractIndex = indexOfOrFail(loaderSource, 'import "../shared/claw-contract.js";', "service-worker-loader.js");
+  const loaderBindingIndex = indexOfOrFail(loaderSource, 'import "../shared/native-host-binding.js";', "service-worker-loader.js");
+  const loaderProtocolIndex = indexOfOrFail(loaderSource, 'import "../shared/mcp-permission-popup-protocol.js";', "service-worker-loader.js");
+  const loaderBundleIndex = indexOfOrFail(loaderSource, 'import "../assets/service-worker.ts-H0DVM1LS.js";', "service-worker-loader.js");
   const loaderDetachedRuntimeIndex = indexOfOrFail(loaderSource, 'import "./service-worker-detached-window-runtime.js";', "service-worker-loader.js");
 
   assert.ok(loaderContractIndex < loaderBindingIndex);
@@ -319,8 +319,8 @@ async function testReleaseAndManifestKeepFrozenShellInterfaces() {
   const workflow = fs.readFileSync(releaseWorkflowPath, "utf8");
   const releasePackageList = fs.readFileSync(releasePackageListPath, "utf8");
 
-  assert.equal(manifest.background?.service_worker, "service-worker-loader.js");
-  assert.equal(manifest.options_page, "options.html");
+  assert.equal(manifest.background?.service_worker, "background/service-worker-loader.js");
+  assert.equal(manifest.options_page, "options/options.html");
   assert.match(workflow, /\brelease-package-items\.txt\b/);
   assert.match(releasePackageList, /\bclaw-contract\.js\b/);
   assert.match(releasePackageList, /\bnative-host-binding\.js\b/);

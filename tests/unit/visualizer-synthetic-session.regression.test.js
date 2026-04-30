@@ -2,8 +2,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const bundlePath = path.join(__dirname, "..", "..", "assets", "sidepanel-BoLm9pmH.js");
-const visualizerCorePath = path.join(__dirname, "..", "..", "visualizer-core.js");
+const bundlePath = path.join(__dirname, "..", "..", "src", "assets", "sidepanel-BoLm9pmH.js");
+const visualizerCorePath = path.join(__dirname, "..", "..", "src", "visualizer", "visualizer-core.js");
 const source = fs.readFileSync(bundlePath, "utf8");
 const visualizerCoreSource = fs.readFileSync(visualizerCorePath, "utf8");
 

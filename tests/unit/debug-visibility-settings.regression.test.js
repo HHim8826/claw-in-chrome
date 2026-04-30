@@ -3,17 +3,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const contractPath = path.join(rootDir, "claw-contract.js");
-const settingsPath = path.join(rootDir, "custom-provider-settings.js");
+const contractPath = path.join(rootDir, "src", "shared", "claw-contract.js");
+const settingsPath = path.join(rootDir, "src", "shared", "custom-provider-settings.js");
 const permissionManagerPath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "PermissionManager-9s959502.js",
 );
-const sidepanelPath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
-const sidepanelLoggerPath = path.join(rootDir, "sidepanel-debug-logger.js");
-const zhCustomI18nPath = path.join(rootDir, "i18n", "custom", "zh-CN.js");
-const zhTwCustomI18nPath = path.join(rootDir, "i18n", "custom", "zh-TW.js");
+const sidepanelPath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const sidepanelLoggerPath = path.join(rootDir, "src", "sidepanel", "sidepanel-debug-logger.js");
+const zhCustomI18nPath = path.join(rootDir, "src", "i18n", "custom", "zh-CN.js");
+const zhTwCustomI18nPath = path.join(rootDir, "src", "i18n", "custom", "zh-TW.js");
 
 function main() {
   const contractSource = fs.readFileSync(contractPath, "utf8");

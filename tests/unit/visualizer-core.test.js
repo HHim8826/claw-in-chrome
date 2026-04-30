@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const core = require(path.join(__dirname, "..", "..", "visualizer-core.js"));
+const core = require(path.join(__dirname, "..", "..", "src", "visualizer", "visualizer-core.js"));
 
 function createToolRunSnapshot(overrides = {}) {
   return {

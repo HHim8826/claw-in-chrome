@@ -3,10 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const intlRuntimePath = path.join(rootDir, "assets", "index-5uYI7rOK.js");
-const optionsBundlePath = path.join(rootDir, "assets", "options-Hyb_OzME.js");
-const optionsEnhancerPath = path.join(rootDir, "options-update-enhancer.js");
-const optionsUpdatePreviewPath = path.join(rootDir, "options-update-preview.local.js");
+const intlRuntimePath = path.join(rootDir, "src", "assets", "index-5uYI7rOK.js");
+const optionsBundlePath = path.join(rootDir, "src", "assets", "options-Hyb_OzME.js");
+const optionsEnhancerPath = path.join(rootDir, "src", "options", "options-update-enhancer.js");
+const optionsUpdatePreviewPath = path.join(rootDir, "src", "options", "options-update-preview.local.js");
 
 function main() {
   const intlRuntimeSource = fs.readFileSync(intlRuntimePath, "utf8");

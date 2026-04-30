@@ -4,8 +4,7 @@ const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
 const sidepanelBundlePath = path.join(
-  rootDir,
-  "assets",
+  rootDir, "src", "assets",
   "sidepanel-BoLm9pmH.js",
 );
 

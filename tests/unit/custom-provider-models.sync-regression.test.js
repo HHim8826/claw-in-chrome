@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const modelsPath = path.join(__dirname, "..", "..", "custom-provider-models.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const modelsPath = path.join(__dirname, "..", "..", "src", "shared", "custom-provider-models.js");
 const contractSource = fs.readFileSync(contractPath, "utf8");
 const modelsSource = fs.readFileSync(modelsPath, "utf8");
 

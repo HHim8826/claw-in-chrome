@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const bundlePath = path.join(__dirname, "..", "..", "assets", "mcpPermissions-qqAoJjJ8.js");
+const bundlePath = path.join(__dirname, "..", "..", "src", "assets", "mcpPermissions-qqAoJjJ8.js");
 const bundleSource = fs.readFileSync(bundlePath, "utf8");
 
 function extractFunction(source, name) {

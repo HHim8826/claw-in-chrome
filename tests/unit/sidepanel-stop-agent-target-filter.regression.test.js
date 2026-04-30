@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const sidepanelBundlePath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
-const serviceWorkerBundlePath = path.join(rootDir, "assets", "service-worker.ts-H0DVM1LS.js");
+const sidepanelBundlePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const serviceWorkerBundlePath = path.join(rootDir, "src", "assets", "service-worker.ts-H0DVM1LS.js");
 
 function readSource(filePath) {
   return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");

@@ -86760,7 +86760,7 @@ if (!GX) {
         }
         o(s, e);
         t = {
-          workerScript: "gif.worker.js",
+          workerScript: "visualizer/gif.worker.js",
           workers: 2,
           repeat: 0,
           background: "#fff",

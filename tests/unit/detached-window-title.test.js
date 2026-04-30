@@ -7,7 +7,7 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const scriptPath = path.join(__dirname, "..", "..", "detached-window-title.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "shared", "detached-window-title.js");
 
 function createTitleHarness(options = {}) {
   const windowListeners = new Map();

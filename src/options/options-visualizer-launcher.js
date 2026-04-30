@@ -89,7 +89,21 @@
       return i18nShared.getUiLocaleTag({
         document,
         navigatorLanguage: navigator.language,
-        zhPageHints: ["Claw in Chrome 设置", "扩展更新", "选项"],
+        zhPageHints: [
+          "Claw in Chrome 设置",
+          "Claude in Chrome 设置",
+          "Claw in Chrome 設置",
+          "Claude in Chrome 設置",
+          "权限",
+          "權限",
+          "快捷方式",
+          "选项",
+          "選項",
+          "扩展更新",
+          "擴展更新",
+          "自动检查更新",
+          "自動檢查更新",
+        ],
         enPagePatterns: [/\bExtension updates\b/i, /\bOptions\b/i],
       });
     }
@@ -173,13 +187,13 @@
   }
 
   function findUpdatePanel() {
-    const strings = getStrings();
+    const knownTitles = ["Extension updates", "扩展更新", "擴展更新"];
     return (
       Array.from(document.querySelectorAll("section")).find(function (section) {
         const heading = section.querySelector("h3");
         return (
           heading &&
-          String(heading.textContent || "").trim() === strings.updatesTitle
+          knownTitles.includes(String(heading.textContent || "").trim())
         );
       }) || null
     );

@@ -7,8 +7,8 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const runtimePath = path.join(__dirname, "..", "..", "service-worker-runtime.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const runtimePath = path.join(__dirname, "..", "..", "src", "background", "service-worker-runtime.js");
 
 function createServiceWorkerHarness(options = {}) {
   const chromeMock = createChromeMock({

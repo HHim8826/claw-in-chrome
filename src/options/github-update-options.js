@@ -89,11 +89,17 @@
       zhPageHints: [
         "Claw in Chrome 设置",
         "Claude in Chrome 设置",
+        "Claw in Chrome 設置",
+        "Claude in Chrome 設置",
         "权限",
+        "權限",
         "快捷方式",
         "选项",
+        "選項",
         "扩展更新",
+        "擴展更新",
         "自动检查更新",
+        "自動檢查更新",
       ],
       enPagePatterns: [
         /\bPermissions\b/i,

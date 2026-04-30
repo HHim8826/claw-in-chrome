@@ -7,7 +7,7 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const scriptPath = path.join(__dirname, "..", "..", "offscreen.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "offscreen", "offscreen.js");
 
 function invokeMessageHandler(listener, message) {
   return new Promise((resolve, reject) => {

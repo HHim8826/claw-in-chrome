@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const adapterPath = path.join(__dirname, "..", "..", "provider-format-adapter.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const adapterPath = path.join(__dirname, "..", "..", "src", "shared", "provider-format-adapter.js");
 const contractSource = fs.readFileSync(contractPath, "utf8");
 const adapterSource = fs.readFileSync(adapterPath, "utf8");
 

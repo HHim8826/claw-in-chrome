@@ -3,10 +3,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const intlRuntimePath = path.join(rootDir, "assets", "index-5uYI7rOK.js");
-const sidepanelBundlePath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
-const zhMessagesPath = path.join(rootDir, "i18n", "zh-CN.json");
-const zhTwMessagesPath = path.join(rootDir, "i18n", "zh-TW.json");
+const intlRuntimePath = path.join(rootDir, "src", "assets", "index-5uYI7rOK.js");
+const sidepanelBundlePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const zhMessagesPath = path.join(rootDir, "src", "i18n", "zh-CN.json");
+const zhTwMessagesPath = path.join(rootDir, "src", "i18n", "zh-TW.json");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");

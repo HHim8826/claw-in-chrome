@@ -3,9 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const sharedPath = path.join(rootDir, "github-update-shared.js");
-const optionsPath = path.join(rootDir, "github-update-options.js");
-const sidepanelPath = path.join(rootDir, "github-update-sidepanel.js");
+const sharedPath = path.join(rootDir, "src", "shared", "github-update-shared.js");
+const optionsPath = path.join(rootDir, "src", "options", "github-update-options.js");
+const sidepanelPath = path.join(rootDir, "src", "sidepanel", "github-update-sidepanel.js");
 
 function main() {
   const sharedSource = fs.readFileSync(sharedPath, "utf8");

@@ -3,9 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const inlineProviderPath = path.join(rootDir, "sidepanel-inline-provider.js");
-const sidepanelBundlePath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
-const onboardingBundlePath = path.join(rootDir, "assets", "useStorageState-hbwNMVUA.js");
+const inlineProviderPath = path.join(rootDir, "src", "sidepanel", "sidepanel-inline-provider.js");
+const sidepanelBundlePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const onboardingBundlePath = path.join(rootDir, "src", "assets", "useStorageState-hbwNMVUA.js");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");
@@ -63,7 +63,7 @@ function testSidepanelPromptOpensProviderSettingsSubview() {
   );
   assertIncludesNormalized(
     source,
-    'url: chrome.runtime.getURL("options.html#options?provider=true")',
+    'url: chrome.runtime.getURL("options/options.html#options?provider=true")',
     "sidepanel prompt should open the provider settings subview URL",
   );
   assertIncludesNormalized(
@@ -131,7 +131,7 @@ function testOnboardingPromptUsesLocalizedProviderSettingsCopy() {
   );
   assertIncludesNormalized(
     source,
-    'url: chrome.runtime.getURL("options.html#options?provider=true")',
+    'url: chrome.runtime.getURL("options/options.html#options?provider=true")',
     "first-run onboarding should open the provider settings subview URL",
   );
 

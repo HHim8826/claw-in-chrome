@@ -346,7 +346,7 @@
       return;
     }
     try {
-      const baseUrl = chrome.runtime.getURL("options-update-preview.local.js");
+      const baseUrl = chrome.runtime.getURL("options/options-update-preview.local.js");
       const response = await fetch(baseUrl, {
         cache: "no-store",
       });

@@ -11,7 +11,7 @@ const {
   FakeElement
 } = require("../helpers/fake-dom");
 
-const scriptPath = path.join(__dirname, "..", "..", "sidepanel-debug-logger.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "sidepanel", "sidepanel-debug-logger.js");
 
 function createConsoleMock() {
   return {

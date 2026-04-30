@@ -14,10 +14,10 @@ const {
   findElementByText
 } = require("../helpers/fake-dom");
 
-const scriptPath = path.join(__dirname, "..", "..", "github-update-options.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "options", "github-update-options.js");
 const customZhPack = Function(
   `"use strict"; return (${fs.readFileSync(
-    path.join(__dirname, "..", "..", "i18n", "custom", "zh-CN.js"),
+    path.join(__dirname, "..", "..", "src", "i18n", "custom", "zh-CN.js"),
     "utf8",
   )});`,
 )();
