@@ -1,13 +1,13 @@
-import "./claw-contract.js";
+import "../shared/claw-contract.js";
 // 先补原生宿主显式绑定补丁，确保后续 bundle connectNative 时会主动上报 browser/profile 实例归属。
-import "./native-host-binding.js";
-import "./mcp-permission-popup-protocol.js";
-import "./custom-provider-models.js";
-import "./provider-format-adapter.js";
-import "./telemetry-disable.js";
+import "../shared/native-host-binding.js";
+import "../shared/mcp-permission-popup-protocol.js";
+import "../shared/custom-provider-models.js";
+import "../shared/provider-format-adapter.js";
+import "../shared/telemetry-disable.js";
 // 先加载发行版 bundle，保留原有 background 主桥。
-import "./assets/service-worker.ts-H0DVM1LS.js";
-import "./github-update-shared.js";
+import "../assets/service-worker.ts-H0DVM1LS.js";
+import "../shared/github-update-shared.js";
 import "./github-update-worker.js";
 // 再加载 detached window runtime，与 recovered runtime 组合出第二轮恢复层。
 import "./service-worker-detached-window-runtime.js";
