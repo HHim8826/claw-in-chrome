@@ -3,7 +3,7 @@
     "default_title": "Claw in Chrome"
   },
   "background": {
-    "service_worker": "service-worker-loader.js",
+    "service_worker": "background/service-worker-loader.js",
     "type": "module"
   },
   "commands": {
