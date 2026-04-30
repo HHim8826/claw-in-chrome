@@ -330,7 +330,7 @@
       params.set("locale", normalizedLocale);
     }
     const query = params.toString();
-    const pathname = globalThis.location?.pathname || "/visualizer.html";
+    const pathname = globalThis.location?.pathname || "/visualizer/visualizer.html";
     return pathname + (query ? "?" + query : "");
   }
 

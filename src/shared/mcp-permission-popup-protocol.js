@@ -56,7 +56,7 @@
   const WINDOW_CLOSE_DELAY_MS = 50;
   const RESPONSE_MESSAGE_TYPE =
     contractMessages.MCP_PERMISSION_RESPONSE || "MCP_PERMISSION_RESPONSE";
-  const PAGE_PATH = "sidepanel.html";
+  const PAGE_PATH = "sidepanel/sidepanel.html";
 
   function normalizePositiveInteger(value) {
     const normalized = Number(value);

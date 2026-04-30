@@ -9,7 +9,7 @@ const __cpPairingClientLabelDesktop = "Claude Desktop";
 // 语义锚点：pairing prompt 输入框提交按键
 const __cpPairingPromptSubmitKey = "Enter";
 // 语义锚点：PairingPrompt 组件只负责浏览器命名输入与回调，不直接决定 runtime message。
-// sidepanel 内联模式与独立 pairing.html 都会复用它，但真正发 pairing_confirmed / pairing_dismissed 的是调用方。
+// sidepanel 内联模式与独立 pages/pairing.html 都会复用它，但真正发 pairing_confirmed / pairing_dismissed 的是调用方。
 function r({
   requestId: r,
   clientType: a,

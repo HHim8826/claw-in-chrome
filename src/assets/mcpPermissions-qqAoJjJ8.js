@@ -1605,7 +1605,7 @@ class B {
     if (!r) {
       return;
     }
-    const a = t.includes("blocked.html") ? "category0" : await O.getCategory(t);
+    const a = t.includes("pages/blocked.html") ? "category0" : await O.getCategory(t);
     await this.updateGroupBlocklistStatus(r.chromeGroupId, e, a, false);
   }
   async removeTabFromBlocklistTracking(e, t) {
@@ -1689,7 +1689,7 @@ class B {
     let o = false;
     if (!t) {
       const t = await chrome.tabs.get(e);
-      const a = t.url?.includes("blocked.html")
+      const a = t.url?.includes("pages/blocked.html")
         ? "category0"
         : await O.getCategory(t.url || "");
       if (Ja(a)) {
@@ -1771,7 +1771,7 @@ class B {
     };
     for (const o of t) {
       if (o.id && o.url) {
-        if (o.url.includes("blocked.html")) {
+        if (o.url.includes("pages/blocked.html")) {
           r.categoriesByTab.set(o.id, "category0");
         } else {
           const e = await O.getCategory(o.url);
@@ -7174,7 +7174,7 @@ function Te() {
     if (chrome.offscreen) {
       if (!(await chrome.offscreen.hasDocument())) {
         await chrome.offscreen.createDocument({
-          url: "offscreen.html",
+          url: "offscreen/offscreen.html",
           reasons: [
             chrome.offscreen.Reason.AUDIO_PLAYBACK,
             chrome.offscreen.Reason.BLOBS,
@@ -14314,7 +14314,7 @@ async function Pa() {
                     }
                   } catch {}
                   const a = chrome.runtime.getURL(
-                    `pairing.html?${__cpMcpBridgePairingQueryKeyRequestId}=${encodeURIComponent(t)}&${__cpMcpBridgePairingQueryKeyClientType}=${encodeURIComponent(r)}&${__cpMcpBridgePairingQueryKeyCurrentName}=${encodeURIComponent(o || "")}`,
+                    `pages/pairing.html?${__cpMcpBridgePairingQueryKeyRequestId}=${encodeURIComponent(t)}&${__cpMcpBridgePairingQueryKeyClientType}=${encodeURIComponent(r)}&${__cpMcpBridgePairingQueryKeyCurrentName}=${encodeURIComponent(o || "")}`,
                   );
                   chrome.tabs.create({
                     url: a,
@@ -14568,7 +14568,7 @@ const __cpMcpPermissionPopupCreateUrl =
   __cpMcpPermissionPopupProtocol.buildPopupUrl ||
   ((e, t) =>
     e(
-      `sidepanel.html?${__cpMcpPermissionPopupQueryKeyTabId}=${t.tabId}&${__cpMcpPermissionPopupQueryKeyPermissionOnly}=true&${__cpMcpPermissionPopupQueryKeyRequestId}=${t.requestId}`,
+      `sidepanel/sidepanel.html?${__cpMcpPermissionPopupQueryKeyTabId}=${t.tabId}&${__cpMcpPermissionPopupQueryKeyPermissionOnly}=true&${__cpMcpPermissionPopupQueryKeyRequestId}=${t.requestId}`,
     ));
 const __cpMcpPermissionPopupCreateWindowOptions =
   __cpMcpPermissionPopupProtocol.createPopupWindowOptions ||
@@ -14674,7 +14674,7 @@ async function Wa(e) {
   await (async function (e) {
     const { sessionId: t, skipPermissions: r, model: o } = e;
     const a = chrome.runtime.getURL(
-      `sidepanel.html?${__cpShortcutsExecuteQueryKeyMode}=${__cpShortcutsExecuteQueryValueWindow}&${__cpShortcutsExecuteQueryKeySessionId}=${t}${r ? `&${__cpShortcutsExecuteQueryKeySkipPermissions}=true` : ""}${o ? `&${__cpShortcutsExecuteQueryKeyModel}=${encodeURIComponent(o)}` : ""}`,
+      `sidepanel/sidepanel.html?${__cpShortcutsExecuteQueryKeyMode}=${__cpShortcutsExecuteQueryValueWindow}&${__cpShortcutsExecuteQueryKeySessionId}=${t}${r ? `&${__cpShortcutsExecuteQueryKeySkipPermissions}=true` : ""}${o ? `&${__cpShortcutsExecuteQueryKeyModel}=${encodeURIComponent(o)}` : ""}`,
     );
     const n = await chrome.windows.create({
       url: a,
@@ -15943,7 +15943,7 @@ async function en(e, t) {
   return r ?? null;
 }
 function tn(e) {
-  return chrome.runtime.getURL(`blocked.html?url=${encodeURIComponent(e)}`);
+  return chrome.runtime.getURL(`pages/blocked.html?url=${encodeURIComponent(e)}`);
 }
 // 语义锚点：DOMAIN_TRANSITION 专用 permission_required producer。
 // 它复用普通 permission_required sentinel 形状，但 toolUseId 在这里本地生成，requestId 继续留给 bridge permission 握手。

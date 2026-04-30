@@ -422,7 +422,7 @@ async function $(e, s) {
     if (a.pathname.toLowerCase() === __cpExtensionUrlPermissionsPath) {
       await (async function (e) {
         try {
-          const e = chrome.runtime.getURL("options.html#permissions");
+          const e = chrome.runtime.getURL("options/options.html#permissions");
           await chrome.tabs.create({
             url: e,
           });
@@ -682,7 +682,7 @@ async function W(e) {
   }
   chrome.sidePanel.setOptions({
     tabId: e,
-    path: `sidepanel.html?tabId=${encodeURIComponent(e)}`,
+    path: `sidepanel/sidepanel.html?tabId=${encodeURIComponent(e)}`,
     enabled: true,
   });
   chrome.sidePanel.open({
@@ -731,7 +731,7 @@ async function z(e, s) {
   await (async function (e) {
     const { sessionId: t, skipPermissions: s, model: a } = e;
     const n = chrome.runtime.getURL(
-      `sidepanel.html?mode=window&sessionId=${t}${s ? "&skipPermissions=true" : ""}${a ? `&model=${encodeURIComponent(a)}` : ""}`,
+      `sidepanel/sidepanel.html?mode=window&sessionId=${t}${s ? "&skipPermissions=true" : ""}${a ? `&model=${encodeURIComponent(a)}` : ""}`,
     );
     const o = await chrome.windows.create({
       url: n,
@@ -986,13 +986,13 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
               __cpPermissionManagerStorageKeyPendingScheduledTask,
               e.task,
             );
-            const t = chrome.runtime.getURL("options.html");
+            const t = chrome.runtime.getURL("options/options.html");
             const s = (await chrome.tabs.query({})).find((e) =>
               e.url?.startsWith(t),
             );
             if (s && s.id) {
               await chrome.tabs.update(s.id, {
-                url: chrome.runtime.getURL("options.html#prompts"),
+                url: chrome.runtime.getURL("options/options.html#prompts"),
                 active: true,
               });
               if (s.windowId) {
@@ -1002,7 +1002,7 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
               }
             } else {
               await chrome.tabs.create({
-                url: chrome.runtime.getURL("options.html#prompts"),
+                url: chrome.runtime.getURL("options/options.html#prompts"),
               });
             }
             a({

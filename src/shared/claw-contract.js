@@ -70,7 +70,7 @@
     detachedWindow: {
       LOCKS_STORAGE_KEY: "claw.detachedWindowLocks",
       OPEN_GROUP_MESSAGE_TYPE: "OPEN_GROUP_DETACHED_WINDOW",
-      PAGE_PATH: "sidepanel.html",
+      PAGE_PATH: "sidepanel/sidepanel.html",
       DEFAULT_SIZE: {
         width: 500,
         height: 768,
@@ -200,7 +200,7 @@
       MAIN_TAB_ACK_REQUEST: "MAIN_TAB_ACK_REQUEST",
       MAIN_TAB_ACK_RESPONSE: "MAIN_TAB_ACK_RESPONSE",
 
-      // pairing: pairing.html <-> service worker / bridge
+      // pairing: pages/pairing.html <-> service worker / bridge
       pairing_confirmed: "pairing_confirmed",
       pairing_dismissed: "pairing_dismissed",
       show_pairing_prompt: "show_pairing_prompt",

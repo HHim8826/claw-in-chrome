@@ -35,7 +35,7 @@
     const consoleApi = options.console || globalThis.console || createNoopConsole();
     const now = typeof options.now === "function" ? options.now : () => Date.now();
     const locksStorageKey = String(options.locksStorageKey || detachedWindowContract.LOCKS_STORAGE_KEY || "claw.detachedWindowLocks");
-    const pagePath = String(options.pagePath || detachedWindowContract.PAGE_PATH || "sidepanel.html");
+    const pagePath = String(options.pagePath || detachedWindowContract.PAGE_PATH || "sidepanel/sidepanel.html");
     const pageUrl = String(options.pageUrl || chromeApi.runtime.getURL(pagePath));
     const pageMeta = new URL(pageUrl);
     const detachedWindowSize = normalizeWindowSize(options.defaultSize || detachedWindowContract.DEFAULT_SIZE);

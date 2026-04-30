@@ -75316,7 +75316,7 @@ var $q = kW.create({
     HTMLAttributes: e
   }) {
     return zq("blockquote", {
-      ...iU(this.options.HTMLAttributes, e),
+      ...iU(this.options/options.htmlAttributes, e),
       children: zq("slot", {})
     });
   },
@@ -75372,7 +75372,7 @@ var Wq = HU.create({
     HTMLAttributes: e
   }) {
     return zq("strong", {
-      ...iU(this.options.HTMLAttributes, e),
+      ...iU(this.options/options.htmlAttributes, e),
       children: zq("slot", {})
     });
   },
@@ -75430,7 +75430,7 @@ var Kq = HU.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["code", iU(this.options.HTMLAttributes, e), 0];
+    return ["code", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -75508,7 +75508,7 @@ var Xq = kW.create({
     node: e,
     HTMLAttributes: t
   }) {
-    return ["pre", iU(this.options.HTMLAttributes, t), ["code", {
+    return ["pre", iU(this.options/options.htmlAttributes, t), ["code", {
       class: e.attrs.language ? this.options.languageClassPrefix + e.attrs.language : null
     }, 0]];
   },
@@ -75779,7 +75779,7 @@ var eG = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["br", iU(this.options.HTMLAttributes, e)];
+    return ["br", iU(this.options/options.htmlAttributes, e)];
   },
   renderText: () => "\n",
   addCommands() {
@@ -75853,7 +75853,7 @@ var tG = kW.create({
     node: e,
     HTMLAttributes: t
   }) {
-    return [`h${this.options.levels.includes(e.attrs.level) ? e.attrs.level : this.options.levels[0]}`, iU(this.options.HTMLAttributes, t), 0];
+    return [`h${this.options.levels.includes(e.attrs.level) ? e.attrs.level : this.options.levels[0]}`, iU(this.options/options.htmlAttributes, t), 0];
   },
   addCommands() {
     return {
@@ -75896,7 +75896,7 @@ var nG = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["hr", iU(this.options.HTMLAttributes, e)];
+    return ["hr", iU(this.options/options.htmlAttributes, e)];
   },
   addCommands() {
     return {
@@ -76040,7 +76040,7 @@ var aG = HU.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["em", iU(this.options.HTMLAttributes, e), 0];
+    return ["em", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -77093,13 +77093,13 @@ var iJ = HU.create({
         parseHTML: e => e.getAttribute("href")
       },
       target: {
-        default: this.options.HTMLAttributes.target
+        default: this.options/options.htmlAttributes.target
       },
       rel: {
-        default: this.options.HTMLAttributes.rel
+        default: this.options/options.htmlAttributes.rel
       },
       class: {
-        default: this.options.HTMLAttributes.class
+        default: this.options/options.htmlAttributes.class
       }
     };
   },
@@ -77124,9 +77124,9 @@ var iJ = HU.create({
       protocols: this.options.protocols,
       defaultProtocol: this.options.defaultProtocol
     })) {
-      return ["a", iU(this.options.HTMLAttributes, e), 0];
+      return ["a", iU(this.options/options.htmlAttributes, e), 0];
     } else {
-      return ["a", iU(this.options.HTMLAttributes, {
+      return ["a", iU(this.options/options.htmlAttributes, {
         ...e,
         href: ""
       }), 0];
@@ -77399,7 +77399,7 @@ var cJ = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["ul", iU(this.options.HTMLAttributes, e), 0];
+    return ["ul", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -77447,7 +77447,7 @@ var uJ = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["li", iU(this.options.HTMLAttributes, e), 0];
+    return ["li", iU(this.options/options.htmlAttributes, e), 0];
   },
   addKeyboardShortcuts() {
     return {
@@ -77762,9 +77762,9 @@ var _J = kW.create({
       ...n
     } = e;
     if (t === 1) {
-      return ["ol", iU(this.options.HTMLAttributes, n), 0];
+      return ["ol", iU(this.options/options.htmlAttributes, n), 0];
     } else {
-      return ["ol", iU(this.options.HTMLAttributes, e), 0];
+      return ["ol", iU(this.options/options.htmlAttributes, e), 0];
     }
   },
   addCommands() {
@@ -77846,7 +77846,7 @@ var SJ = kW.create({
     node: e,
     HTMLAttributes: t
   }) {
-    return ["li", iU(this.options.HTMLAttributes, t, {
+    return ["li", iU(this.options/options.htmlAttributes, t, {
       "data-type": this.name
     }), ["label", ["input", {
       type: "checkbox",
@@ -77920,7 +77920,7 @@ var SJ = kW.create({
           }
         }
       });
-      Object.entries(this.options.HTMLAttributes).forEach(([e, t]) => {
+      Object.entries(this.options/options.htmlAttributes).forEach(([e, t]) => {
         r.setAttribute(e, t);
       });
       r.dataset.checked = e.attrs.checked;
@@ -77966,7 +77966,7 @@ var jJ = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["ul", iU(this.options.HTMLAttributes, e, {
+    return ["ul", iU(this.options/options.htmlAttributes, e, {
       "data-type": this.name
     }), 0];
   },
@@ -78022,7 +78022,7 @@ var EJ = kW.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["p", iU(this.options.HTMLAttributes, e), 0];
+    return ["p", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -78058,7 +78058,7 @@ var AJ = HU.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["s", iU(this.options.HTMLAttributes, e), 0];
+    return ["s", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -78110,7 +78110,7 @@ var OJ = HU.create({
   renderHTML({
     HTMLAttributes: e
   }) {
-    return ["u", iU(this.options.HTMLAttributes, e), 0];
+    return ["u", iU(this.options/options.htmlAttributes, e), 0];
   },
   addCommands() {
     return {
@@ -81415,7 +81415,7 @@ function YY({
                     children: [l.jsx("button", {
                       className: "px-4 py-2.5 rounded-[14px] bg-text-100 hover:bg-text-200 active:bg-text-000 text-bg-100 font-button transition-all hover:shadow-md",
                       onClick: () => chrome.tabs.create({
-                        url: chrome.runtime.getURL("options.html#options?provider=true")
+                        url: chrome.runtime.getURL("options/options.html#options?provider=true")
                       }),
                       children: __cpGetLocalizedProviderPromptActionText(ye?.locale)
                     }), l.jsx("button", {
@@ -85958,7 +85958,7 @@ function UX({
       currentWindow: true
     });
     const s = n?.id || t;
-    const r = chrome.runtime.getURL(`options.html#permissions?requestMicrophone=true&returnTabId=${s}`);
+    const r = chrome.runtime.getURL(`options/options.html#permissions?requestMicrophone=true&returnTabId=${s}`);
     chrome.tabs.create({
       url: r
     });
@@ -95181,7 +95181,7 @@ function o1() {
       const t = e || __cpDefaultBlockedTabInfo;
       g(e => __cpAreBlockedTabInfosEqual(e, t) ? e : t);
     }, [g]);
-    const C = chrome.runtime.getURL("blocked.html");
+    const C = chrome.runtime.getURL("pages/blocked.html");
     const _ = p !== "category0" && p !== null;
     const M = p === "category1" || p === "category2" || p === "category_org_blocked";
     const S = p === "category3";
@@ -95536,7 +95536,7 @@ function o1() {
   const [Le, Oe] = a.useState(null);
   const __cpSidepanelInlinePairingPromptState = Le;
   a.useEffect(() => {
-    // 语义锚点：sidepanel 已打开时，优先在当前面板内消费 show_pairing_prompt，而不是退化为新开 pairing.html。
+    // 语义锚点：sidepanel 已打开时，优先在当前面板内消费 show_pairing_prompt，而不是退化为新开 pages/pairing.html。
     const e = (e, t, n) => {
       if (e.type === __cpSidepanelRuntimeMessageTypeShowPairingPrompt) {
         Oe({
@@ -98246,7 +98246,7 @@ function o1() {
           children: [l.jsx("button", {
             className: "px-4 py-2.5 rounded-[14px] bg-text-100 hover:bg-text-200 active:bg-text-000 text-bg-100 font-button transition-all hover:shadow-md",
             onClick: () => chrome.tabs.create({
-              url: chrome.runtime.getURL("options.html#options?provider=true")
+              url: chrome.runtime.getURL("options/options.html#options?provider=true")
             }),
             children: __cpGetLocalizedProviderPromptActionText(n?.locale)
           }), l.jsx("button", {
@@ -98322,7 +98322,7 @@ function o1() {
               Oe(null);
             },
             onDismiss: () => {
-              // 语义锚点：sidepanel 内联 pairing 的 dismiss 只关闭本地弹层；pairing_dismissed 仅由独立 pairing.html 发出。
+              // 语义锚点：sidepanel 内联 pairing 的 dismiss 只关闭本地弹层；pairing_dismissed 仅由独立 pages/pairing.html 发出。
               Oe(null);
             }
           })

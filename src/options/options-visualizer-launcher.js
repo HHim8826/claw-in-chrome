@@ -136,7 +136,7 @@
   }
 
   async function buildVisualizerTargetUrl() {
-    const baseUrl = chrome.runtime.getURL("visualizer.html");
+    const baseUrl = chrome.runtime.getURL("visualizer/visualizer.html");
     const separator = baseUrl.includes("?") ? "&" : "?";
     const localeTag = (await readPreferredLocaleTag()) || getLocaleTag();
     return (

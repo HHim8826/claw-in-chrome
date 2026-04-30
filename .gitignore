@@ -11,7 +11,6 @@ Thumbs.db
 /node_modules
 /.VSCodeCounter
 /docs
-任务规格计划书.md
 学习路线.md
 .tmp_*.js
 git-hash.txt
@@ -23,5 +22,6 @@ custom-build-badge.css
 /不同版本
 知识.md
 AGENTS.md
-tmp.log.worktrees/
+tmp.log
+.worktrees/
 
