@@ -422,7 +422,7 @@ async function $(e, s) {
     if (a.pathname.toLowerCase() === __cpExtensionUrlPermissionsPath) {
       await (async function (e) {
         try {
-          const e = chrome.runtime.getURL("options/options.html#permissions");
+          const e = chrome.runtime.getURL("options.HTML#permissions");
           await chrome.tabs.create({
             url: e,
           });
@@ -986,13 +986,13 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
               __cpPermissionManagerStorageKeyPendingScheduledTask,
               e.task,
             );
-            const t = chrome.runtime.getURL("options/options.html");
+            const t = chrome.runtime.getURL("options.HTML");
             const s = (await chrome.tabs.query({})).find((e) =>
               e.url?.startsWith(t),
             );
             if (s && s.id) {
               await chrome.tabs.update(s.id, {
-                url: chrome.runtime.getURL("options/options.html#prompts"),
+                url: chrome.runtime.getURL("options.HTML#prompts"),
                 active: true,
               });
               if (s.windowId) {
@@ -1002,7 +1002,7 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
               }
             } else {
               await chrome.tabs.create({
-                url: chrome.runtime.getURL("options/options.html#prompts"),
+                url: chrome.runtime.getURL("options.HTML#prompts"),
               });
             }
             a({

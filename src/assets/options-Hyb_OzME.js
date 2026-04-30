@@ -675,7 +675,7 @@ function cpGetOptionsNavStrings(e) {
   return cpOptionsNavStrings[cpGetOptionsLocaleKey(e)];
 }
 // ------------------------------
-// options/options.html hash 路由协议（页面内导航）
+// options.HTML hash 路由协议（页面内导航）
 //
 // 1) 一级 Tab：
 //   - #permissions | #prompts | #options | #internal

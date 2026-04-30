@@ -50385,7 +50385,7 @@ const wA = ({ reason: t }) => {
             onClick: () =>
               chrome.tabs.create({
                 url: chrome.runtime.getURL(
-                  "options/options.html#options?provider=true",
+                  "options.HTML#options?provider=true",
                 ),
               }),
             children: __cpGetLocalizedProviderOnboardingActionText(),
