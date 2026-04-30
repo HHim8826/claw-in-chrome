@@ -35169,7 +35169,7 @@ var Ew = "(?:\\[[^\\]]*\\]|[^\\[\\]]|\\](?=[^\\[]*\\]))*";
 var Tw = "\\s*<?((?:\\([^)]*\\)|[^\\s\\\\]|\\\\.)*?)>?(?:\\s+['\"]([\\s\\S]*?)['\"])?\\s*";
 var Nw = /mailto:/i;
 function Aw(e, t, n) {
-  var s = (e[2] || e[1]).replace(/\s+/g, " ").toLowerCase();
+  var s = (e[2] || e[1]).toLowerCase();
   if (t._defs && t._defs[s]) {
     var r = t._defs[s];
     n.target = r.target;
@@ -35399,7 +35399,7 @@ var Ow = {
     order: Lw++,
     match: sw(/^ *\[([^\]]+)\]: *<?([^\s>]*)>?(?: +["(]([^\n]+)[")])? *\n(?: *\n)*/),
     parse: function (e, t, n) {
-      var s = e[1].replace(/\s+/g, " ").toLowerCase();
+      var s = e[1].toLowerCase();
       var r = e[2];
       var i = e[3];
       if (n._refs && n._refs[s]) {
@@ -87643,7 +87643,7 @@ async function cQ(e, t, n = {}) {
     });
     return function (e) {
       const t = e => {
-        const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+        const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").trim();
         return t && t.toLowerCase() !== "title" ? __cpTrimSessionText(__cpStripSessionDisplayArtifacts(t), __CP_GROUP_TITLE_LIMIT) : "";
       };
       if (!e.content || e.content.length === 0) {
@@ -87691,7 +87691,7 @@ function __cpBuildTaskStyleGroupTitlePrompt(e, t = {}) {
   return `<task_request>\n${__cpEscapeXmlText(e)}\n</task_request>\n\n<context>\n<current_domain>${__cpEscapeXmlText(n.currentDomain)}</current_domain>\n<page_title>${__cpEscapeXmlText(n.tabTitle)}</page_title>\n<current_url>${__cpEscapeXmlText(n.currentUrl)}</current_url>${s}\n</context>\n\nThink like PageAgent naming an active browser task. Use the user's request as the main signal, then use page context only to make the title more specific. Put the final answer between <title> tags.`;
 }
 function __cpNormalizeGeneratedGroupTitle(e) {
-  const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+  const t = String(e || "").replace(/<\/?title>/gi, " ").replace(/<[^>]*>/g, " ").replace(/[\u0000-\u001f\u007f]/g, " ").trim();
   if (!t || t.toLowerCase() === "title") {
     return "";
   }
@@ -92130,7 +92130,7 @@ function __cpNormalizeSessionNumber(e, t = Date.now()) {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : t;
 }
 function __cpTrimSessionText(e, t = __CP_CHAT_SESSION_TEXT_LIMIT) {
-  const n = String(e || "").replace(/\s+/g, " ").trim();
+  const n = String(e || "").trim();
   if (!n) {
     return "";
   }
@@ -92154,7 +92154,7 @@ function __cpNormalizeSessionLabel(e, t = __CP_CHAT_SESSION_PREVIEW_LIMIT) {
   return __cpTrimSessionText(e, t);
 }
 function __cpNormalizeSessionSearchText(e) {
-  return String(e || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return String(e || "").trim().toLowerCase();
 }
 function __cpBuildScopeRestoreAnchor(e = {}) {
   const t = __cpNormalizeSessionScopeId(e.scopeId);
@@ -92190,7 +92190,7 @@ function __cpNormalizeScopeRestoreAnchor(e) {
   };
 }
 function __cpStripSessionDisplayArtifacts(e) {
-  return String(e || "").replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, " ").replace(/<system-reminder>[\s\S]*$/gi, " ").replace(/\s+/g, " ").trim();
+  return String(e || "").replace(/<system-reminder>[\s\S]*?<\/system-reminder>/gi, " ").replace(/<system-reminder>[\s\S]*$/gi, " ").trim();
 }
 function __cpExtractSessionDisplayText(e, t = __CP_CHAT_SESSION_TEXT_LIMIT) {
   return __cpTrimSessionText(__cpStripSessionDisplayArtifacts(__cpExtractSessionText(e)), t);
