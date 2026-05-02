@@ -8,10 +8,10 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const scriptPath = path.join(__dirname, "..", "..", "options-visualizer-launcher.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "options", "options-visualizer-launcher.js");
 const customZhPack = Function(
   `"use strict"; return (${fs.readFileSync(
-    path.join(__dirname, "..", "..", "i18n", "custom", "zh-CN.js"),
+    path.join(__dirname, "..", "..", "src", "i18n", "custom", "zh-CN.js"),
     "utf8",
   )});`,
 )();
@@ -375,7 +375,7 @@ async function testLauncherRendersPanelAndOpensVisualizerTab() {
   await flushMicrotasks();
 
   assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
-    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=en-US"
+    url: "chrome-extension://visualizer-test-extension/visualizer/visualizer.html?locale=en-US"
   }]);
   assert.deepEqual(harness.windowOpenCalls, []);
 }
@@ -395,7 +395,7 @@ async function testLauncherPassesChineseLocaleToVisualizer() {
   await flushMicrotasks();
 
   assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
-    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=zh-CN"
+    url: "chrome-extension://visualizer-test-extension/visualizer/visualizer.html?locale=zh-CN"
   }]);
 }
 
@@ -418,7 +418,7 @@ async function testLauncherUsesStoredPreferredLocaleForTargetUrl() {
   await flushMicrotasks();
 
   assert.deepEqual(JSON.parse(JSON.stringify(harness.tabCreateCalls)), [{
-    url: "chrome-extension://visualizer-test-extension/visualizer.html?locale=zh-CN"
+    url: "chrome-extension://visualizer-test-extension/visualizer/visualizer.html?locale=zh-CN"
   }]);
 }
 

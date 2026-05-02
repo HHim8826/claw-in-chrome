@@ -7,9 +7,9 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const sharedPath = path.join(__dirname, "..", "..", "github-update-shared.js");
+const sharedPath = path.join(__dirname, "..", "..", "src", "shared", "github-update-shared.js");
 const customZhPackSource = fs.readFileSync(
-  path.join(__dirname, "..", "..", "i18n", "custom", "zh-CN.js"),
+  path.join(__dirname, "..", "..", "src", "i18n", "custom", "zh-CN.js"),
   "utf8"
 );
 
@@ -179,7 +179,7 @@ function testNormalizeStoredInfoUsesAliasesAndDefaults() {
   assert.equal(normalized.releaseUrl, "https://example.com/release");
   assert.equal(
     normalized.downloadUrl,
-    "https://github.com/S-Trespassing/claw-in-chrome/releases/download/v1.9.0.0/claw-in-chrome-v1.9.0.0.zip"
+    "https://github.com/HHim8826/claw-in-chrome/releases/download/v1.9.0.0/claw-in-chrome-v1.9.0.0.zip"
   );
   assert.equal(normalized.notes, "Bug fixes");
   assert.equal(normalized.publishedAt, "2026-03-01T00:00:00.000Z");
@@ -193,7 +193,7 @@ function testNormalizeStoredInfoUsesAliasesAndDefaults() {
   assert.equal(fallbackInfo.latestVersion, "");
   assert.equal(
     fallbackInfo.releaseUrl,
-    "https://github.com/S-Trespassing/claw-in-chrome/releases/latest"
+    "https://github.com/HHim8826/claw-in-chrome/releases/latest"
   );
   assert.equal(fallbackInfo.downloadUrl, "");
 }
@@ -214,11 +214,11 @@ function testNormalizeLatestPayloadUsesFixedClockAndValidatesVersion() {
   assert.equal(normalized.hasUpdate, true);
   assert.equal(
     normalized.releaseUrl,
-    "https://github.com/S-Trespassing/claw-in-chrome/releases/tag/v2.0.0.0"
+    "https://github.com/HHim8826/claw-in-chrome/releases/tag/v2.0.0.0"
   );
   assert.equal(
     normalized.downloadUrl,
-    "https://github.com/S-Trespassing/claw-in-chrome/releases/download/v2.0.0.0/claw-in-chrome-v2.0.0.0.zip"
+    "https://github.com/HHim8826/claw-in-chrome/releases/download/v2.0.0.0/claw-in-chrome-v2.0.0.0.zip"
   );
   assert.equal(normalized.notes, "New major release");
   assert.equal(normalized.minSupportedVersion, "1.5.0.0");

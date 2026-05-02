@@ -19,12 +19,12 @@ function assertIncludesNormalized(source, snippet, label) {
 }
 
 function testManifestNoLongerRegistersManagedSchema() {
-  const manifest = JSON.parse(readRepoFile("manifest.json"));
+  const manifest = JSON.parse(readRepoFile("src", "manifest.json"));
   assert.equal(Object.prototype.hasOwnProperty.call(manifest, "storage"), false, "manifest should no longer register a managed storage schema");
 }
 
 function testManagedSchemaHasNoEnterprisePolicyEntries() {
-  const schema = JSON.parse(readRepoFile("managed_schema.json"));
+  const schema = JSON.parse(readRepoFile("src", "managed_schema.json"));
   assert.deepEqual(schema, {
     type: "object",
     properties: {}
@@ -32,15 +32,15 @@ function testManagedSchemaHasNoEnterprisePolicyEntries() {
 }
 
 function testRuntimeNoLongerReadsManagedEnterprisePolicies() {
-  const mcpPermissions = readRepoFile("assets", "mcpPermissions-qqAoJjJ8.js");
-  const sharedState = readRepoFile("assets", "useStorageState-hbwNMVUA.js");
+  const mcpPermissions = readRepoFile("src", "assets", "mcpPermissions-qqAoJjJ8.js");
+  const sharedState = readRepoFile("src", "assets", "useStorageState-hbwNMVUA.js");
 
   assert.equal(mcpPermissions.includes("chrome.storage.managed.get(P)"), false, "domain blocklist runtime should not read managed policy");
   assert.equal(sharedState.includes('chrome.storage.managed.get("forceLoginOrgUUID")'), false, "organization lock runtime should not read managed policy");
 }
 
 function testBlockingCategoriesAreNormalizedToAllowed() {
-  const mcpPermissions = readRepoFile("assets", "mcpPermissions-qqAoJjJ8.js");
+  const mcpPermissions = readRepoFile("src", "assets", "mcpPermissions-qqAoJjJ8.js");
 
   assertIncludesNormalized(
     mcpPermissions,
@@ -49,12 +49,12 @@ function testBlockingCategoriesAreNormalizedToAllowed() {
   );
   assertIncludesNormalized(
     mcpPermissions,
-    'const a = t.includes("blocked.html") ? "category0" : await O.getCategory(t);',
+    'const a = t.includes("pages/blocked.html") ? "category0" : await O.getCategory(t);',
     "string URLs pointing at blocked.html should normalize to category0",
   );
   assertIncludesNormalized(
     mcpPermissions,
-    'const a = t.url?.includes("blocked.html") ? "category0" : await O.getCategory(t.url || "");',
+    'const a = t.url?.includes("pages/blocked.html") ? "category0" : await O.getCategory(t.url || "");',
     "tab URLs pointing at blocked.html should normalize to category0",
   );
   assertIncludesNormalized(

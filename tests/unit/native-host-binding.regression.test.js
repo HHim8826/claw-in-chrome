@@ -4,8 +4,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const rootDir = path.join(__dirname, "..", "..");
-const loaderPath = path.join(rootDir, "service-worker-loader.js");
-const bindingPath = path.join(rootDir, "native-host-binding.js");
+const loaderPath = path.join(rootDir, "src", "background", "service-worker-loader.js");
+const bindingPath = path.join(rootDir, "src", "shared", "native-host-binding.js");
 
 function readSource(filePath) {
   return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");
@@ -122,13 +122,13 @@ async function main() {
 
   assertIncludes(
     loaderSource,
-    'import "./native-host-binding.js";',
+    'import "../shared/native-host-binding.js";',
     "service-worker loader",
   );
 
   assert.ok(
-    loaderSource.indexOf('import "./native-host-binding.js";') <
-      loaderSource.indexOf('import "./assets/service-worker.ts-H0DVM1LS.js";'),
+    loaderSource.indexOf('import "../shared/native-host-binding.js";') <
+      loaderSource.indexOf('import "../assets/service-worker.ts-H0DVM1LS.js";'),
     "native-host binding patch must load before the bundled service worker runtime",
   );
 

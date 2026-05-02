@@ -3,8 +3,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const storageChunkPath = path.join(rootDir, "assets", "useStorageState-hbwNMVUA.js");
-const sidepanelBundlePath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
+const storageChunkPath = path.join(rootDir, "src", "assets", "useStorageState-hbwNMVUA.js");
+const sidepanelBundlePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");

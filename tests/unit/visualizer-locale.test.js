@@ -13,18 +13,18 @@ const {
   FakeMutationObserver
 } = require("../helpers/fake-dom");
 
-const corePath = path.join(__dirname, "..", "..", "visualizer-core.js");
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const scriptPath = path.join(__dirname, "..", "..", "visualizer.js");
+const corePath = path.join(__dirname, "..", "..", "src", "visualizer", "visualizer-core.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const scriptPath = path.join(__dirname, "..", "..", "src", "visualizer", "visualizer.js");
 const customZhPack = Function(
   `"use strict"; return (${fs.readFileSync(
-    path.join(__dirname, "..", "..", "i18n", "custom", "zh-CN.js"),
+    path.join(__dirname, "..", "..", "src", "i18n", "custom", "zh-CN.js"),
     "utf8",
   )});`,
 )();
 const customZhTwPack = Function(
   `"use strict"; return (${fs.readFileSync(
-    path.join(__dirname, "..", "..", "i18n", "custom", "zh-TW.js"),
+    path.join(__dirname, "..", "..", "src", "i18n", "custom", "zh-TW.js"),
     "utf8",
   )});`,
 )();

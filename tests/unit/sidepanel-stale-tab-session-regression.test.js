@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const sourcePath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
+const sourcePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
 
 function readSource() {
   return fs.readFileSync(sourcePath, "utf8").replace(/\r\n/g, "\n");

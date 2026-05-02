@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 
-const bundlePath = path.join(__dirname, "..", "..", "assets", "sidepanel-BoLm9pmH.js");
+const bundlePath = path.join(__dirname, "..", "..", "src", "assets", "sidepanel-BoLm9pmH.js");
 
 function readSource() {
   return fs.readFileSync(bundlePath, "utf8").replace(/\r\n/g, "\n");

@@ -7,8 +7,8 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const syncPath = path.join(__dirname, "..", "..", "service-worker-shortcut-workflow-sync.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const syncPath = path.join(__dirname, "..", "..", "src", "background", "service-worker-shortcut-workflow-sync.js");
 
 function createFixedDate(isoString) {
   const RealDate = Date;

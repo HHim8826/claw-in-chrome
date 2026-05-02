@@ -6,8 +6,8 @@ const {
   runScriptInSandbox
 } = require("../helpers/chrome-test-utils");
 
-const contractPath = path.join(__dirname, "..", "..", "claw-contract.js");
-const runtimePath = path.join(__dirname, "..", "..", "service-worker-detached-window-runtime.js");
+const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
+const runtimePath = path.join(__dirname, "..", "..", "src", "background", "service-worker-detached-window-runtime.js");
 
 function createDetachedWindowHarness(options = {}) {
   const chromeMock = createChromeMock({
@@ -95,7 +95,7 @@ async function testOpenDetachedWindowCreatesPopupAndPersistsLock() {
   assert.equal(chromeMock.calls.windows.create.length, 1);
   assert.equal(
     chromeMock.calls.windows.create[0].url,
-    `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=777&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
+    `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=777&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
   );
   assert.equal(chromeMock.storageMock.state["claw.detachedWindowLocks"]["777"].windowId, 901);
   assert.equal(chromeMock.storageMock.state["claw.detachedWindowLocks"]["777"].mainTabId, 55);
@@ -121,7 +121,7 @@ async function testOpenDetachedWindowReusesExistingPopupAndRefreshesTargetTab() 
         tabs: [
           {
             id: 601,
-            url: `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=44&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
+            url: `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=44&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
           }
         ]
       }
@@ -141,7 +141,7 @@ async function testOpenDetachedWindowReusesExistingPopupAndRefreshesTargetTab() 
   assert.equal(chromeMock.calls.tabs.update[0].tabId, 601);
   assert.equal(
     String(chromeMock.calls.tabs.update[0].payload.url || ""),
-    `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
+    `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
   );
   assert.deepEqual(chromeMock.calls.windows.update, [
     {
@@ -184,7 +184,7 @@ async function testOpenDetachedWindowReusesRestoredPopupByRestoreUrlAcrossGroupC
         tabs: [
           {
             id: 601,
-            url: `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
+            url: `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
           }
         ]
       }
@@ -236,7 +236,7 @@ async function testOpenDetachedWindowCreatesNewPopupWhenSameUrlIsOccupiedByAnoth
         tabs: [
           {
             id: 601,
-            url: `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(occupiedSessionId)}`
+            url: `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(occupiedSessionId)}`
           }
         ]
       }
@@ -295,7 +295,7 @@ async function testSweepDetachedWindowLocksRemovesMissingPopupAndRefreshesHostWi
         tabs: [
           {
             id: 601,
-            url: `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
+            url: `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(sessionId)}`
           }
         ]
       }
@@ -333,7 +333,7 @@ async function testSweepDetachedWindowLocksDoesNotRekeyAcrossSameUrlOtherSession
         tabs: [
           {
             id: 601,
-            url: `chrome-extension://test-extension-id/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(occupiedSessionId)}`
+            url: `chrome-extension://test-extension-id/sidepanel/sidepanel.html?mode=window&tabId=55&groupId=12&restoreUrl=${encodeURIComponent(restoreUrl)}&sessionId=${encodeURIComponent(occupiedSessionId)}`
           }
         ]
       },

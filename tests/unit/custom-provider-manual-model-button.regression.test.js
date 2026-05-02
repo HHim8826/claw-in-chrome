@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const sourcePath = path.join(rootDir, "custom-provider-settings.js");
+const sourcePath = path.join(rootDir, "src", "shared", "custom-provider-settings.js");
 
 function main() {
   const source = fs.readFileSync(sourcePath, "utf8");

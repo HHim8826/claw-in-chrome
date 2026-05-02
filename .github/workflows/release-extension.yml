@@ -4,8 +4,9 @@ name: Release Extension
   push:
     branches:
       - main
+      - dev
     paths:
-      - manifest.json
+      - src/manifest.json
   workflow_dispatch:
     inputs:
       min_supported_version:
@@ -40,7 +41,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          VERSION="$(node -p "require('./manifest.json').version")"
+          VERSION="$(node -p "require('./src/manifest.json').version")"
           if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Manifest version must use four numeric segments, got: ${VERSION}" >&2
             exit 1
@@ -56,8 +57,8 @@ jobs:
           BEFORE_SHA="${{ github.event.before }}"
           PREVIOUS_VERSION=""
           if [[ -n "${BEFORE_SHA}" ]] && [[ "${BEFORE_SHA}" != "0000000000000000000000000000000000000000" ]]; then
-            if git cat-file -e "${BEFORE_SHA}:manifest.json" 2>/dev/null; then
-              PREVIOUS_VERSION="$(git show "${BEFORE_SHA}:manifest.json" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => { const parsed = JSON.parse(data); process.stdout.write(String(parsed.version || '')); });")"
+            if git cat-file -e "${BEFORE_SHA}:src/manifest.json" 2>/dev/null; then
+              PREVIOUS_VERSION="$(git show "${BEFORE_SHA}:src/manifest.json" | node -e "let data=''; process.stdin.on('data', chunk => data += chunk); process.stdin.on('end', () => { const parsed = JSON.parse(data); process.stdout.write(String(parsed.version || '')); });")"
             fi
           fi
 
@@ -139,8 +140,8 @@ jobs:
           const payload = {
             version,
             published_at: new Date().toISOString(),
-            release_url: `https://github.com/S-Trespassing/claw-in-chrome/releases/tag/v${version}`,
-            download_url: `https://github.com/S-Trespassing/claw-in-chrome/releases/download/v${version}/claw-in-chrome-v${version}.zip`,
+            release_url: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/tag/v${version}`,
+            download_url: `https://github.com/${process.env.GITHUB_REPOSITORY}/releases/download/v${version}/claw-in-chrome-v${version}.zip`,
             notes
           };
           if (minSupportedVersion) {
@@ -175,6 +176,7 @@ jobs:
           fi
 
           MISSING_ITEMS=()
+          cd src
           for item in "${PACKAGE_ITEMS[@]}"; do
             if [[ ! -e "${item}" ]]; then
               MISSING_ITEMS+=("${item}")

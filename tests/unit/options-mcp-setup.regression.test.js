@@ -3,9 +3,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const rootDir = path.join(__dirname, "..", "..");
-const settingsPath = path.join(rootDir, "custom-provider-settings.js");
-const optionsBundlePath = path.join(rootDir, "assets", "options-Hyb_OzME.js");
-const zhCustomI18nPath = path.join(rootDir, "i18n", "custom", "zh-CN.js");
+const settingsPath = path.join(rootDir, "src", "shared", "custom-provider-settings.js");
+const optionsBundlePath = path.join(rootDir, "src", "assets", "options-Hyb_OzME.js");
+const zhCustomI18nPath = path.join(rootDir, "src", "i18n", "custom", "zh-CN.js");
 
 function main() {
   const settingsSource = fs.readFileSync(settingsPath, "utf8");

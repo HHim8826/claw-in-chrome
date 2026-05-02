@@ -4,13 +4,13 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const rootDir = path.join(__dirname, "..", "..");
-const contractPath = path.join(rootDir, "claw-contract.js");
-const mcpPermissionsPath = path.join(rootDir, "assets", "mcpPermissions-qqAoJjJ8.js");
-const sidepanelPath = path.join(rootDir, "assets", "sidepanel-BoLm9pmH.js");
-const optionsPath = path.join(rootDir, "assets", "options-Hyb_OzME.js");
-const enUsPath = path.join(rootDir, "i18n", "en-US.json");
-const zhCnPath = path.join(rootDir, "i18n", "zh-CN.json");
-const zhTwPath = path.join(rootDir, "i18n", "zh-TW.json");
+const contractPath = path.join(rootDir, "src", "shared", "claw-contract.js");
+const mcpPermissionsPath = path.join(rootDir, "src", "assets", "mcpPermissions-qqAoJjJ8.js");
+const sidepanelPath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const optionsPath = path.join(rootDir, "src", "assets", "options-Hyb_OzME.js");
+const enUsPath = path.join(rootDir, "src", "i18n", "en-US.json");
+const zhCnPath = path.join(rootDir, "src", "i18n", "zh-CN.json");
+const zhTwPath = path.join(rootDir, "src", "i18n", "zh-TW.json");
 
 const contractSource = fs.readFileSync(contractPath, "utf8");
 const mcpPermissionsSource = fs.readFileSync(mcpPermissionsPath, "utf8");

@@ -2,12 +2,16 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const repoRoot = path.join(__dirname, "..");
+const srcDir = path.join(repoRoot, "src");
 const packageListPath = path.join(
   repoRoot,
   ".github",
   "release-package-items.txt",
 );
-const optionalUnpackagedFiles = new Set(["options-update-preview.local.js"]);
+const optionalUnpackagedFiles = new Set([
+  "options-update-preview.local.js",
+  "options/options-update-preview.local.js",
+]);
 const jsStringLiteralPattern = [
   "(?:",
   "\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"",
@@ -30,7 +34,7 @@ function readPackageItems() {
 }
 
 function collectFilesUnder(relativePath, output) {
-  const absolutePath = path.join(repoRoot, relativePath);
+  const absolutePath = path.join(srcDir, relativePath);
   const stat = fs.statSync(absolutePath);
   if (stat.isDirectory()) {
     for (const entry of fs.readdirSync(absolutePath)) {
@@ -329,7 +333,7 @@ function scanManifestDependencies(source, fromFile, dependencyMap) {
 function scanDependencies(packageFiles) {
   const dependencyMap = new Map();
   for (const file of packageFiles) {
-    const absolutePath = path.join(repoRoot, file);
+    const absolutePath = path.join(srcDir, file);
     const extension = path.extname(file).toLowerCase();
     if (!fs.existsSync(absolutePath)) {
       continue;
@@ -369,7 +373,7 @@ function main() {
   const packageItems = readPackageItems();
   const packageItemSet = new Set(packageItems);
   const missingListedItems = packageItems.filter(item => {
-    return !fs.existsSync(path.join(repoRoot, item));
+    return !fs.existsSync(path.join(srcDir, item));
   });
 
   const packageFiles = expandPackageFiles(packageItems);
@@ -381,7 +385,7 @@ function main() {
     if (optionalUnpackagedFiles.has(dependency)) {
       continue;
     }
-    const absoluteDependencyPath = path.join(repoRoot, dependency);
+    const absoluteDependencyPath = path.join(srcDir, dependency);
     if (!fs.existsSync(absoluteDependencyPath)) {
       brokenReferences.push({ dependency, references });
       continue;
