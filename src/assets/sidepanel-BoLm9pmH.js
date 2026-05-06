@@ -88504,7 +88504,7 @@ function CQ({
       const w = p || "anthropic_message_create";
       const k = await M(w, async e => {
         if (r) {
-          const t = `user_${o ?? "unknown"}_account_${r}_session_${i ?? "unknown"}`;
+          const t = `user_${o ?? "unknown"}_account_${r}_session_${i ?? "unknown"}`.replace(/[^a-zA-Z0-9_-]/g, "_");
           b.metadata = {
             user_id: t
           };
@@ -89271,7 +89271,7 @@ function CQ({
               } : {})
             };
             if (ue?.account.uuid) {
-              const e = `user_${r ?? "unknown"}_account_${ue.account.uuid}_session_${s ?? "unknown"}`;
+              const e = `user_${r ?? "unknown"}_account_${ue.account.uuid}_session_${s ?? "unknown"}`.replace(/[^a-zA-Z0-9_-]/g, "_");
               C.metadata = {
                 user_id: e
               };
