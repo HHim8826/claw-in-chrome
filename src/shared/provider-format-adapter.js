@@ -14,6 +14,8 @@
   const DEFAULT_MAX_OUTPUT_TOKENS = 10000;
   const MIN_CONTEXT_WINDOW = 20000;
   const REASONING_EFFORT_VALUES = ["none", "low", "medium", "high", "max"];
+  const MAX_RATE_LIMIT_RETRIES = 3;
+  const DEFAULT_RATE_LIMIT_BACKOFF_MS = 5000;
   const DEFAULT_CHAT_COMPATIBILITY = Object.freeze({
     responseReasoningFields: ["reasoning"],
     streamReasoningFields: ["reasoning"],
@@ -3032,6 +3034,39 @@
     }
     return pageLifecycleEnding === true || typeof document !== "undefined" && document.visibilityState === "hidden";
   }
+  function parseRetryAfterDelayMs(headers, fallbackMs) {
+    const maxDelayMs = 300000;
+    const retryAfter = headers.get("retry-after");
+    if (retryAfter) {
+      const deltaSeconds = Number(retryAfter);
+      if (Number.isFinite(deltaSeconds) && deltaSeconds >= 0) {
+        return Math.min(deltaSeconds * 1000, maxDelayMs);
+      }
+      try {
+        const retryDate = new Date(retryAfter);
+        if (!isNaN(retryDate.getTime())) {
+          const delayMs = retryDate.getTime() - Date.now();
+          if (delayMs >= 0) {
+            return Math.min(delayMs, maxDelayMs);
+          }
+        }
+      } catch {}
+    }
+    const resetHeader = headers.get("x-ratelimit-reset");
+    if (resetHeader) {
+      const resetSeconds = Number(resetHeader);
+      if (Number.isFinite(resetSeconds) && resetSeconds > 0) {
+        const delayMs = (resetSeconds * 1000) - Date.now();
+        if (delayMs >= 0) {
+          return Math.min(delayMs, maxDelayMs);
+        }
+      }
+    }
+    const base = Math.min(fallbackMs || DEFAULT_RATE_LIMIT_BACKOFF_MS, maxDelayMs);
+    const jitter = Math.random() * base;
+    return base + jitter;
+  }
+
   async function parseProviderError(response, fallbackMessage) {
     const text = await response.text().catch(function () {
       return "";
@@ -3088,12 +3123,40 @@
       let shouldTryNextCandidate = false;
       let lastProviderError = null;
       for (let retryIndex = 0; retryIndex < 2; retryIndex++) {
-        const upstream = await nativeFetch(providerUrl, {
-          method: "POST",
-          headers: buildProviderHeaders(request.headers, candidateConfig, isStreamRequest),
-          body: JSON.stringify(providerBody),
-          signal: request.signal
-        });
+        let upstream;
+        let rateLimitExhausted = false;
+        for (let rateLimitAttempt = 0; rateLimitAttempt <= MAX_RATE_LIMIT_RETRIES; rateLimitAttempt++) {
+          upstream = await nativeFetch(providerUrl, {
+            method: "POST",
+            headers: buildProviderHeaders(request.headers, candidateConfig, isStreamRequest),
+            body: JSON.stringify(providerBody),
+            signal: request.signal
+          });
+          if (upstream.status === 429 && rateLimitAttempt < MAX_RATE_LIMIT_RETRIES) {
+            const delayMs = parseRetryAfterDelayMs(upstream.headers, DEFAULT_RATE_LIMIT_BACKOFF_MS);
+            debugLog("provider.rate_limit_retry", {
+              attempt: index + 1,
+              rateLimitAttempt: rateLimitAttempt + 1,
+              delayMs,
+              format: candidate.format,
+              providerUrl
+            }, "warn");
+            await new Promise(function (resolve) { setTimeout(resolve, delayMs); });
+            if (request.signal && request.signal.aborted) {
+              throw new DOMException("The operation was aborted.", "AbortError");
+            }
+            continue;
+          }
+          if (upstream.status === 429) {
+            rateLimitExhausted = true;
+            debugLog("provider.rate_limit_exhausted", {
+              attempt: index + 1,
+              format: candidate.format,
+              providerUrl
+            }, "error");
+          }
+          break;
+        }
         if (!upstream.ok) {
           const providerError = await parseProviderError(upstream, "自定义模型供应商返回了错误。");
           lastProviderError = providerError;

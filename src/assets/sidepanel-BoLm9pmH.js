@@ -92257,9 +92257,6 @@ function __cpExtractSessionText(e) {
 }
 function __cpSerializeSessionToolResult(e) {
   const t = __cpExtractSessionText(e.content);
-  if (!t && !e.is_error) {
-    return null;
-  }
   return {
     type: "tool_result",
     tool_use_id: String(e.tool_use_id || e.toolUseId || "").trim(),
