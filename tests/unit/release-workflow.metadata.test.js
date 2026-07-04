@@ -8,6 +8,7 @@ const packageListPath = path.join(__dirname, "..", "..", ".github", "release-pac
 const packageJsonPath = path.join(__dirname, "..", "..", "package.json");
 const buildReleaseImportScriptPath = path.join(__dirname, "..", "..", "scripts", "build-release-import.ps1");
 const checkScriptPath = path.join(__dirname, "..", "..", "scripts", "check-release-package.js");
+const releaseVersionCheckScriptPath = path.join(__dirname, "..", "..", "scripts", "check-release-version.js");
 const optionsHtmlPath = path.join(__dirname, "..", "..", "src", "options", "options.html");
 const sidepanelHtmlPath = path.join(__dirname, "..", "..", "src", "sidepanel", "sidepanel.html");
 const pairingHtmlPath = path.join(__dirname, "..", "..", "src", "pages", "pairing.html");
@@ -24,6 +25,7 @@ const pairingHtml = fs.readFileSync(pairingHtmlPath, "utf8");
 const offscreenHtml = fs.readFileSync(offscreenHtmlPath, "utf8");
 const gifViewerHtml = fs.readFileSync(gifViewerHtmlPath, "utf8");
 const serviceWorkerLoaderSource = fs.readFileSync(serviceWorkerLoaderPath, "utf8");
+const { validateReleaseVersion } = require(releaseVersionCheckScriptPath);
 
 function getPackageItems() {
   return new Set(
@@ -168,6 +170,61 @@ function testReleaseNotesUseTriggeringPushCommitMessages() {
   assert.doesNotMatch(workflowSource, /git log -1 --format='- %s'/, "workflow should no longer truncate fallback notes to a single title line");
 }
 
+function testWorkflowEnforcesImmutableReleaseVersions() {
+  assert.equal(
+    fs.existsSync(releaseVersionCheckScriptPath),
+    true,
+    "release workflow should have an executable version-policy check"
+  );
+  assert.match(
+    workflowSource,
+    /node scripts\/check-release-version\.js/,
+    "release workflow should validate version monotonicity and tag uniqueness"
+  );
+  assert.doesNotMatch(
+    workflowSource,
+    /overwrite_files:\s*true/,
+    "release workflow should not overwrite assets for an existing release"
+  );
+}
+
+function testReleaseVersionPolicyBehavior() {
+  assert.doesNotThrow(() => validateReleaseVersion({
+    current: "1.0.68.0",
+    previous: "1.0.67.7",
+    tag: "v1.0.68.0",
+    tagExists: false
+  }));
+  assert.throws(
+    () => validateReleaseVersion({
+      current: "1.0.67.7",
+      previous: "1.0.67.7",
+      tagExists: false
+    }),
+    /must be greater/
+  );
+  assert.throws(
+    () => validateReleaseVersion({
+      current: "1.0.67.6",
+      previous: "1.0.67.7",
+      tagExists: false
+    }),
+    /must be greater/
+  );
+  assert.throws(
+    () => validateReleaseVersion({
+      current: "1.0.68.0",
+      previous: "1.0.67.7",
+      tagExists: true
+    }),
+    /tag already exists/
+  );
+  assert.throws(
+    () => validateReleaseVersion({ current: "1.0.68", tagExists: false }),
+    /four numeric segments/
+  );
+}
+
 function main() {
   testPackageListIncludesRuntimeDependencies();
   testReleaseArchiveExcludesLocalPreviewAddon();
@@ -176,6 +233,8 @@ function main() {
   testReleasePackageCheckIsWiredIntoScriptsAndWorkflow();
   testMinSupportedVersionIsOptional();
   testReleaseNotesUseTriggeringPushCommitMessages();
+  testWorkflowEnforcesImmutableReleaseVersions();
+  testReleaseVersionPolicyBehavior();
   console.log("release workflow metadata tests passed");
 }
 

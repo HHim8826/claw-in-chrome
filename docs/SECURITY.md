@@ -22,6 +22,9 @@ Apply these controls to every security-sensitive change.
 
 - Keep credentials out of logs, screenshots, fixtures, and error messages.
 - Use the sanitizers in the debug loggers before persisting diagnostics.
+- Send the same sanitized payload to diagnostic storage and browser consoles.
+  Treat permission `action_data` as private text and never fall back to raw
+  payload logging when sanitization or persistence fails.
 - Reject unexpected permission additions through `npm run check:manifest`.
 - Explain permission changes in the pull request and update the tracked
   baseline intentionally.
@@ -32,4 +35,3 @@ Apply these controls to every security-sensitive change.
 
 Do not include secrets or personal browsing data in a public report. Open a
 private maintainer channel and provide the smallest reproducible case.
-

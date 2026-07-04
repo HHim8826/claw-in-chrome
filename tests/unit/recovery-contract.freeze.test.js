@@ -115,6 +115,8 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(contract.permissionManager.SAVED_PROMPTS_STORAGE_KEY, "savedPrompts");
   assert.equal(contract.offscreen.KEEPALIVE_INTERVAL_MS, 20000);
   assert.equal(contract.offscreen.AUDIO_FIELD_URL, "audioUrl");
+  assert.equal(contract.offscreen.GIF_MAX_FRAME_COUNT, 50);
+  assert.equal(contract.offscreen.GIF_MAX_TOTAL_PIXELS, 50000000);
   assert.equal(contract.offscreen.GIF_FIELD_BLOB_URL, "blobUrl");
   assert.equal(contract.pairing.QUERY_KEYS.REQUEST_ID, "request_id");
   assert.equal(contract.pairing.QUERY_KEYS.CLIENT_TYPE, "client_type");
@@ -151,6 +153,7 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(contract.messages.SHOW_PERMISSION_NOTIFICATION, "SHOW_PERMISSION_NOTIFICATION");
   assert.equal(contract.messages.resize_window, "resize_window");
   assert.equal(contract.messages.MCP_PERMISSION_RESPONSE, "MCP_PERMISSION_RESPONSE");
+  assert.equal(contract.messages.WORKFLOW_REPLACE_USER, "CP_WORKFLOW_REPLACE_USER");
   assert.equal(contract.messages.EXECUTE_TASK, "EXECUTE_TASK");
   assert.equal(contract.messages.OFFSCREEN_PLAY_SOUND, "OFFSCREEN_PLAY_SOUND");
   assert.equal(contract.messages.GENERATE_GIF, "GENERATE_GIF");

@@ -34,6 +34,12 @@
 
     const consoleApi = options.console || globalThis.console || createNoopConsole();
     const now = typeof options.now === "function" ? options.now : () => Date.now();
+    let detachedWindowOperationQueue = Promise.resolve();
+    const runSerializedDetachedWindowOperation = operation => {
+      const result = detachedWindowOperationQueue.then(operation, operation);
+      detachedWindowOperationQueue = result.catch(() => {});
+      return result;
+    };
     const locksStorageKey = String(options.locksStorageKey || detachedWindowContract.LOCKS_STORAGE_KEY || "claw.detachedWindowLocks");
     const pagePath = String(options.pagePath || detachedWindowContract.PAGE_PATH || "sidepanel/sidepanel.html");
     const pageUrl = String(options.pageUrl || chromeApi.runtime.getURL(pagePath));
@@ -111,7 +117,7 @@
     };
 
     // detached lock 写入边界：调用方必须先完成归一化；这里仅负责原样落盘。
-    const writeDetachedWindowLocks = async locks => {
+    const writeDetachedWindowLocksUnlocked = async locks => {
       await chromeApi.storage.local.set({
         [locksStorageKey]: locks
       });
@@ -121,7 +127,7 @@
     // detached lock upsert 边界：
     // 以 groupId 作为唯一主键覆盖账本里的当前记录；
     // 调用方不需要关心旧 entry 是否存在，只要提供当前最新的窗口上下文即可。
-    const upsertDetachedWindowLock = async (entry, previousGroupIdValue = null) => {
+    const upsertDetachedWindowLockUnlocked = async (entry, previousGroupIdValue = null) => {
       const normalizedEntry = normalizeDetachedWindowLockEntry({
         ...entry,
         updatedAt: now()
@@ -136,14 +142,14 @@
         delete locks[String(previousGroupId)];
       }
       locks[String(normalizedEntry.groupId)] = normalizedEntry;
-      await writeDetachedWindowLocks(locks);
+      await writeDetachedWindowLocksUnlocked(locks);
       return normalizedEntry;
     };
 
     // detached lock 反向清理入口：
     // 关闭 popup / 监听窗口销毁时，通常只拿得到 windowId，
     // 这里负责把 windowId 反查回 group 锁并统一移除。
-    const removeDetachedWindowLockByWindowId = async windowIdValue => {
+    const removeDetachedWindowLockByWindowIdUnlocked = async windowIdValue => {
       const windowId = normalizePositiveNumber(windowIdValue);
       if (windowId === null) {
         return [];
@@ -162,7 +168,7 @@
       }
 
       if (changed) {
-        await writeDetachedWindowLocks(locks);
+        await writeDetachedWindowLocksUnlocked(locks);
       }
       return removedLocks;
     };
@@ -272,7 +278,7 @@
 
     // 清理顺序固定：先删锁，再尝试关窗。
     // 这样即使 popup window 已经被用户手动关掉，也不会让锁账本残留。
-    const closeDetachedWindowForLockEntry = async lockEntryValue => {
+    const closeDetachedWindowForLockEntryUnlocked = async lockEntryValue => {
       const lockEntry = normalizeDetachedWindowLockEntry(lockEntryValue);
       if (!lockEntry) {
         return false;
@@ -280,7 +286,7 @@
 
       const locks = await readDetachedWindowLocks();
       delete locks[String(lockEntry.groupId)];
-      await writeDetachedWindowLocks(locks);
+      await writeDetachedWindowLocksUnlocked(locks);
 
       try {
         await chromeApi.windows.remove(lockEntry.windowId);
@@ -364,7 +370,7 @@
     // 1) 只保留当前还能在 windows.getAll 中找到的 popup
     // 2) 用 lock 自己记住的 mainTabId 刷新 hostWindowId
     // 3) 不再按裸 restoreUrl 把锁偷迁移给别的 session，避免同 URL 会话互相抢窗
-    const sweepDetachedWindowLocks = async () => {
+    const sweepDetachedWindowLocksUnlocked = async () => {
       const existingLocks = await readDetachedWindowLocks();
       const nextLocks = {};
 
@@ -401,7 +407,7 @@
       });
 
       if (hasChanged) {
-        await writeDetachedWindowLocks(nextLocks);
+        await writeDetachedWindowLocksUnlocked(nextLocks);
       }
 
       return nextLocks;
@@ -413,8 +419,8 @@
     // 3) 只有同 live group / 同 sessionId 才允许复用
     // 4) 若同 URL 的别的 session 正在使用独立窗，则当前请求必须新开，不得切走占用中的窗
     // 5) 最后把 lock/mainTabId/hostWindowId 一并落盘
-    const openDetachedWindowForGroup = async payload => {
-      await sweepDetachedWindowLocks();
+    const openDetachedWindowForGroupUnlocked = async payload => {
+      await sweepDetachedWindowLocksUnlocked();
       const preferredMainTabId = normalizePositiveNumber(payload?.mainTabId) ?? normalizePositiveNumber(payload?.tabId);
       const {
         tabId,
@@ -444,7 +450,7 @@
             });
           }
           await focusDetachedWindow(existingDetachedWindow);
-          await upsertDetachedWindowLock({
+          await upsertDetachedWindowLockUnlocked({
             groupId,
             windowId: existingDetachedWindow.windowId,
             popupTabId: existingDetachedWindow.tabId,
@@ -473,7 +479,7 @@
         restoreUrl,
         sessionId
       });
-      await upsertDetachedWindowLock({
+      await upsertDetachedWindowLockUnlocked({
         groupId,
         windowId: createdDetachedWindow.windowId,
         popupTabId: createdDetachedWindow.popupTabId,
@@ -482,6 +488,24 @@
       });
       return createdDetachedWindow;
     };
+
+    const writeDetachedWindowLocks = locks =>
+      runSerializedDetachedWindowOperation(() =>
+        writeDetachedWindowLocksUnlocked(locks));
+    const upsertDetachedWindowLock = (entry, previousGroupIdValue = null) =>
+      runSerializedDetachedWindowOperation(() =>
+        upsertDetachedWindowLockUnlocked(entry, previousGroupIdValue));
+    const removeDetachedWindowLockByWindowId = windowIdValue =>
+      runSerializedDetachedWindowOperation(() =>
+        removeDetachedWindowLockByWindowIdUnlocked(windowIdValue));
+    const closeDetachedWindowForLockEntry = lockEntryValue =>
+      runSerializedDetachedWindowOperation(() =>
+        closeDetachedWindowForLockEntryUnlocked(lockEntryValue));
+    const sweepDetachedWindowLocks = () =>
+      runSerializedDetachedWindowOperation(sweepDetachedWindowLocksUnlocked);
+    const openDetachedWindowForGroup = payload =>
+      runSerializedDetachedWindowOperation(() =>
+        openDetachedWindowForGroupUnlocked(payload));
 
     return {
       constants: {

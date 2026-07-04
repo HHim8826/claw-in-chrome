@@ -106,6 +106,23 @@ function getWorkflowStore(chromeMock) {
   return chromeMock.storageMock.state.claw_site_workflows_v1;
 }
 
+function invokeRuntimeMessage(listener, message, sender = {}) {
+  return new Promise((resolve, reject) => {
+    if (typeof listener !== "function") {
+      reject(new Error("workflow mutation runtime listener is not registered"));
+      return;
+    }
+    try {
+      const handled = listener(message, sender, resolve);
+      if (handled !== true) {
+        reject(new Error("workflow mutation runtime message was not handled"));
+      }
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
 async function testInitialSyncBuildsShortcutWorkflowsAndPreservesManualEntries() {
   const harness = createSyncHarness({
     DateImpl: createFixedDate("2026-04-19T01:10:00.000Z"),
@@ -251,10 +268,66 @@ async function testStorageListenerOnlySyncsForSavedPromptChanges() {
   assert.equal(workflowStore.workflows[0].linkedPromptId, "prompt-storage");
 }
 
+async function testUserWorkflowMutationAndShortcutSyncPreserveBothSources() {
+  const harness = createSyncHarness({
+    storageState: {
+      savedPrompts: [{
+        id: "prompt-one",
+        command: "first_shortcut",
+        prompt: "Run the first shortcut"
+      }],
+      claw_site_workflows_v1: {
+        version: 1,
+        updatedAt: 100,
+        workflows: []
+      }
+    }
+  });
+
+  await harness.flushScheduledWork();
+
+  const listener = harness.chromeMock.events.runtimeOnMessage.listeners.at(-1);
+  const mutationPromise = invokeRuntimeMessage(listener, {
+    type: "CP_WORKFLOW_REPLACE_USER",
+    workflows: [{
+      name: "user-workflow",
+      label: "User workflow",
+      source: "user",
+      prompt: "Keep this user-authored workflow",
+      enabled: true,
+      updatedAt: 500,
+      inputs: [],
+      url_patterns: []
+    }]
+  });
+
+  await harness.chromeMock.chrome.storage.local.set({
+    savedPrompts: [{
+      id: "prompt-one",
+      command: "first_shortcut",
+      prompt: "Run the first shortcut"
+    }, {
+      id: "prompt-two",
+      command: "second_shortcut",
+      prompt: "Run the second shortcut"
+    }]
+  });
+
+  const response = await mutationPromise;
+  await harness.flushScheduledWork();
+
+  assert.equal(response.ok, true);
+  const workflows = getWorkflowStore(harness.chromeMock).workflows;
+  assert.ok(workflows.some(entry => entry.name === "user-workflow"));
+  assert.ok(workflows.some(entry => entry.linkedPromptId === "prompt-one"));
+  assert.ok(workflows.some(entry => entry.linkedPromptId === "prompt-two"));
+}
+
 async function main() {
   await testInitialSyncBuildsShortcutWorkflowsAndPreservesManualEntries();
   await testSyncDropsOrphanShortcutsAndIgnoresInvalidPromptEntries();
   await testStorageListenerOnlySyncsForSavedPromptChanges();
+  await testUserWorkflowMutationAndShortcutSyncPreserveBothSources();
   console.log("service worker shortcut workflow sync integration tests passed");
 }
 

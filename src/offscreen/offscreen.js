@@ -22,6 +22,10 @@ const __cpOffscreenAudioFieldUrl =
 const __cpOffscreenAudioFieldVolume =
   __cpOffscreenContract.AUDIO_FIELD_VOLUME || "volume";
 const __cpOffscreenDefaultVolume = __cpOffscreenContract.DEFAULT_VOLUME || 0.5;
+const __cpOffscreenGifMaxFrameCount =
+  __cpOffscreenContract.GIF_MAX_FRAME_COUNT || 50;
+const __cpOffscreenGifMaxTotalPixels =
+  __cpOffscreenContract.GIF_MAX_TOTAL_PIXELS || 50000000;
 const __cpOffscreenGifFieldFrames =
   __cpOffscreenContract.GIF_FIELD_FRAMES || "frames";
 const __cpOffscreenGifFieldOptions =
@@ -419,6 +423,14 @@ function applyActionIndicators(canvas, action, options, scaleFactor = 1) {
  * GIF generation function with full enhancement support
  */
 async function generateGif(frames, options = {}) {
+  if (!Array.isArray(frames) || frames.length === 0) {
+    throw new Error("GIF generation requires at least one frame");
+  }
+  if (frames.length > __cpOffscreenGifMaxFrameCount) {
+    throw new Error(
+      `GIF frame count exceeds ${__cpOffscreenGifMaxFrameCount}`,
+    );
+  }
   console.log(`[Offscreen] Generating GIF from ${frames.length} frames`);
   console.log(`[Offscreen] Options:`, options);
 
@@ -431,24 +443,30 @@ async function generateGif(frames, options = {}) {
     showWatermark: options.showWatermark ?? true,
   };
 
-  // Load all images first
-  const images = await Promise.all(
-    frames.map((frame, index) => {
-      console.log(`[Offscreen] Loading image ${index + 1}/${frames.length}`);
-      return new Promise((resolve, reject) => {
-        const img = new Image();
-        img.onload = () => {
-          console.log(
-            `[Offscreen] Image ${index + 1} loaded: ${img.width}x${img.height}`,
-          );
-          resolve(img);
-        };
-        img.onerror = reject;
-        const dataUrl = `data:image/${frame.format || "png"};base64,${frame.base64}`;
-        img.src = dataUrl;
-      });
-    }),
-  );
+  // Decode sequentially so the pixel budget can stop unsafe work before every
+  // frame is allocated at once.
+  const images = [];
+  let decodedPixelCount = 0;
+  for (const [index, frame] of frames.entries()) {
+    console.log(`[Offscreen] Loading image ${index + 1}/${frames.length}`);
+    const img = await new Promise((resolve, reject) => {
+      const nextImage = new Image();
+      nextImage.onload = () => resolve(nextImage);
+      nextImage.onerror = reject;
+      const dataUrl = `data:image/${frame.format || "png"};base64,${frame.base64}`;
+      nextImage.src = dataUrl;
+    });
+    decodedPixelCount += Number(img.width || 0) * Number(img.height || 0);
+    if (decodedPixelCount > __cpOffscreenGifMaxTotalPixels) {
+      throw new Error(
+        `GIF decoded pixel budget exceeds ${__cpOffscreenGifMaxTotalPixels}`,
+      );
+    }
+    console.log(
+      `[Offscreen] Image ${index + 1} loaded: ${img.width}x${img.height}`,
+    );
+    images.push(img);
+  }
   console.log(`[Offscreen] All ${images.length} images loaded`);
   const width = images[0].width;
   const height = images[0].height;

@@ -16,6 +16,10 @@ name: Release Extension
 permissions:
   contents: write
 
+concurrency:
+  group: release-extension
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -68,14 +72,14 @@ jobs:
             fi
           fi
 
-          if [[ -n "${PREVIOUS_VERSION}" ]] && [[ "${PREVIOUS_VERSION}" == "${VERSION}" ]]; then
-            echo "Version did not change, skipping release."
-            echo "should_release=false" >> "${GITHUB_OUTPUT}"
-            exit 0
-          fi
-
           TAG="v${VERSION}"
           TRIGGER_SHA="${{ github.sha }}"
+
+          node scripts/check-release-version.js \
+            --current "${VERSION}" \
+            --previous "${PREVIOUS_VERSION}" \
+            --tag "${TAG}" \
+            --repo "${GITHUB_WORKSPACE}"
 
           ZIP_NAME="claw-in-chrome-v${VERSION}.zip"
           ZIP_PATH="${RUNNER_TEMP}/${ZIP_NAME}"
@@ -238,4 +242,3 @@ jobs:
             ${{ steps.meta.outputs.latest_json_path }}
           fail_on_unmatched_files: true
           make_latest: true
-          overwrite_files: true

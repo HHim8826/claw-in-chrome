@@ -1,10 +1,18 @@
 const SAVED_PROMPTS_KEY = globalThis.__CP_CONTRACT__?.permissionManager?.SAVED_PROMPTS_STORAGE_KEY || "savedPrompts";
 const WORKFLOW_STORAGE_KEY = globalThis.__CP_CONTRACT__?.workflows?.STORAGE_KEY || "claw_site_workflows_v1";
+const WORKFLOW_REPLACE_USER_MESSAGE_TYPE = globalThis.__CP_CONTRACT__?.messages?.WORKFLOW_REPLACE_USER || "CP_WORKFLOW_REPLACE_USER";
 const SYNC_SOURCE = "shortcut";
 
 let syncScheduled = false;
 let syncInFlight = false;
 let syncPending = false;
+let workflowMutationQueue = Promise.resolve();
+
+function runSerializedWorkflowMutation(operation) {
+  const result = workflowMutationQueue.then(operation, operation);
+  workflowMutationQueue = result.catch(function () {});
+  return result;
+}
 
 function normalizeText(value) {
   return String(value || "").replace(/\r\n/g, "\n").trim();
@@ -198,13 +206,13 @@ async function readWorkflowStore() {
 }
 
 async function writeWorkflowStore(workflows) {
-  await chrome.storage.local.set({
-    [WORKFLOW_STORAGE_KEY]: {
-      version: 1,
-      updatedAt: Date.now(),
-      workflows
-    }
-  });
+  const payload = {
+    version: 1,
+    updatedAt: Date.now(),
+    workflows
+  };
+  await chrome.storage.local.set({ [WORKFLOW_STORAGE_KEY]: payload });
+  return payload;
 }
 
 function serializeWorkflowStore(workflows) {
@@ -254,8 +262,25 @@ async function syncSavedPromptsIntoWorkflowLibrary() {
   const nextComparable = serializeWorkflowStore(nextWorkflows);
 
   if (currentComparable !== nextComparable) {
-    await writeWorkflowStore(nextWorkflows);
+    return writeWorkflowStore(nextWorkflows);
   }
+  return workflowStore;
+}
+
+async function replaceUserWorkflows(workflows) {
+  const workflowStore = await readWorkflowStore();
+  const shortcutWorkflows = workflowStore.workflows.filter(function (entry) {
+    return normalizeText(entry.source) === SYNC_SOURCE && normalizeText(entry.linkedPromptId);
+  });
+  const userWorkflows = (Array.isArray(workflows) ? workflows : [])
+    .map(normalizeWorkflowEntry)
+    .filter(function (entry) {
+      return entry && normalizeText(entry.source) !== SYNC_SOURCE;
+    });
+  const nextWorkflows = userWorkflows.concat(shortcutWorkflows).sort(function (left, right) {
+    return normalizeNumber(right.updatedAt, 0) - normalizeNumber(left.updatedAt, 0);
+  });
+  return writeWorkflowStore(nextWorkflows);
 }
 
 function runSync(reason) {
@@ -265,9 +290,7 @@ function runSync(reason) {
   }
   syncScheduled = false;
   syncInFlight = true;
-  Promise.resolve().then(function () {
-    return syncSavedPromptsIntoWorkflowLibrary();
-  }).catch(function (error) {
+  runSerializedWorkflowMutation(syncSavedPromptsIntoWorkflowLibrary).catch(function (error) {
     console.warn("[Claw] shortcut workflow sync failed", reason, error);
   }).finally(function () {
     syncInFlight = false;
@@ -300,6 +323,23 @@ chrome.storage.onChanged.addListener(function (changes, areaName) {
     return;
   }
   queueSync("storage");
+});
+
+chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+  if (message?.type !== WORKFLOW_REPLACE_USER_MESSAGE_TYPE) {
+    return false;
+  }
+  runSerializedWorkflowMutation(function () {
+    return replaceUserWorkflows(message.workflows);
+  }).then(function (store) {
+    sendResponse({ ok: true, store });
+  }).catch(function (error) {
+    sendResponse({
+      ok: false,
+      error: error instanceof Error ? error.message : String(error || "Workflow update failed")
+    });
+  });
+  return true;
 });
 
 queueSync("init");

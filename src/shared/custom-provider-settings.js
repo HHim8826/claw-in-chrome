@@ -49,6 +49,8 @@
     "customSystemPromptActiveProfileId";
   const WORKFLOW_STORAGE_KEY =
     workflowsContract.STORAGE_KEY || "claw_site_workflows_v1";
+  const WORKFLOW_REPLACE_USER_MESSAGE_TYPE =
+    rootContract.messages?.WORKFLOW_REPLACE_USER || "CP_WORKFLOW_REPLACE_USER";
   const PREFERRED_LOCALE_STORAGE_KEY =
     uiContract.PREFERRED_LOCALE_STORAGE_KEY || "preferred_locale";
   const DEBUG_MODE_STORAGE_KEY =
@@ -977,9 +979,19 @@
           return Number(right.updatedAt || 0) - Number(left.updatedAt || 0);
         }),
     };
-    await chrome.storage.local.set({
-      [WORKFLOW_STORAGE_KEY]: payload,
-    });
+    if (chrome.runtime?.sendMessage) {
+      const response = await chrome.runtime.sendMessage({
+        type: WORKFLOW_REPLACE_USER_MESSAGE_TYPE,
+        workflows: payload.workflows.filter(function (entry) {
+          return String(entry?.source || "").trim().toLowerCase() !== "shortcut";
+        }),
+      });
+      if (!response?.ok) {
+        throw new Error(response?.error || "Workflow update failed.");
+      }
+      return response.store || payload;
+    }
+    await chrome.storage.local.set({ [WORKFLOW_STORAGE_KEY]: payload });
     return payload;
   }
   function downloadTextFile(filename, text, mimeType) {

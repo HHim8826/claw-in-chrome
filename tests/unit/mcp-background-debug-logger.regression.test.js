@@ -154,6 +154,10 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
     authorization: "Bearer hidden-token",
     requestUrl: "https://api.example.com/v1/messages?api_key=123",
     prompt: "please keep this private",
+    action_data: {
+      text: "typed customer secret",
+      selector: "#private-form"
+    },
     note: "Authorization: Bearer should-not-leak",
     customProviderConfig: {
       apiKey: "provider-secret",
@@ -188,6 +192,7 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
   assert.equal(entry.payload.authorization, "[redacted-secret]");
   assert.equal(entry.payload.requestUrl, "[redacted-url]");
   assert.equal(entry.payload.prompt.startsWith("[redacted-text]:"), true);
+  assert.equal(String(entry.payload.action_data).startsWith("[redacted-text]"), true);
   assert.equal(String(entry.payload.note).includes("[redacted]"), true);
   assert.equal(String(entry.payload.note).includes("should-not-leak"), false);
   assert.equal(entry.payload.customProviderConfig.enabled, true);
@@ -202,6 +207,11 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
   assert.equal(Object.prototype.hasOwnProperty.call(entry.payload.customProviderConfig, "apiKey"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(entry.payload.customProviderConfig, "baseUrl"), false);
   assert.equal(harness.consoleMock.debugCalls.length >= 1, true);
+  const consolePayload = harness.consoleMock.debugCalls.at(-1)[2];
+  assert.equal(consolePayload.apiKey, "[redacted-secret]");
+  assert.equal(consolePayload.requestUrl, "[redacted-url]");
+  assert.equal(String(consolePayload.action_data).startsWith("[redacted-text]"), true);
+  assert.equal(JSON.stringify(harness.consoleMock.debugCalls).includes("typed customer secret"), false);
 }
 
 async function testBackgroundLoggerReSanitizesExistingEntriesBeforePersisting() {
@@ -233,6 +243,9 @@ async function testBackgroundLoggerReSanitizesExistingEntriesBeforePersisting() 
 }
 
 function testBundleKeepsMcpDebugHooksAndPermissionOutcomeReasons() {
+  assertIncludes(bundleSource, '"actiondata",', "MCP bundle private diagnostic fields");
+  assertIncludes(bundleSource, 'console.debug("[service-worker-debug]", e, a.payload);', "MCP bundle sanitized console output");
+  assertIncludes(bundleSource, 'console.debug("[service-worker-debug] log_failed", e, o);', "MCP bundle sanitized logging failure");
   assertIncludes(bundleSource, "__cpBackgroundDebugTrack(\"claude_chrome.bridge.tool_received\"", "MCP bundle");
   assertIncludes(bundleSource, "__cpBackgroundDebugTrack(\"claude_chrome.mcp.tool_called\"", "MCP bundle");
   assertIncludes(bundleSource, "__cpBackgroundDebugTrack(\"claude_chrome.permission.prompted\"", "MCP bundle");

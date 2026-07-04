@@ -31,6 +31,9 @@ Prefer these seams when implementing behavior.
   `service-worker-detached-window-runtime.js` expose injectable runtime APIs.
 - `sidepanel-debug-logger.js` and `options-debug-logger.js` expose sanitized
   diagnostics through `globalThis` debug APIs.
+- The MCP bundle's service-worker diagnostic seam sanitizes persisted and
+  console payloads with the same helper. Permission `action_data` is treated as
+  private text and raw payloads are never used as a logging fallback.
 
 ## Bundle patch contract
 
@@ -59,4 +62,3 @@ The current recovered layer protects these workflows.
 The side-panel bundle remains large and expensive to review. New behavior must
 move toward readable modules where practical; the quality score tracks this
 debt explicitly.
-

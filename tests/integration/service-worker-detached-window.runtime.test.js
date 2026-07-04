@@ -41,6 +41,29 @@ function createDetachedWindowHarness(options = {}) {
   };
 }
 
+function installDynamicWindowMock(chromeMock) {
+  const windows = [];
+  let nextWindowId = 900;
+  let nextTabId = 1900;
+  chromeMock.chrome.windows.getAll = async () => JSON.parse(JSON.stringify(windows));
+  chromeMock.chrome.windows.create = async payload => {
+    chromeMock.calls.windows.create.push(JSON.parse(JSON.stringify(payload)));
+    nextWindowId += 1;
+    nextTabId += 1;
+    const created = {
+      id: nextWindowId,
+      type: "popup",
+      tabs: [{
+        id: nextTabId,
+        url: payload.url
+      }]
+    };
+    windows.push(created);
+    return JSON.parse(JSON.stringify(created));
+  };
+  return windows;
+}
+
 async function testReadDetachedWindowLocksDropsInvalidEntries() {
   const { api } = createDetachedWindowHarness({
     storageState: {
@@ -405,6 +428,85 @@ async function testBuildAndParseDetachedWindowUrlRoundTrip() {
   assert.equal(parsed.sessionId, sessionId);
 }
 
+async function testConcurrentOpenForSameGroupCreatesOnePopup() {
+  const { api, chromeMock } = createDetachedWindowHarness({
+    tabById: {
+      55: {
+        id: 55,
+        windowId: 7,
+        groupId: 12,
+        url: "https://example.com/same-group"
+      }
+    }
+  });
+  installDynamicWindowMock(chromeMock);
+
+  const [first, second] = await Promise.all([
+    api.openDetachedWindowForGroup({ tabId: 55, sessionId: "session-a" }),
+    api.openDetachedWindowForGroup({ tabId: 55, sessionId: "session-a" })
+  ]);
+
+  assert.equal(chromeMock.calls.windows.create.length, 1);
+  assert.equal(first.windowId, second.windowId);
+  assert.equal(Object.keys(chromeMock.storageMock.state["claw.detachedWindowLocks"]).length, 1);
+}
+
+async function testConcurrentOpenForDifferentGroupsPreservesBothLocks() {
+  const { api, chromeMock } = createDetachedWindowHarness({
+    tabById: {
+      55: {
+        id: 55,
+        windowId: 7,
+        groupId: 12,
+        url: "https://example.com/group-a"
+      },
+      56: {
+        id: 56,
+        windowId: 8,
+        groupId: 13,
+        url: "https://example.com/group-b"
+      }
+    }
+  });
+  installDynamicWindowMock(chromeMock);
+
+  await Promise.all([
+    api.openDetachedWindowForGroup({ tabId: 55, sessionId: "session-a" }),
+    api.openDetachedWindowForGroup({ tabId: 56, sessionId: "session-b" })
+  ]);
+
+  assert.deepEqual(
+    Object.keys(chromeMock.storageMock.state["claw.detachedWindowLocks"]).sort(),
+    ["12", "13"]
+  );
+}
+
+async function testRejectedOpenDoesNotBlockLaterOperations() {
+  const { api, chromeMock } = createDetachedWindowHarness({
+    tabById: {
+      55: {
+        id: 55,
+        windowId: 7,
+        groupId: 12,
+        url: "https://example.com/recovery"
+      }
+    }
+  });
+  installDynamicWindowMock(chromeMock);
+
+  await assert.rejects(
+    api.openDetachedWindowForGroup({ tabId: 999, sessionId: "missing" }),
+    /Unknown tab 999/
+  );
+  const recovered = await api.openDetachedWindowForGroup({
+    tabId: 55,
+    sessionId: "session-recovered"
+  });
+
+  assert.equal(recovered.success, true);
+  assert.equal(chromeMock.calls.windows.create.length, 1);
+}
+
 async function main() {
   await testReadDetachedWindowLocksDropsInvalidEntries();
   await testOpenDetachedWindowCreatesPopupAndPersistsLock();
@@ -415,6 +517,9 @@ async function main() {
   await testSweepDetachedWindowLocksDoesNotRekeyAcrossSameUrlOtherSession();
   await testCloseDetachedWindowForLockEntryRemovesWindowAndLock();
   await testBuildAndParseDetachedWindowUrlRoundTrip();
+  await testConcurrentOpenForSameGroupCreatesOnePopup();
+  await testConcurrentOpenForDifferentGroupsPreservesBothLocks();
+  await testRejectedOpenDoesNotBlockLaterOperations();
   console.log("service worker detached window runtime integration tests passed");
 }
 

@@ -65,6 +65,7 @@ const __cpBackgroundDebugPrivateTextKeys = new Set([
   "rawbody",
   "inputtext",
   "outputtext",
+  "actiondata",
 ]);
 const __cpBackgroundDebugRedactedSecret = "[redacted-secret]";
 const __cpBackgroundDebugRedactedText = "[redacted-text]";
@@ -172,6 +173,11 @@ function __cpBackgroundDebugSafeClone(e, t, r, o) {
   if (t > 4) {
     return "[max-depth]";
   }
+  if (__cpBackgroundDebugIsPrivateTextKey(o)) {
+    return typeof e == "string"
+      ? `${__cpBackgroundDebugRedactedText}:${e.length}`
+      : __cpBackgroundDebugRedactedText;
+  }
   if (typeof e == "string") {
     return __cpBackgroundDebugSanitizeString(e, o);
   }
@@ -276,12 +282,12 @@ async function __cpBackgroundDebugLog(e, t = {}, r = "info") {
       },
     });
     if (r === "error") {
-      console.error("[service-worker-debug]", e, t);
+      console.error("[service-worker-debug]", e, a.payload);
     } else {
-      console.debug("[service-worker-debug]", e, t);
+      console.debug("[service-worker-debug]", e, a.payload);
     }
   } catch (o) {
-    console.debug("[service-worker-debug] log_failed", e, t, o);
+    console.debug("[service-worker-debug] log_failed", e, o);
   }
 }
 function __cpBackgroundDebugTrack(e, t = {}, r = "info") {
