@@ -39,7 +39,7 @@ function createConsoleMock() {
   };
 }
 
-function createLoggerHarness() {
+function createLoggerHarness(options = {}) {
   const chromeMock = createChromeMock({
     runtimeId: "options-debug-test"
   });
@@ -48,6 +48,7 @@ function createLoggerHarness() {
     readyState: "complete"
   });
   const consoleMock = createConsoleMock();
+  const fetchCalls = [];
 
   const sandbox = {
     console: consoleMock,
@@ -59,12 +60,16 @@ function createLoggerHarness() {
         this.type = type;
       }
     },
-    fetch: async () => ({
-      ok: false
-    }),
+    fetch: async url => {
+      fetchCalls.push(url);
+      return {
+        ok: options.localPreviewAvailable === true
+      };
+    },
     location: {
       pathname: "/options.html",
-      hash: "#options"
+      hash: "#options",
+      search: options.search || ""
     },
     window: {
       addEventListener(type, listener) {
@@ -87,6 +92,7 @@ function createLoggerHarness() {
     chromeMock,
     consoleMock,
     document,
+    fetchCalls,
     api: sandbox.__CP_OPTIONS_DEBUG__,
     async emitWindow(type, payload) {
       for (const listener of windowListeners.get(type) || []) {
@@ -105,6 +111,18 @@ function createLoggerHarness() {
     },
     flushLogs
   };
+}
+
+async function testLocalPreviewAddonIsExplicitlyOptIn() {
+  const defaultHarness = createLoggerHarness();
+  await defaultHarness.flushLogs();
+  assert.deepEqual(defaultHarness.fetchCalls, [], "normal options startup must not request the local preview addon");
+
+  const previewHarness = createLoggerHarness({
+    search: "?clawLocalUpdatePreview=1"
+  });
+  await previewHarness.flushLogs();
+  assert.equal(previewHarness.fetchCalls.length, 1, "the local preview query flag must request the addon");
 }
 
 async function testLoggerSanitizesSensitiveValuesAndSupportsReadClearDump() {
@@ -213,6 +231,7 @@ async function testLoggerCapturesWindowAndDocumentEvents() {
 }
 
 async function main() {
+  await testLocalPreviewAddonIsExplicitlyOptIn();
   await testLoggerSanitizesSensitiveValuesAndSupportsReadClearDump();
   await testLoggerCapturesWindowAndDocumentEvents();
   console.log("options debug logger tests passed");

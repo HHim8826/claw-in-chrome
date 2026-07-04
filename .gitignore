@@ -5,5 +5,6 @@ logs/
 node_modules/
 artifacts/
 dist/
+local-release-import/
 playwright-report/
 test-results/

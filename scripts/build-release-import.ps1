@@ -7,9 +7,10 @@ $ErrorActionPreference = "Stop"
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..")).Path
+$srcRoot = Join-Path $repoRoot "src"
 $releasePackageCheckScriptPath = Join-Path $repoRoot "scripts\check-release-package.js"
 $packageListPath = Join-Path $repoRoot ".github\release-package-items.txt"
-$manifestPath = Join-Path $repoRoot "manifest.json"
+$manifestPath = Join-Path $srcRoot "manifest.json"
 $outputRootPath = Join-Path $repoRoot $OutputRoot
 $outputPath = Join-Path $outputRootPath $FolderName
 
@@ -41,7 +42,7 @@ if ($packageItems.Count -eq 0) {
 
 $missingItems = @()
 foreach ($item in $packageItems) {
-  $sourcePath = Join-Path $repoRoot $item
+  $sourcePath = Join-Path $srcRoot $item
   if (-not (Test-Path -LiteralPath $sourcePath)) {
     $missingItems += $item
   }
@@ -64,7 +65,7 @@ if (Test-Path -LiteralPath $outputPath) {
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 
 foreach ($item in $packageItems) {
-  $sourcePath = Join-Path $repoRoot $item
+  $sourcePath = Join-Path $srcRoot $item
   $destinationPath = Join-Path $outputPath $item
   $sourceItem = Get-Item -LiteralPath $sourcePath
 

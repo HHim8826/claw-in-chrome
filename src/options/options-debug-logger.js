@@ -342,6 +342,10 @@
     });
   });
   async function loadLocalOptionsDebugAddon() {
+    const search = String(globalThis.location?.search || "");
+    if (!/(?:^|[?&])clawLocalUpdatePreview=1(?:&|$)/.test(search)) {
+      return;
+    }
     if (!chrome?.runtime?.getURL) {
       return;
     }

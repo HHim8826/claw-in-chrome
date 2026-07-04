@@ -138,6 +138,16 @@ function testReleasePackageCheckIsWiredIntoScriptsAndWorkflow() {
     /& node \$releasePackageCheckScriptPath/,
     "local import build script should run the release package checker before copying files"
   );
+  assert.match(
+    buildReleaseImportScriptSource,
+    /\$srcRoot = Join-Path \$repoRoot "src"/,
+    "local import build script should copy package items relative to src"
+  );
+  assert.match(
+    buildReleaseImportScriptSource,
+    /\$manifestPath = Join-Path \$srcRoot "manifest\.json"/,
+    "local import build script should read the src manifest"
+  );
 }
 
 function testMinSupportedVersionIsOptional() {
