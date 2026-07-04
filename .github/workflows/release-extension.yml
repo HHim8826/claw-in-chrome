@@ -4,7 +4,6 @@ name: Release Extension
   push:
     branches:
       - main
-      - dev
     paths:
       - src/manifest.json
   workflow_dispatch:
@@ -31,6 +30,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run fast validation
+        run: npm run validate:fast
 
       - name: Verify release package manifest
         run: npm run check:release-package
@@ -189,6 +195,35 @@ jobs:
           fi
 
           zip -r "${{ steps.meta.outputs.zip_path }}" "${PACKAGE_ITEMS[@]}"
+
+      - name: Install Playwright Chromium
+        if: steps.meta.outputs.should_release == 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Extract release archive
+        if: steps.meta.outputs.should_release == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_ROOT="${RUNNER_TEMP}/release-extension"
+          mkdir -p "${RELEASE_ROOT}"
+          unzip -q "${{ steps.meta.outputs.zip_path }}" -d "${RELEASE_ROOT}"
+          echo "release_root=${RELEASE_ROOT}" >> "${GITHUB_ENV}"
+
+      - name: Smoke test extracted release
+        if: steps.meta.outputs.should_release == 'true'
+        env:
+          CLAW_EXTENSION_ROOT: ${{ env.release_root }}
+          CLAW_E2E_ARTIFACT_DIR: ${{ runner.temp }}/release-e2e-artifacts
+        run: xvfb-run --auto-servernum npm run test:e2e
+
+      - name: Upload release smoke failure artifacts
+        if: failure() && steps.meta.outputs.should_release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-e2e-failure
+          path: ${{ runner.temp }}/release-e2e-artifacts
+          if-no-files-found: ignore
 
       - name: Publish GitHub Release
         if: steps.meta.outputs.should_release == 'true'

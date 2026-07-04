@@ -1,0 +1,25 @@
+{
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting",
+    "debugger",
+    "tabGroups",
+    "tabs",
+    "alarms",
+    "notifications",
+    "system.display",
+    "webNavigation",
+    "declarativeNetRequestWithHostAccess",
+    "offscreen",
+    "nativeMessaging",
+    "unlimitedStorage",
+    "downloads"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "externally_connectable_matches": [
+    "https://claude.ai/*",
+    "https://*.claude.ai/*"
+  ]
+}

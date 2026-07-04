@@ -6,8 +6,21 @@ const path = require("node:path");
 const { chromium } = require("playwright");
 
 const repoRoot = path.join(__dirname, "..", "..");
-const manifestPath = path.join(repoRoot, "src", "manifest.json");
+const extensionRoot = process.env.CLAW_EXTENSION_ROOT
+  ? path.resolve(process.env.CLAW_EXTENSION_ROOT)
+  : path.join(repoRoot, "src");
+const artifactRoot = process.env.CLAW_E2E_ARTIFACT_DIR
+  ? path.resolve(process.env.CLAW_E2E_ARTIFACT_DIR)
+  : path.join(os.tmpdir(), "claw-extension-e2e-artifacts");
+const manifestPath = path.join(extensionRoot, "manifest.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+
+function writeFailureArtifact(name, content) {
+  fs.mkdirSync(artifactRoot, { recursive: true });
+  const artifactPath = path.join(artifactRoot, name);
+  fs.writeFileSync(artifactPath, content);
+  console.error(`Saved E2E failure artifact: ${artifactPath}`);
+}
 
 function findBrowserExecutable() {
   const envPath = process.env.CLAW_E2E_BROWSER_PATH;
@@ -34,8 +47,8 @@ async function launchExtensionContext() {
     args: [
       "--no-first-run",
       "--no-default-browser-check",
-      `--disable-extensions-except=${path.join(repoRoot, "src")}`,
-      `--load-extension=${path.join(repoRoot, "src")}`,
+      `--disable-extensions-except=${extensionRoot}`,
+      `--load-extension=${extensionRoot}`,
     ]
   });
   return {
@@ -133,6 +146,7 @@ async function testExtensionPagesLoad() {
     assert.equal(optionsManifest.version, manifest.version);
     assert.equal(optionsManifest.stored, "ok");
     assert.deepEqual(optionsResult.pageErrors, []);
+    assert.deepEqual(optionsResult.consoleErrors, []);
 
     const visualizerEmptyPage = await contextInfo.context.newPage();
     const emptyVisualizerResult = await capturePageErrors(visualizerEmptyPage, async () => {
@@ -292,7 +306,7 @@ async function testExtensionPagesLoad() {
     } catch (err) {
       try {
         if (!optionsPage.isClosed()) {
-          require("fs").writeFileSync("d:/code/claw-in-chrome/.worktrees/dev/scratch.html", await optionsPage.content());
+          writeFailureArtifact("options-page.html", await optionsPage.content());
         }
       } catch (e) {
         console.error("Failed to dump scratch.html:", e.message);
@@ -345,7 +359,7 @@ async function testExtensionPagesLoad() {
         await visualizerPage.waitForSelector(".cpv-seq-row[data-current='true']", { timeout: 5000 });
       } catch (err) {
         const content = await visualizerPage.content();
-        require("fs").writeFileSync("d:/code/claw-in-chrome/.worktrees/dev/scratch-visualizer.html", content);
+        writeFailureArtifact("visualizer-page.html", content);
         console.log("VISUALIZER BODY TEXT:", await visualizerPage.evaluate(() => document.body.textContent));
         throw err;
       }
@@ -377,6 +391,7 @@ async function testExtensionPagesLoad() {
     assert.equal(sidepanelManifest.name, manifest.name);
     assert.equal(sidepanelManifest.version, manifest.version);
     assert.deepEqual(sidepanelResult.pageErrors, []);
+    assert.deepEqual(sidepanelResult.consoleErrors, []);
     await sidepanelPage.waitForSelector("#cp-github-update-sidepanel-root", {
       state: "attached",
       timeout: 15000

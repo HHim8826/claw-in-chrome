@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Claw in Chrome](https://img.shields.io/badge/Claw-in%20Chrome-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.0.66.7-green?style=for-the-badge)
+![Release](https://img.shields.io/github/v/release/HHim8826/claw-in-chrome?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Chrome%20116%2B-lightgrey?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)
 
@@ -46,7 +46,7 @@
 1. 打开 `chrome://extensions/`
 2. 开启右上角 **开发者模式**
 3. 点击 **加载已解压的扩展程序**
-4. 选择当前 `claw in chrome` 文件夹
+4. 选择当前仓库的 `src/` 文件夹
 5. 将 `Claw` 固定到浏览器工具栏，并打开侧边栏
 
 ### 2. 配置模型供应商
@@ -68,11 +68,16 @@
 
 ## 🗂️ 项目结构
 
-- `assets/`：扩展资源与打包产物
-- `i18n/`：多语言文案
+- `src/`：可直接加载到 Chrome 的扩展根目录
+- `src/assets/`：上游资源与打包产物
+- `src/i18n/`：多语言文案
 - `tests/`：单元、集成与 E2E 测试
-- `scripts/`：发布辅助脚本
-- `docs/`：截图与补充说明
+- `scripts/`：验证、检查与发布辅助脚本
+- `docs/`：架构、安全、可靠性与恢复模型说明
+
+开发者和代码代理应先阅读 [`AGENTS.md`](./AGENTS.md)，并在提交前运行
+`npm run validate:fast`。涉及扩展页面、后台脚本或发布内容的变更还应运行
+`npm run validate:full`。
 
 ## ⚖️ License
 

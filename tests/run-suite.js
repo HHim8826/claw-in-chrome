@@ -39,12 +39,25 @@ function runTestFile(filePath) {
   }
 }
 
+function runTestFiles(files, execute = runTestFile) {
+  const failures = [];
+  for (const filePath of files) {
+    try {
+      execute(filePath);
+    } catch (error) {
+      failures.push(`${filePath}: ${error.message || error}`);
+    }
+  }
+  if (failures.length > 0) {
+    throw new Error(`${failures.length} test file(s) failed:\n- ${failures.join("\n- ")}`);
+  }
+  return { fileCount: files.length };
+}
+
 function runSuites(suites) {
   const suiteNames = Array.isArray(suites) && suites.length > 0 ? suites : ["unit", "integration", "e2e"];
   const files = suiteNames.flatMap((suiteName) => collectTestFiles(path.join(testsRoot, suiteName)));
-  for (const filePath of files) {
-    runTestFile(filePath);
-  }
+  runTestFiles(files);
   return {
     suites: suiteNames,
     fileCount: files.length
@@ -69,5 +82,6 @@ if (require.main === module) {
 module.exports = {
   collectTestFiles,
   runTestFile,
+  runTestFiles,
   runSuites
 };

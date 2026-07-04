@@ -323,6 +323,21 @@ async function testCustomI18nPackLoadsWithoutUnsafeEval() {
   assert.equal(section.fastModelLabel, "快速模型");
 }
 
+async function testEnglishDefaultsDoNotRequestMissingCustomPack() {
+  let fetchCount = 0;
+  const { shared } = createSharedHarness({
+    fetch: async function () {
+      fetchCount += 1;
+      return { ok: false };
+    }
+  });
+
+  const defaults = { providerName: "Model provider" };
+  const section = await shared.resolveCustomI18nSection("customProvider", "en-US", defaults);
+  assert.deepEqual(JSON.parse(JSON.stringify(section)), defaults);
+  assert.equal(fetchCount, 0, "English defaults must not request i18n/custom/en-US.js");
+}
+
 async function testReadStoredStateAndOpenPagesUseChromeTabs() {
   const { shared, tabCreateCalls } = createSharedHarness({
     manifestVersion: "3.0.0.0",
@@ -391,6 +406,7 @@ async function main() {
   testExplicitDocumentLocaleTagWinsOverBrowserLanguage();
   testTraditionalChineseLocaleHelpers();
   await testCustomI18nPackLoadsWithoutUnsafeEval();
+  await testEnglishDefaultsDoNotRequestMissingCustomPack();
   await testReadStoredStateAndOpenPagesUseChromeTabs();
   await testOpenUrlFallsBackToWindowOpen();
   console.log("github update shared tests passed");

@@ -3,12 +3,19 @@
   "private": true,
   "type": "commonjs",
   "scripts": {
+    "check:architecture": "node scripts/check-architecture.js",
+    "check:docs": "node scripts/check-docs.js",
+    "check:manifest": "node scripts/check-manifest.js",
     "check:release-package": "node scripts/check-release-package.js",
+    "check:syntax": "node scripts/check-syntax.js",
+    "inspect:runtime": "node scripts/inspect-runtime.js",
     "test": "node tests/run-all-tests.js",
     "test:node": "node tests/run-suite.js unit integration",
     "test:unit": "node tests/run-suite.js unit",
     "test:integration": "node tests/run-suite.js integration",
-    "test:e2e": "node tests/run-suite.js e2e"
+    "test:e2e": "node tests/run-suite.js e2e",
+    "validate:fast": "node scripts/validate-feature.js",
+    "validate:full": "node scripts/validate-feature.js --full"
   },
   "devDependencies": {
     "playwright": "^1.59.1"

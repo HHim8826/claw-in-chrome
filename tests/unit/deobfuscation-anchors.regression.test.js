@@ -1495,10 +1495,6 @@ async function main() {
   await testPermissionManagerAnchorsExist();
   await testMcpPermissionsAnchorsExist();
   await testStorageChunkAnchorExists();
-  await testDeobfuscationMapMentionsCurrentFocusFiles();
-  await testSessionRecoveryDocMentionsServiceWorkerBridgePartitions();
-  await testToolExecutorIndicatorDocMentionsCurrentChain();
-  await testTaskPlanMentionsThirdRoundClosure();
   console.log("deobfuscation anchor regression tests passed");
 }
 

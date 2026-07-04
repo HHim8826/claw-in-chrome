@@ -1,0 +1,24 @@
+# Quality score
+
+This scorecard tracks the repository's current agent-development readiness.
+Update it when a gate is added, removed, or proven insufficient.
+
+## Current score
+
+The target is four or higher in every category.
+
+| Area | Score | Evidence | Next improvement |
+| --- | ---: | --- | --- |
+| Agent navigation | 4/5 | `AGENTS.md` and architecture index | Add module-local guides only when needed |
+| Automated tests | 4/5 | Unit, integration, and extension E2E suites | Add coverage reporting for readable modules |
+| Architecture safety | 4/5 | Contract and loader checks | Extract more side-panel behavior from the bundle |
+| CI and release | 3/5 | Fast CI, E2E CI, and release validation are defined | Confirm the first green remote run, then add signed provenance |
+| Runtime diagnostics | 3/5 | Storage-backed debug loggers and inspection command | Export diagnostics directly from E2E failures |
+| Security | 3/5 | Permission baseline and security guide | Add secret scanning and dependency review |
+| Documentation | 4/5 | Required-doc and local-link checks | Add automated command example execution |
+
+## Scoring rule
+
+Use one for undocumented/manual behavior, three for documented and partially
+tested behavior, and five for an enforced, observable, and low-maintenance
+contract. Do not raise a score without repository evidence.

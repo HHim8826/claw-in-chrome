@@ -3,7 +3,7 @@
 <div align="center">
 
 ![Claw in Chrome](https://img.shields.io/badge/Claw-in%20Chrome-blue?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.0.66.7-green?style=for-the-badge)
+![Release](https://img.shields.io/github/v/release/HHim8826/claw-in-chrome?style=for-the-badge)
 ![Platform](https://img.shields.io/badge/platform-Chrome%20116%2B-lightgrey?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)
 
@@ -46,7 +46,7 @@ Put Claw into Chrome's sidebar so you can connect your own model providers direc
 1. Open `chrome://extensions/`
 2. Turn on **Developer mode**
 3. Click **Load unpacked**
-4. Select this `claw in chrome` folder
+4. Select the repository's `src/` folder
 5. Pin `Claw` to the browser toolbar and open the sidebar
 
 ### 2. Configure a model provider
@@ -68,11 +68,16 @@ For this project's target workflow, that format usually unlocks the best tool be
 
 ## 🗂️ Project Structure
 
-- `assets/`: extension assets and bundled files
-- `i18n/`: localization resources
+- `src/`: unpacked extension root loaded by Chrome
+- `src/assets/`: upstream assets and bundled files
+- `src/i18n/`: localization resources
 - `tests/`: unit, integration, and E2E tests
-- `scripts/`: release helper scripts
-- `docs/`: screenshots and supplementary docs
+- `scripts/`: validation, inspection, and release helper scripts
+- `docs/`: architecture, security, reliability, and recovery documentation
+
+Developers and coding agents must read [`AGENTS.md`](./AGENTS.md) and run
+`npm run validate:fast` before committing. Changes to extension pages,
+background runtime, or release contents must also run `npm run validate:full`.
 
 ## ⚖️ License
 

@@ -782,6 +782,9 @@
     if (!normalized) {
       return null;
     }
+    if (normalized === "en-US") {
+      return null;
+    }
     if (customI18nPackCache.has(normalized)) {
       return customI18nPackCache.get(normalized);
     }

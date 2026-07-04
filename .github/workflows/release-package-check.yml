@@ -5,11 +5,7 @@ name: Release Package Check
     paths:
       - ".github/release-package-items.txt"
       - ".github/workflows/*.yml"
-      - "manifest.json"
-      - "*.html"
-      - "*.js"
-      - "*.css"
-      - "assets/**"
+      - "src/**"
       - "scripts/check-release-package.js"
   push:
     branches:
@@ -17,11 +13,7 @@ name: Release Package Check
     paths:
       - ".github/release-package-items.txt"
       - ".github/workflows/*.yml"
-      - "manifest.json"
-      - "*.html"
-      - "*.js"
-      - "*.css"
-      - "assets/**"
+      - "src/**"
       - "scripts/check-release-package.js"
 
 jobs:
