@@ -30,6 +30,9 @@ Apply these controls to every security-sensitive change.
   baseline intentionally.
 - Validate remote URLs and protocols before issuing requests.
 - Keep native-host names and runtime message fields in the shared contract.
+- Treat editable prompt rules and built-in prompt overrides as model
+  instructions, not authorization. They must not grant Chrome permissions,
+  bypass permission prompts, or mutate permission policy.
 
 ## Reporting
 

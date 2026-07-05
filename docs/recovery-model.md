@@ -35,6 +35,11 @@ Prefer these seams when implementing behavior.
   upstream application loads. The runtime filters request context, excludes
   temporary messages from session snapshots, and guards scope-ledger storage
   while incognito mode is enabled.
+- `custom-provider-settings.js` owns prompt-rule migration, scope
+  normalization, and built-in prompt override persistence. The side-panel
+  reads the same storage record through a Chrome storage subscription and a
+  narrow built-in-override reader; workflow-store writes still cross the
+  background mutation boundary.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
@@ -65,6 +70,9 @@ The current recovered layer protects these workflows.
 - Custom-provider errors stay inside the provider flow. The quick-mode bundle
   displays the returned error and never redirects custom-provider failures to
   Claude account usage settings.
+- Prompt rules compose deterministically by `main`, `relaxed`, and `quick`
+  scope. Built-in prompt overrides change model instructions only; they don't
+  change runtime permissions or bypass the permission manager.
 
 ## Known constraint
 

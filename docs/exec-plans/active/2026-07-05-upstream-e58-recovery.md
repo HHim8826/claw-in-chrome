@@ -204,3 +204,10 @@ results, review findings, commits, and push state here as work proceeds.
 - Provider GREEN: focused model and adapter suites pass Gemini endpoint and
   field filtering, endpoint normalization, `429` no-fallback behavior,
   DeepSeek transcript flattening, and Responses tool-call replay.
+- Prompt RED: the settings regression test failed because prompt rules had no
+  scope normalizer or context payload builder.
+- Prompt GREEN: scoped `main`, `relaxed`, and `quick` composition, legacy
+  prompt-profile migration, built-in override persistence, side-panel storage
+  subscriptions, and every supported built-in prompt consumer pass focused
+  regression and syntax checks. The fork's background workflow mutation
+  boundary was retained while reconciling the source settings module.

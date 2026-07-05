@@ -16,6 +16,9 @@ Preserve these invariants.
 - User-authored workflow replacement and shortcut synchronization run through
   one background mutation queue. The background preserves shortcut-owned
   entries when it commits user-owned workflow changes.
+- Prompt-rule migrations normalize malformed scopes to the supported
+  `main`, `relaxed`, and `quick` contexts, and settings writes preserve the
+  background workflow mutation boundary.
 - Session cleanup retains scopes needed for URL-based recovery.
 - Runtime message handlers acknowledge only messages they own.
 - Release packages contain every manifest, HTML, worker, and runtime dependency.

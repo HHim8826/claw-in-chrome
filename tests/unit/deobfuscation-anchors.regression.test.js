@@ -78,6 +78,7 @@ async function testCompactConversationCompactsWithoutTdz() {
       assert.equal(key, "zepher_prompt");
       return {};
     },
+    __cpReadBuiltInPromptOverride: async () => "",
   };
   const CompactConversationService = vm.runInNewContext(
     `${compactServiceSource}\nWX;`,
@@ -118,6 +119,10 @@ async function testCompactConversationCompactsWithoutTdz() {
   assert.equal(createMessagePayload.messages[0].role, "user");
   assert.equal(createMessagePayload.messages[1].role, "assistant");
   assert.equal(createMessagePayload.messages[2].role, "user");
+  assert.equal(
+    createMessagePayload.system[0].text,
+    "You are a helpful AI assistant tasked with summarizing browser automation conversations.",
+  );
   assert.equal(result.summaryMessage.isCompactSummary, true);
   assert.equal(result.messagesAfterCompacting.length, 2);
   assert.equal(result.messagesAfterCompacting[0].isCompactionMessage, true);
