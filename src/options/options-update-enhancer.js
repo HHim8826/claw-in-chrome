@@ -1,6 +1,7 @@
 (function () {
   const shared = globalThis.__CP_GITHUB_UPDATE_SHARED__;
   const providerContract = globalThis.__CP_CONTRACT__?.customProvider || {};
+  const uiContract = globalThis.__CP_CONTRACT__?.ui || {};
   if (!shared || !globalThis.chrome?.runtime?.id) {
     return;
   }
@@ -34,6 +35,12 @@
     viewRelease: "Open release",
     close: "Close",
     unknown: "Unknown",
+    incognitoCardTitle: "Incognito mode",
+    incognitoCardSubtitle:
+      "Each chat starts without previous context and is never written to local history.",
+    incognitoToggleLabel: "Incognito mode",
+    incognitoToggleHelp:
+      "Useful when questions keep changing: avoid sending irrelevant prior context to save tokens.",
     httpCardTitle: "HTTP Protocol",
     httpCardSubtitle:
       "Allow custom providers to use unencrypted HTTP endpoints. Enabled by default, and best used only on trusted local networks or in development.",
@@ -49,6 +56,8 @@
       navigatorLanguage: navigator.language,
       ignoredSelectors: [
         "#" + MODAL_ROOT_ID,
+        "#" + INCOGNITO_PANEL_ID,
+        "#" + INCOGNITO_ANCHOR_ID,
         "#" + HTTP_PANEL_ID,
         "#" + HTTP_ANCHOR_ID,
       ],
@@ -114,6 +123,10 @@
 
   const STYLE_ID = "cp-options-update-enhancer-style";
   const MODAL_ROOT_ID = "cp-options-update-enhancer-modal-root";
+  const INCOGNITO_PANEL_ID = "cp-options-incognito-mode-panel";
+  const INCOGNITO_ANCHOR_ID = "cp-options-incognito-mode-anchor";
+  const INCOGNITO_MODE_STORAGE_KEY =
+    uiContract.INCOGNITO_MODE_STORAGE_KEY || "incognitoMode";
   const HTTP_PANEL_ID = "cp-options-http-provider-panel";
   const HTTP_ANCHOR_ID = "cp-options-http-provider-anchor";
   const HTTP_PROVIDER_STORAGE_KEY =
@@ -737,6 +750,54 @@
       scheduleRefresh();
     }
   }
+  async function readIncognitoModeEnabled() {
+    const stored = await chrome.storage.local.get(INCOGNITO_MODE_STORAGE_KEY);
+    return stored[INCOGNITO_MODE_STORAGE_KEY] === true;
+  }
+  async function setIncognitoModeEnabled(enabled) {
+    const nextEnabled = !!enabled;
+    if (state) {
+      state.incognitoModePending = true;
+      scheduleEnhance();
+    }
+    try {
+      await chrome.storage.local.set({
+        [INCOGNITO_MODE_STORAGE_KEY]: nextEnabled,
+      });
+      if (state) {
+        state.incognitoModeEnabled = nextEnabled;
+      }
+    } finally {
+      if (state) {
+        state.incognitoModePending = false;
+      }
+      scheduleRefresh();
+    }
+  }
+  function ensureIncognitoPanelAnchor(panel) {
+    let anchor = document.getElementById(INCOGNITO_ANCHOR_ID);
+    if (!anchor) {
+      anchor = document.createElement("div");
+      anchor.id = INCOGNITO_ANCHOR_ID;
+      anchor.hidden = true;
+      anchor.setAttribute("aria-hidden", "true");
+    }
+    if (panel.nextElementSibling !== anchor) {
+      panel.insertAdjacentElement("afterend", anchor);
+    }
+    return anchor;
+  }
+  function getHttpPanelAnchorTarget(panel) {
+    const incognitoPanel = document.getElementById(INCOGNITO_PANEL_ID);
+    if (incognitoPanel?.parentElement || incognitoPanel?.parentNode) {
+      return incognitoPanel;
+    }
+    const incognitoAnchor = document.getElementById(INCOGNITO_ANCHOR_ID);
+    if (incognitoAnchor?.parentElement || incognitoAnchor?.parentNode) {
+      return incognitoAnchor;
+    }
+    return panel;
+  }
   function ensureHttpPanelAnchor(panel) {
     let anchor = document.getElementById(HTTP_ANCHOR_ID);
     if (!anchor) {
@@ -745,10 +806,15 @@
       anchor.hidden = true;
       anchor.setAttribute("aria-hidden", "true");
     }
-    if (panel.nextElementSibling !== anchor) {
-      panel.insertAdjacentElement("afterend", anchor);
+    const target = getHttpPanelAnchorTarget(panel);
+    if (target.nextElementSibling !== anchor) {
+      target.insertAdjacentElement("afterend", anchor);
     }
     return anchor;
+  }
+  function removeIncognitoPanel() {
+    document.getElementById(INCOGNITO_PANEL_ID)?.remove();
+    document.getElementById(INCOGNITO_ANCHOR_ID)?.remove();
   }
   function removeHttpPanel() {
     document.getElementById(HTTP_PANEL_ID)?.remove();
@@ -762,6 +828,8 @@
     }
     if (
       element.id === MODAL_ROOT_ID ||
+      element.id === INCOGNITO_PANEL_ID ||
+      element.id === INCOGNITO_ANCHOR_ID ||
       element.id === HTTP_PANEL_ID ||
       element.id === HTTP_ANCHOR_ID
     ) {
@@ -770,6 +838,10 @@
     return !!element.closest(
       "#" +
         MODAL_ROOT_ID +
+        ", #" +
+        INCOGNITO_PANEL_ID +
+        ", #" +
+        INCOGNITO_ANCHOR_ID +
         ", #" +
         HTTP_PANEL_ID +
         ", #" +
@@ -1007,6 +1079,95 @@
     wrap.appendChild(toggle);
     control.replaceChildren(wrap);
   }
+  function renderIncognitoPanel(panel) {
+    const strings = getStrings();
+    const anchor = ensureIncognitoPanelAnchor(panel);
+    let incognitoPanel = document.getElementById(INCOGNITO_PANEL_ID);
+    const signature =
+      (state?.incognitoModeEnabled ? "1" : "0") +
+      ":" +
+      (state?.incognitoModePending ? "1" : "0");
+    if (!incognitoPanel) {
+      incognitoPanel = document.createElement("section");
+      incognitoPanel.id = INCOGNITO_PANEL_ID;
+      incognitoPanel.className =
+        "cp-page-card cp-page-panel bg-bg-100 border border-border-300 rounded-xl px-6 pt-6 pb-6 md:px-8 md:pt-8 md:pb-8";
+    }
+    incognitoPanel.style.marginTop = "24px";
+    incognitoPanel.style.pointerEvents = "auto";
+    incognitoPanel.style.position = "relative";
+    incognitoPanel.style.zIndex = "1";
+    if (
+      incognitoPanel.dataset.cpIncognitoPanelSignature === signature &&
+      anchor.nextElementSibling === incognitoPanel
+    ) {
+      return;
+    }
+
+    const shell = document.createElement("div");
+    shell.style.display = "flex";
+    shell.style.flexDirection = "column";
+    shell.style.gap = "16px";
+
+    const header = document.createElement("div");
+    const title = document.createElement("h3");
+    title.className = "cp-page-heading text-text-100 font-xl-bold";
+    title.textContent = strings.incognitoCardTitle;
+    const subtitle = document.createElement("p");
+    subtitle.className = "cp-page-subheading text-text-300 font-base";
+    subtitle.textContent = strings.incognitoCardSubtitle;
+    header.appendChild(title);
+    header.appendChild(subtitle);
+
+    const row = document.createElement("div");
+    row.className = "cp-page-row";
+    const copy = document.createElement("div");
+    copy.className = "cp-page-row-copy";
+    const rowTitle = document.createElement("div");
+    rowTitle.className = "cp-page-row-title";
+    rowTitle.textContent = strings.incognitoToggleLabel;
+    const help = document.createElement("p");
+    help.className = "cp-page-row-help";
+    help.textContent = strings.incognitoToggleHelp;
+    copy.appendChild(rowTitle);
+    copy.appendChild(help);
+
+    const control = document.createElement("div");
+    control.className = "cp-update-enhancer-row-control";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "cp-page-toggle cp-update-enhancer-toggle";
+    toggle.dataset.enabled = state?.incognitoModeEnabled ? "true" : "false";
+    toggle.style.pointerEvents = "auto";
+    toggle.setAttribute("role", "switch");
+    toggle.setAttribute(
+      "aria-checked",
+      state?.incognitoModeEnabled ? "true" : "false",
+    );
+    toggle.setAttribute("aria-label", strings.incognitoToggleLabel);
+    toggle.title = strings.incognitoToggleLabel;
+    toggle.disabled = !!state?.incognitoModePending;
+    toggle.addEventListener("click", function () {
+      if (state?.incognitoModePending) {
+        return;
+      }
+      setIncognitoModeEnabled(!state?.incognitoModeEnabled).catch(
+        function () {},
+      );
+    });
+
+    control.appendChild(toggle);
+    row.appendChild(copy);
+    row.appendChild(control);
+    shell.appendChild(header);
+    shell.appendChild(row);
+    incognitoPanel.dataset.cpIncognitoPanelSignature = signature;
+    incognitoPanel.replaceChildren(shell);
+
+    if (anchor.nextElementSibling !== incognitoPanel) {
+      anchor.insertAdjacentElement("afterend", incognitoPanel);
+    }
+  }
   function renderHttpPanel(panel) {
     const strings = getStrings();
     const anchor = ensureHttpPanelAnchor(panel);
@@ -1098,30 +1259,36 @@
     ensureStyles();
     if (!isOptionsRootView()) {
       closeModal();
+      removeIncognitoPanel();
       removeHttpPanel();
       return;
     }
     const panel = findUpdatePanel();
     if (!panel || !state) {
+      removeIncognitoPanel();
       removeHttpPanel();
       return;
     }
     enhanceNotes(panel);
     enhanceAutoCheck(panel);
+    renderIncognitoPanel(panel);
     renderHttpPanel(panel);
   }
 
   async function refreshState() {
-    const [updateState, httpEnabled] = await Promise.all([
+    const [updateState, httpEnabled, incognitoModeEnabled] = await Promise.all([
       readStoredState(),
       readHttpProviderSupportEnabled(),
+      readIncognitoModeEnabled(),
       ensureStrings(getOptionsLocaleTag()),
     ]);
     state = {
       ...(updateState && typeof updateState === "object" ? updateState : {}),
       httpEnabled,
+      incognitoModeEnabled,
       autoCheckPending: !!state?.autoCheckPending,
       httpTogglePending: !!state?.httpTogglePending,
+      incognitoModePending: !!state?.incognitoModePending,
     };
     scheduleEnhance();
   }
@@ -1173,6 +1340,7 @@
       if (
         changes[STORAGE_KEYS.INFO] ||
         changes[STORAGE_KEYS.AUTO_CHECK_ENABLED] ||
+        changes[INCOGNITO_MODE_STORAGE_KEY] ||
         changes[HTTP_PROVIDER_STORAGE_KEY]
       ) {
         scheduleRefresh();

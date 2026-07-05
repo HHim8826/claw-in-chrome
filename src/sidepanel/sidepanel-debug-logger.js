@@ -9,9 +9,15 @@
   const permissionManagerContract = contract.permissionManager || {};
   const debugContract = contract.debug || {};
   const uiContract = contract.ui || {};
+  const sessionContract = contract.session || {};
   const STORAGE_KEY = debugContract.SIDEPANEL_LOGS_STORAGE_KEY || "sidepanelDebugLogs";
   const META_KEY = debugContract.SIDEPANEL_META_STORAGE_KEY || "sidepanelDebugMeta";
   const DEBUG_MODE_STORAGE_KEY = uiContract.DEBUG_MODE_STORAGE_KEY || "debugMode";
+  const INCOGNITO_MODE_STORAGE_KEY =
+    uiContract.INCOGNITO_MODE_STORAGE_KEY || "incognitoMode";
+  const CHAT_SCOPE_PREFIX =
+    sessionContract.CHAT_SCOPE_PREFIX || "claw.chat.scopes.";
+  const INCOGNITO_STORAGE_PATCH_FLAG = "__CP_INCOGNITO_STORAGE_PATCHED__";
   const MAX_ENTRIES = 500;
   const FLUSH_DELAY_MS = 150;
   const SESSION_ID = "sp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
@@ -27,7 +33,8 @@
         providerContract.SELECTED_MODEL_STORAGE_KEY || "selectedModel",
         providerContract.SELECTED_MODEL_QUICK_MODE_STORAGE_KEY || "selectedModelQuickMode",
         permissionManagerContract.LAST_PERMISSION_MODE_PREFERENCE_STORAGE_KEY || "lastPermissionModePreference",
-        modelsContract.CONFIG_STORAGE_KEY || "chrome_ext_models"
+        modelsContract.CONFIG_STORAGE_KEY || "chrome_ext_models",
+        INCOGNITO_MODE_STORAGE_KEY
       ]
   );
   const SENSITIVE_KEYS = new Set(["apikey", "anthropicapikey", "accesstoken", "refreshtoken", "authtoken", "authorization", "token", "secret", "password", "currentapikey", "originalapikey"]);
@@ -42,6 +49,291 @@
   // 调试模式固定开启，不再受本地 debugMode 偏好关闭。
   let debugEnabled = true;
   const pendingEntries = [];
+  function isSessionPersistenceKey(key) {
+    return String(key || "").startsWith(CHAT_SCOPE_PREFIX);
+  }
+  function normalizeStorageKeyList(keys) {
+    if (typeof keys === "string") {
+      return [keys];
+    }
+    if (Array.isArray(keys)) {
+      return keys.map(key => String(key || ""));
+    }
+    if (keys && typeof keys === "object") {
+      return Object.keys(keys);
+    }
+    return null;
+  }
+  function cloneStorageGetResultWithoutSessionKeys(result) {
+    if (!result || typeof result !== "object") {
+      return result;
+    }
+    const next = {
+      ...result
+    };
+    for (const key of Object.keys(next)) {
+      if (isSessionPersistenceKey(key)) {
+        delete next[key];
+      }
+    }
+    return next;
+  }
+  function isToolResultContentBlock(value) {
+    return !!value && typeof value === "object" && value.type === "tool_result";
+  }
+  function isIncognitoInternalUserMessage(message) {
+    if (!message || typeof message !== "object" || message.role !== "user") {
+      return false;
+    }
+    if (message._synthetic || message._syntheticResult) {
+      return true;
+    }
+    if (!Array.isArray(message.content)) {
+      return false;
+    }
+    const content = message.content.filter(Boolean);
+    return content.length > 0 && content.every(isToolResultContentBlock);
+  }
+  function filterMessagesForIncognitoRequest(messages, enabled) {
+    const list = Array.isArray(messages) ? messages : [];
+    if (!enabled || list.length <= 1) {
+      return list;
+    }
+    let startIndex = -1;
+    for (let index = list.length - 1; index >= 0; index -= 1) {
+      const message = list[index];
+      if (
+        message &&
+        typeof message === "object" &&
+        message.role === "user" &&
+        !isIncognitoInternalUserMessage(message)
+      ) {
+        startIndex = index;
+        break;
+      }
+    }
+    return startIndex > 0 ? list.slice(startIndex) : list;
+  }
+  const DEFAULT_INCOGNITO_SESSION_KEY = "__default__";
+  const incognitoMessageBoundaries = new Map();
+  function normalizeIncognitoSessionKey(sessionKey) {
+    const key = String(sessionKey || "").trim();
+    return key || DEFAULT_INCOGNITO_SESSION_KEY;
+  }
+  function beginTemporaryMessages(messages, sessionKey) {
+    const list = Array.isArray(messages) ? messages : [];
+    const key = normalizeIncognitoSessionKey(sessionKey);
+    const existing = incognitoMessageBoundaries.get(key);
+    if (existing && existing.endIndex == null) {
+      return list;
+    }
+    incognitoMessageBoundaries.set(key, {
+      startIndex: list.length,
+      endIndex: null
+    });
+    return list;
+  }
+  function stripTemporaryMessages(messages, sessionKey) {
+    const list = Array.isArray(messages) ? messages : [];
+    const key = normalizeIncognitoSessionKey(sessionKey);
+    const boundary = incognitoMessageBoundaries.get(key);
+    if (!boundary) {
+      return list;
+    }
+    const startIndex = Math.max(
+      0,
+      Math.min(Number(boundary.startIndex) || 0, list.length)
+    );
+    const rawEndIndex =
+      boundary.endIndex == null ? list.length : boundary.endIndex;
+    const endIndex = Math.max(
+      startIndex,
+      Math.min(Number(rawEndIndex) || startIndex, list.length)
+    );
+    if (endIndex <= startIndex) {
+      if (boundary.endIndex != null && list.length <= startIndex) {
+        incognitoMessageBoundaries.delete(key);
+      }
+      return list;
+    }
+    return list.slice(0, startIndex).concat(list.slice(endIndex));
+  }
+  function endTemporaryMessages(messages, sessionKey) {
+    const list = Array.isArray(messages) ? messages : [];
+    const key = normalizeIncognitoSessionKey(sessionKey);
+    const boundary = incognitoMessageBoundaries.get(key);
+    if (!boundary) {
+      return list;
+    }
+    if (boundary.endIndex == null) {
+      boundary.endIndex = list.length;
+    }
+    return stripTemporaryMessages(list, key);
+  }
+  function withOptionalStorageCallback(promise, callback) {
+    if (typeof callback !== "function") {
+      return promise;
+    }
+    promise.then(
+      value => callback(value),
+      error => {
+        console.warn("[sidepanel-incognito] storage guard failed", error);
+        callback(undefined);
+      }
+    );
+    return undefined;
+  }
+  function installIncognitoStorageGuard() {
+    const localStorageArea = chrome?.storage?.local;
+    if (!localStorageArea || globalThis[INCOGNITO_STORAGE_PATCH_FLAG]) {
+      return;
+    }
+    const nativeGet = localStorageArea.get.bind(localStorageArea);
+    const nativeSet = localStorageArea.set.bind(localStorageArea);
+    const nativeRemove = localStorageArea.remove.bind(localStorageArea);
+    let incognitoModeEnabled = false;
+    let incognitoModeHydrated = false;
+    async function readIncognitoModeEnabled() {
+      if (incognitoModeHydrated) {
+        return incognitoModeEnabled;
+      }
+      try {
+        const stored = await nativeGet(INCOGNITO_MODE_STORAGE_KEY);
+        incognitoModeEnabled =
+          stored?.[INCOGNITO_MODE_STORAGE_KEY] === true;
+      } catch {
+        incognitoModeEnabled = false;
+      }
+      incognitoModeHydrated = true;
+      return incognitoModeEnabled;
+    }
+    async function guardedGet(keys) {
+      const result = await nativeGet(keys);
+      if (!(await readIncognitoModeEnabled())) {
+        return result;
+      }
+      return cloneStorageGetResultWithoutSessionKeys(result);
+    }
+    async function guardedSet(items) {
+      if (
+        !(await readIncognitoModeEnabled()) ||
+        !items ||
+        typeof items !== "object" ||
+        Array.isArray(items)
+      ) {
+        return nativeSet(items);
+      }
+      const next = {};
+      let blockedCount = 0;
+      for (const [key, value] of Object.entries(items)) {
+        if (isSessionPersistenceKey(key)) {
+          blockedCount += 1;
+          continue;
+        }
+        next[key] = value;
+      }
+      if (!Object.keys(next).length) {
+        if (blockedCount) {
+          console.debug(
+            "[sidepanel-incognito] skipped session persistence write",
+            { blockedCount }
+          );
+        }
+        return undefined;
+      }
+      return nativeSet(next);
+    }
+    async function guardedRemove(keys) {
+      if (!(await readIncognitoModeEnabled())) {
+        return nativeRemove(keys);
+      }
+      const keyList = normalizeStorageKeyList(keys);
+      if (!keyList) {
+        return nativeRemove(keys);
+      }
+      const nextKeys = keyList.filter(key => !isSessionPersistenceKey(key));
+      if (nextKeys.length === keyList.length) {
+        return nativeRemove(keys);
+      }
+      if (!nextKeys.length) {
+        console.debug(
+          "[sidepanel-incognito] skipped session persistence removal",
+          { blockedCount: keyList.length }
+        );
+        return undefined;
+      }
+      return nativeRemove(
+        Array.isArray(keys) || (keys && typeof keys === "object")
+          ? nextKeys
+          : nextKeys[0]
+      );
+    }
+    localStorageArea.get = function (keys, callback) {
+      return withOptionalStorageCallback(guardedGet(keys), callback);
+    };
+    localStorageArea.set = function (items, callback) {
+      return withOptionalStorageCallback(guardedSet(items), callback);
+    };
+    localStorageArea.remove = function (keys, callback) {
+      return withOptionalStorageCallback(guardedRemove(keys), callback);
+    };
+    if (chrome?.storage?.onChanged) {
+      chrome.storage.onChanged.addListener(function (changes, areaName) {
+        if (
+          areaName !== "local" ||
+          !(INCOGNITO_MODE_STORAGE_KEY in (changes || {}))
+        ) {
+          return;
+        }
+        incognitoModeEnabled =
+          changes[INCOGNITO_MODE_STORAGE_KEY]?.newValue === true;
+        incognitoModeHydrated = true;
+      });
+    }
+    globalThis.__CP_INCOGNITO__ = {
+      storageKey: INCOGNITO_MODE_STORAGE_KEY,
+      chatScopePrefix: CHAT_SCOPE_PREFIX,
+      readEnabled: readIncognitoModeEnabled,
+      isEnabled() {
+        return incognitoModeEnabled;
+      },
+      filterMessagesForRequest(messages, sessionKey) {
+        const visibleMessages = incognitoModeEnabled
+          ? Array.isArray(messages)
+            ? messages
+            : []
+          : stripTemporaryMessages(messages, sessionKey);
+        return filterMessagesForIncognitoRequest(
+          visibleMessages,
+          incognitoModeEnabled
+        );
+      },
+      beginTemporaryMessages,
+      endTemporaryMessages,
+      filterMessagesForPersistence(messages, sessionKey) {
+        return stripTemporaryMessages(messages, sessionKey);
+      },
+      filterMessagesForRequestBySession(messages, sessionKey) {
+        const visibleMessages = incognitoModeEnabled
+          ? Array.isArray(messages)
+            ? messages
+            : []
+          : stripTemporaryMessages(messages, sessionKey);
+        return filterMessagesForIncognitoRequest(
+          visibleMessages,
+          incognitoModeEnabled
+        );
+      }
+    };
+    globalThis[INCOGNITO_STORAGE_PATCH_FLAG] = {
+      storageKey: INCOGNITO_MODE_STORAGE_KEY,
+      chatScopePrefix: CHAT_SCOPE_PREFIX,
+      nativeGet,
+      nativeSet,
+      nativeRemove
+    };
+  }
+  installIncognitoStorageGuard();
   function normalizeKey(key) {
     return String(key || "").replace(/[^a-z0-9]/gi, "").toLowerCase();
   }

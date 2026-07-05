@@ -5,6 +5,12 @@ const path = require("node:path");
 const rootDir = path.join(__dirname, "..", "..");
 const contractPath = path.join(rootDir, "src", "shared", "claw-contract.js");
 const settingsPath = path.join(rootDir, "src", "shared", "custom-provider-settings.js");
+const optionsEnhancerPath = path.join(
+  rootDir,
+  "src",
+  "options",
+  "options-update-enhancer.js"
+);
 const permissionManagerPath = path.join(
   rootDir, "src", "assets",
   "PermissionManager-9s959502.js",
@@ -17,6 +23,7 @@ const zhTwCustomI18nPath = path.join(rootDir, "src", "i18n", "custom", "zh-TW.js
 function main() {
   const contractSource = fs.readFileSync(contractPath, "utf8");
   const settingsSource = fs.readFileSync(settingsPath, "utf8");
+  const optionsEnhancerSource = fs.readFileSync(optionsEnhancerPath, "utf8");
   const permissionManagerSource = fs.readFileSync(permissionManagerPath, "utf8");
   const sidepanelSource = fs.readFileSync(sidepanelPath, "utf8");
   const sidepanelLoggerSource = fs.readFileSync(sidepanelLoggerPath, "utf8");
@@ -39,6 +46,18 @@ function main() {
     contractSource,
     /SHOW_SYSTEM_REMINDERS_STORAGE_KEY:\s*"showSystemReminders"/,
     "shared contract should expose the system reminders storage key",
+  );
+
+  assert.match(
+    contractSource,
+    /INCOGNITO_MODE_STORAGE_KEY:\s*"incognitoMode"/,
+    "shared contract should expose the incognito mode storage key"
+  );
+
+  assert.match(
+    optionsEnhancerSource,
+    /function renderIncognitoPanel\(panel\) \{[\s\S]*toggle\.className = "cp-page-toggle cp-update-enhancer-toggle";/s,
+    "options enhancer should render the incognito switch"
   );
 
   assert.match(
@@ -183,6 +202,30 @@ function main() {
     sidepanelLoggerSource,
     /let debugEnabled = true;/,
     "sidepanel debug logger should default to enabled",
+  );
+
+  assert.match(
+    sidepanelLoggerSource,
+    /function installIncognitoStorageGuard\(\) \{/,
+    "sidepanel logger should install the incognito storage boundary"
+  );
+
+  assert.match(
+    sidepanelSource,
+    /let p = be\(__cpFilterIncognitoRequestMessages\(L\)\);/,
+    "standard chat requests should use incognito-filtered context"
+  );
+
+  assert.match(
+    sidepanelSource,
+    /let f = AQ\(__cpIncognitoRuntime\?\.filterMessagesForRequest\?\.\(r, I\.current\) \|\| r\);/,
+    "quick-mode requests should use incognito-filtered context"
+  );
+
+  assert.match(
+    sidepanelSource,
+    /const __cpPersistentMessages = __cpIncognitoRuntime\?\.filterMessagesForPersistence\?\.\(dt, o\.sessionId\) \|\| dt;/,
+    "session snapshots should exclude temporary incognito messages"
   );
 
   assert.match(

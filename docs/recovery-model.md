@@ -31,6 +31,10 @@ Prefer these seams when implementing behavior.
   `service-worker-detached-window-runtime.js` expose injectable runtime APIs.
 - `sidepanel-debug-logger.js` and `options-debug-logger.js` expose sanitized
   diagnostics through `globalThis` debug APIs.
+- `sidepanel-debug-logger.js` exposes `globalThis.__CP_INCOGNITO__` before the
+  upstream application loads. The runtime filters request context, excludes
+  temporary messages from session snapshots, and guards scope-ledger storage
+  while incognito mode is enabled.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
@@ -56,6 +60,8 @@ The current recovered layer protects these workflows.
 - Permission prompts and MCP permission responses.
 - GitHub update metadata, release downloads, and update presentation.
 - Tool-result visualization and diagnostic logging.
+- Incognito request and persistence boundaries for standard chat, quick mode,
+  small-model helpers, and local session snapshots.
 
 ## Known constraint
 

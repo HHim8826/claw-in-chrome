@@ -193,3 +193,8 @@ results, review findings, commits, and push state here as work proceeds.
   `e58afcc2fbeaa988508d08cef08f837fd85665fa`.
 - Planning note: no implementation file was changed before this brief, plan,
   harness checklist, and done criteria were recorded.
+- Incognito RED: `node tests/unit/sidepanel-debug-logger.test.js` failed because
+  enabled mode still exposed `claw.chat.scopes.*` records.
+- Incognito GREEN: request filtering, temporary boundaries, persistence guards,
+  options placement and toggle behavior, bundle anchors, contract checks, i18n
+  parity, and syntax checks passed their focused commands.

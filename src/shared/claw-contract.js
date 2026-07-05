@@ -61,6 +61,7 @@
       SHOW_TRACE_IDS_STORAGE_KEY: "showTraceIds",
       SHOW_SYSTEM_REMINDERS_STORAGE_KEY: "showSystemReminders",
       SHOW_TOOL_RESULT_DETAILS_STORAGE_KEY: "showToolResultDetails",
+      INCOGNITO_MODE_STORAGE_KEY: "incognitoMode",
     },
     session: {
       CHAT_SCOPE_PREFIX: "claw.chat.scopes.",

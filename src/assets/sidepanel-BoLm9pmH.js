@@ -88488,7 +88488,11 @@ function CQ({
       } else if (m === "small_fast") {
         v = R || L;
       }
-      const x = await qs(y.messages);
+      const __cpIncognitoRuntime = globalThis.__CP_INCOGNITO__;
+      if (__cpIncognitoRuntime?.readEnabled) {
+        await __cpIncognitoRuntime.readEnabled().catch(() => false);
+      }
+      const x = await qs(__cpIncognitoRuntime?.filterMessagesForRequest?.(y.messages, s) || y.messages);
       const b = {
         ...y,
         messages: x,
@@ -89075,7 +89079,12 @@ function CQ({
       }
       __cpPendingUserMessage = n;
     }
-    const __cpProjectedMetrics = ZX.calculateProjectedMetricsFromMessages(L, __cpMaxOutputTokens, __cpContextWindow);
+    const __cpIncognitoRuntime = globalThis.__CP_INCOGNITO__;
+    if (__cpIncognitoRuntime?.readEnabled) {
+      await __cpIncognitoRuntime.readEnabled().catch(() => false);
+    }
+    const __cpFilterIncognitoRequestMessages = e => __cpIncognitoRuntime?.filterMessagesForRequest?.(e, s) || e;
+    const __cpProjectedMetrics = ZX.calculateProjectedMetricsFromMessages(__cpFilterIncognitoRequestMessages(L), __cpMaxOutputTokens, __cpContextWindow);
     if (!v && __cpProjectedMetrics && __cpProjectedMetrics.isError) {
       P(true);
       z(null);
@@ -89222,7 +89231,7 @@ function CQ({
           y.setAttribute("permissions", x);
           y.setAttribute("model", o.current);
           try {
-            let p = be(L);
+            let p = be(__cpFilterIncognitoRequestMessages(L));
             p = await qs(p);
             rQ(p, e => {
               w(t => t.map((t, n) => e[n] || t));
@@ -90261,7 +90270,11 @@ function FQ(e) {
               };
               let s = 0;
               let p = 0;
-              let f = AQ(r);
+              const __cpIncognitoRuntime = globalThis.__CP_INCOGNITO__;
+              if (__cpIncognitoRuntime?.readEnabled) {
+                await __cpIncognitoRuntime.readEnabled().catch(() => false);
+              }
+              let f = AQ(__cpIncognitoRuntime?.filterMessagesForRequest?.(r, I.current) || r);
               f = LQ(f, Q.current);
               r.push({
                 role: "assistant",
@@ -97224,6 +97237,45 @@ function o1() {
     });
     return s;
   }, [__cpNormalizeScopeState, __cpStartEmptySessionForScope]);
+  a.useEffect(() => {
+    const e = globalThis.__CP_INCOGNITO__;
+    const t = e?.storageKey || "incognitoMode";
+    if (!e || !chrome?.storage?.onChanged) {
+      return;
+    }
+    e.readEnabled?.().then(t => {
+      if (t) {
+        e.beginTemporaryMessages?.(dt, o.sessionId);
+      }
+    }).catch(() => {});
+    const n = (n, s) => {
+      if (s !== "local" || !(t in (n || {}))) {
+        return;
+      }
+      if (n[t]?.newValue === true) {
+        e.beginTemporaryMessages?.(dt, o.sessionId);
+        __cpPanelDebugLog("incognito.boundary_started", {
+          sessionId: o.sessionId,
+          messageCount: Array.isArray(dt) ? dt.length : 0
+        });
+        return;
+      }
+      const r = e.endTemporaryMessages?.(dt, o.sessionId) || dt;
+      if (r !== dt && Array.isArray(r) && r.length !== (Array.isArray(dt) ? dt.length : 0)) {
+        __cpPersistedSessionSignatureRef.current = "";
+        __cpPersistedDraftSignatureRef.current = "";
+        __cpSetChatMessages(r);
+        __cpSetLastStopReason(null);
+        __cpPanelDebugLog("incognito.boundary_discarded", {
+          sessionId: o.sessionId,
+          beforeCount: Array.isArray(dt) ? dt.length : 0,
+          afterCount: r.length
+        });
+      }
+    };
+    chrome.storage.onChanged.addListener(n);
+    return () => chrome.storage.onChanged.removeListener(n);
+  }, [dt, o.sessionId, __cpSetChatMessages, __cpSetLastStopReason]);
   // 语义锚点：把当前输入框草稿持久化到 scope draft ledger，供 scope 切换 / detached window 恢复时优先回放。
   const __cpPersistDraftState = a.useCallback(async (e = __cpActiveScopeRef.current) => {
     const t = __cpNormalizeScopeState(e);
@@ -97272,22 +97324,24 @@ function o1() {
   // 语义锚点：把当前消息快照持久化到 scope session ledger，供 hydrate / recent session / detached window 接续。
   const __cpPersistSessionSnapshot = a.useCallback(async (e = __cpActiveScopeRef.current) => {
     const t = __cpNormalizeScopeState(e);
-    if (__cpHydratingSessionRef.current || !t.ready || !__cpSessionHasMeaningfulMessages(dt)) {
+    const __cpIncognitoRuntime = globalThis.__CP_INCOGNITO__;
+    const __cpPersistentMessages = __cpIncognitoRuntime?.filterMessagesForPersistence?.(dt, o.sessionId) || dt;
+    if (__cpHydratingSessionRef.current || !t.ready || !__cpSessionHasMeaningfulMessages(__cpPersistentMessages)) {
       __cpPanelDebugLog("session.persist_snapshot_skipped", {
         scopeId: t.scopeId,
         ready: t.ready,
         hydrating: __cpHydratingSessionRef.current,
-        messageCount: Array.isArray(dt) ? dt.length : 0
+        messageCount: Array.isArray(__cpPersistentMessages) ? __cpPersistentMessages.length : 0
       });
       return null;
     }
     const n = await __cpResolveSessionTabContext();
     const s = __cpBuildSessionSnapshot({
       sessionId: o.sessionId,
-      messages: dt,
+      messages: __cpPersistentMessages,
       selectedModel: D,
       quickMode: ne,
-      lastStopReason: jt,
+      lastStopReason: __cpPersistentMessages === dt ? jt : null,
       createdAt: __cpSessionCreatedAtRef.current,
       scopeId: t.scopeId,
       mainTabId: t.mainTabId,
