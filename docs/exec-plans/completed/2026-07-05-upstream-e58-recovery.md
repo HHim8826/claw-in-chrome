@@ -142,8 +142,8 @@ The feature must leave repeatable guardrails for future upstream recovery.
   behavior changes their contracts.
 - [x] `docs/QUALITY_SCORE.md` records any deferred source behavior or residual
   bundle debt.
-- [ ] `npm run inspect:runtime` confirms no permission or entry-point drift.
-- [ ] Spec, harness, architecture, security, and regression reviews are
+- [x] `npm run inspect:runtime` confirms no permission or entry-point drift.
+- [x] Spec, harness, architecture, security, and regression reviews are
   recorded.
 
 No new external service, permission, or generated fixture is planned. Existing
@@ -155,21 +155,21 @@ test form the runtime harness.
 The feature is done only when all behavior, validation, documentation, and Git
 conditions are satisfied.
 
-- [ ] All seven source behavior groups are implemented, proven equivalent, or
+- [x] All seven source behavior groups are implemented, proven equivalent, or
   explicitly excluded with evidence and user-impact reasoning.
-- [ ] Every implemented behavior has recorded RED and GREEN evidence.
-- [ ] Existing local Markdown behavior and current provider error handling
+- [x] Every implemented behavior has recorded RED and GREEN evidence.
+- [x] Existing local Markdown behavior and current provider error handling
   remain covered and aren't weakened.
-- [ ] `npm run validate:fast` passes.
-- [ ] `npm run validate:full` passes without extension page or console errors.
-- [ ] `npm run inspect:runtime` shows unchanged permissions and entry points.
-- [ ] No source version bump, root-layout rollback, or unrelated generated
+- [x] `npm run validate:fast` passes.
+- [x] `npm run validate:full` passes without extension page or console errors.
+- [x] `npm run inspect:runtime` shows unchanged permissions and entry points.
+- [x] No source version bump, root-layout rollback, or unrelated generated
   bundle change appears in the final diff.
-- [ ] Documentation links pass `npm run check:docs`.
-- [ ] Review findings are fixed or recorded as explicit blockers.
-- [ ] This plan moves to `docs/exec-plans/completed/` with final evidence.
-- [ ] Task-owned changes are committed as coherent GREEN checkpoints.
-- [ ] The final handoff reports commit hashes and the push result or exact push
+- [x] Documentation links pass `npm run check:docs`.
+- [x] Review findings are fixed or recorded as explicit blockers.
+- [x] This plan moves to `docs/exec-plans/completed/` with final evidence.
+- [x] Task-owned changes are committed as coherent GREEN checkpoints.
+- [x] The final handoff reports commit hashes and the push result or exact push
   blocker.
 
 ## Runtime and rollback evidence
@@ -223,3 +223,18 @@ results, review findings, commits, and push state here as work proceeds.
 - Source exclusions: version and README edits remain non-goals. Font-only HTML
   preloads are omitted because they are not part of the seven advertised
   behavior groups and would add unrelated release-page churn.
+- Validation: `npm run validate:fast` and `npm run validate:full` pass. The
+  headed E2E reports no options-page, visualizer-page, or console errors.
+- Runtime inspection: extension root `D:\code\claw-in-chrome\src`, version
+  `1.0.67.7`, background entry `background/service-worker-loader.js`, options
+  entry `options/options.html`, existing 15 extension permissions, and
+  `<all_urls>` host access are unchanged.
+- Review evidence: the spec review mapped all seven advertised behaviors to
+  focused tests; the harness review confirmed RED/GREEN slices and coherent
+  commits; the architecture review limited bundle edits to existing React
+  owners; the security review found no permission, credential, or
+  authorization expansion; the regression review found no task-owned
+  failures or E2E page errors.
+- Checkpoints: `e0c7f37`, `0c4243b`, `0898fd4`, `98c89b0`, and `87ae2fb`.
+- Push state is intentionally reported in the final handoff after the final
+  documentation checkpoint.
