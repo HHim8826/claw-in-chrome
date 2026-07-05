@@ -83502,6 +83502,35 @@ function xX({
   const [oe, ae] = a.useState(f?.url || "");
   const le = Ge();
   const [ce, ue] = a.useState(f?.model || u || le.default || "");
+  a.useEffect(() => {
+    const e = Array.isArray(le.options) ? le.options : [];
+    const t = t => {
+      const n = String(t || "").trim();
+      if (!n) {
+        return false;
+      }
+      return e.some(e => {
+        const t = typeof e == "string" ? e : String(e?.model || e?.value || "").trim();
+        return t === n;
+      });
+    };
+    const n = String(u || "").trim();
+    const s = String(le.default || "").trim();
+    const r = n && (!e.length || t(n)) ? n : s;
+    if (!r) {
+      return;
+    }
+    ue(e => {
+      const n = String(e || "").trim();
+      if (f?.model && n === f.model) {
+        return e;
+      }
+      if (!n || Array.isArray(le.options) && le.options.length > 0 && !t(n)) {
+        return r;
+      }
+      return e;
+    });
+  }, [f?.model, u, le.default, le.options]);
   const de = [d.formatMessage({
     defaultMessage: "Sunday",
     id: "mJR06Pgp0X"
@@ -86111,10 +86140,20 @@ const ZX = new class {
     }
     return this.estimateTokenCountFromValue(e.content);
   }
+  hasUsableUsage(e) {
+    if (!e || typeof e != "object") {
+      return false;
+    }
+    const t = Number(e.input_tokens || 0);
+    const n = Number(e.output_tokens || 0);
+    const s = Number(e.cache_creation_input_tokens || 0);
+    const r = Number(e.cache_read_input_tokens || 0);
+    return [t, n, s, r].some(e => Number.isFinite(e) && e > 0);
+  }
   calculateMetricsFromMessages(e, t, n = 200000) {
     for (let r = e.length - 1; r >= 0; r--) {
       const s = e[r];
-      if (s && "role" in s && s.role === "assistant" && "usage" in s && s.usage) {
+      if (s && "role" in s && s.role === "assistant" && "usage" in s && this.hasUsableUsage(s.usage)) {
         return this.calculateMetricsFromUsage(s.usage, t, n);
       }
     }
@@ -86147,7 +86186,7 @@ const ZX = new class {
     let s = null;
     for (let i = e.length - 1; i >= 0; i--) {
       const o = e[i];
-      if (o && "role" in o && o.role === "assistant" && "usage" in o && o.usage) {
+      if (o && "role" in o && o.role === "assistant" && "usage" in o && this.hasUsableUsage(o.usage)) {
         r = i;
         s = o.usage;
         break;
@@ -92216,7 +92255,14 @@ function __cpNormalizeSessionNumber(e, t = Date.now()) {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : t;
 }
 function __cpTrimSessionText(e, t = __CP_CHAT_SESSION_TEXT_LIMIT) {
-  const n = String(e || "").trim();
+  const n = String(e || "").replace(/\s+/g, " ").trim();
+  if (!n) {
+    return "";
+  }
+  return n.length > t ? `${n.slice(0, Math.max(0, t - 1)).trimEnd()}…` : n;
+}
+function __cpTrimSessionContentText(e, t = __CP_CHAT_SESSION_TEXT_LIMIT) {
+  const n = String(e || "").replace(/\r\n?/g, "\n").trim();
   if (!n) {
     return "";
   }
@@ -92240,7 +92286,7 @@ function __cpNormalizeSessionLabel(e, t = __CP_CHAT_SESSION_PREVIEW_LIMIT) {
   return __cpTrimSessionText(e, t);
 }
 function __cpNormalizeSessionSearchText(e) {
-  return String(e || "").trim().toLowerCase();
+  return String(e || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 function __cpBuildScopeRestoreAnchor(e = {}) {
   const t = __cpNormalizeSessionScopeId(e.scopeId);
@@ -92320,21 +92366,21 @@ function __cpSanitizeSessionJsonValue(e, t = 0) {
 }
 function __cpExtractSessionText(e) {
   if (typeof e == "string") {
-    return __cpTrimSessionText(e);
+    return __cpTrimSessionContentText(e);
   }
   if (Array.isArray(e)) {
-    return __cpTrimSessionText(e.map(__cpExtractSessionText).filter(Boolean).join("\n\n"));
+    return __cpTrimSessionContentText(e.map(__cpExtractSessionText).filter(Boolean).join("\n\n"));
   }
   if (e && typeof e == "object") {
     if (typeof e.text == "string") {
-      return __cpTrimSessionText(e.text);
+      return __cpTrimSessionContentText(e.text);
     }
     if ("content" in e) {
       return __cpExtractSessionText(e.content);
     }
     try {
       const t = __cpSanitizeSessionJsonValue(e);
-      return t === undefined ? "" : __cpTrimSessionText(JSON.stringify(t), __CP_CHAT_SESSION_JSON_TEXT_LIMIT);
+      return t === undefined ? "" : __cpTrimSessionContentText(JSON.stringify(t), __CP_CHAT_SESSION_JSON_TEXT_LIMIT);
     } catch (t) {
       return "";
     }
@@ -92358,7 +92404,7 @@ function __cpSerializeSessionToolResult(e) {
 }
 function __cpSerializeSessionContent(e) {
   if (typeof e == "string") {
-    return __cpTrimSessionText(e);
+    return __cpTrimSessionContentText(e);
   }
   if (!Array.isArray(e)) {
     return __cpExtractSessionText(e);
@@ -92369,7 +92415,7 @@ function __cpSerializeSessionContent(e) {
       continue;
     }
     if (n.type === "text") {
-      const e = __cpTrimSessionText(n.text || "");
+      const e = __cpTrimSessionContentText(n.text || "");
       if (e) {
         t.push({
           type: "text",

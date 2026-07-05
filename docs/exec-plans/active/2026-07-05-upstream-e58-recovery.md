@@ -130,17 +130,17 @@ The feature must leave repeatable guardrails for future upstream recovery.
 - [x] Product behavior is recorded in `docs/product-specs/` before code changes.
 - [x] Multi-step work is recorded in `docs/exec-plans/active/` before code
   changes.
-- [ ] Every source-commit claim maps to a focused test or documented exclusion.
-- [ ] Incognito storage and message boundaries have pure deterministic tests.
-- [ ] Gemini, DeepSeek, and `429` behavior use provider boundary tests.
-- [ ] Prompt migrations and scoped composition have malformed-data fixtures.
-- [ ] Markdown preservation has a multiline session round-trip fixture.
-- [ ] Shortcut model resolution has configured and fetched-model fixtures.
-- [ ] Every generated bundle patch has a semantic anchor regression test.
-- [ ] `docs/recovery-model.md` describes each new stable seam.
-- [ ] `docs/SECURITY.md` and `docs/RELIABILITY.md` reflect final state when
+- [x] Every source-commit claim maps to a focused test or documented exclusion.
+- [x] Incognito storage and message boundaries have pure deterministic tests.
+- [x] Gemini, DeepSeek, and `429` behavior use provider boundary tests.
+- [x] Prompt migrations and scoped composition have malformed-data fixtures.
+- [x] Markdown preservation has a multiline session round-trip fixture.
+- [x] Shortcut model resolution has configured and fetched-model fixtures.
+- [x] Every generated bundle patch has a semantic anchor regression test.
+- [x] `docs/recovery-model.md` describes each new stable seam.
+- [x] `docs/SECURITY.md` and `docs/RELIABILITY.md` reflect final state when
   behavior changes their contracts.
-- [ ] `docs/QUALITY_SCORE.md` records any deferred source behavior or residual
+- [x] `docs/QUALITY_SCORE.md` records any deferred source behavior or residual
   bundle debt.
 - [ ] `npm run inspect:runtime` confirms no permission or entry-point drift.
 - [ ] Spec, harness, architecture, security, and regression reviews are
@@ -211,3 +211,15 @@ results, review findings, commits, and push state here as work proceeds.
   subscriptions, and every supported built-in prompt consumer pass focused
   regression and syntax checks. The fork's background workflow mutation
   boundary was retained while reconciling the source settings module.
+- History/context RED: a restored assistant record with all-zero usage hid an
+  earlier valid context measurement. The shortcut-model regression also
+  failed because custom-provider models were not overlaid into the shared
+  model config.
+- History/context GREEN: multiline Markdown survives CRLF normalization and
+  local serialization while labels remain single-line; zero-filled usage is
+  skipped; configured, fetched, and cached provider models merge
+  deterministically; both shortcut editors follow the resolved default without
+  replacing an explicitly saved selection.
+- Source exclusions: version and README edits remain non-goals. Font-only HTML
+  preloads are omitted because they are not part of the seven advertised
+  behavior groups and would add unrelated release-page churn.

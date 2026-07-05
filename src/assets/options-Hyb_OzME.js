@@ -2605,9 +2605,31 @@ function de({ prompt: a, onClose: r, onSave: i }) {
   const [V, W] = s.useState(a?.specificDate || "");
   const [U, Y] = s.useState(a?.url || "");
   const $ = w();
+  const __cpShortcutFallbackModelId = "claude-sonnet-4-5-20250929";
   const [q, G] = s.useState(
-    a?.model || $.default || "claude-sonnet-4-5-20250929",
+    a?.model || $.default || __cpShortcutFallbackModelId,
   );
+  s.useEffect(() => {
+    const e = String($.default || "").trim();
+    if (!e) {
+      return;
+    }
+    const t = Array.isArray($.options) ? $.options : [];
+    G((n) => {
+      const r = String(n || "").trim();
+      if (a?.model && r === a.model) {
+        return n;
+      }
+      const i = t.some((e) => {
+        const t = typeof e == "string" ? e : String(e?.model || e?.value || "").trim();
+        return t === r;
+      });
+      if (!r || r === __cpShortcutFallbackModelId || (t.length && !i)) {
+        return e;
+      }
+      return n;
+    });
+  }, [a?.model, $.default, $.options]);
   s.useEffect(() => {
     setTimeout(() => {
       v.current?.focus();

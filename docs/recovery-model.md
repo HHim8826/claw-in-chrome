@@ -40,6 +40,10 @@ Prefer these seams when implementing behavior.
   reads the same storage record through a Chrome storage subscription and a
   narrow built-in-override reader; workflow-store writes still cross the
   background mutation boundary.
+- The `useStorageState` model-config seam resolves configured, fetched, and
+  cached custom-provider models before shortcut editors render. Both shortcut
+  bundles track the resolved default and replace only empty, temporary, or
+  stale selections.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
@@ -73,6 +77,10 @@ The current recovered layer protects these workflows.
 - Prompt rules compose deterministically by `main`, `relaxed`, and `quick`
   scope. Built-in prompt overrides change model instructions only; they don't
   change runtime permissions or bypass the permission manager.
+- Local session content uses a Markdown-preserving text normalizer, while
+  titles, labels, and search keys use single-line whitespace normalization.
+  Context metrics skip restored assistant records whose usage fields are all
+  zero so an earlier usable measurement remains visible.
 
 ## Known constraint
 

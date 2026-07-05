@@ -66781,12 +66781,191 @@ const _U = e.forwardRef(
 // 语义锚点：模型配置（展示名/别名等）在 storage 里的 key。
 const __cpModelsConfigStorageKey =
   globalThis.__CP_CONTRACT__?.models?.CONFIG_STORAGE_KEY || "chrome_ext_models";
+const __cpCustomProviderConfigStorageKeyForModels = "customProviderConfig";
+const __cpFetchedModelsCacheKeyForModels = "customProviderFetchedModelsCache";
 function xU() {
-  return _(__cpModelsConfigStorageKey, xUDefaultModelConfig);
+  const t = _(__cpModelsConfigStorageKey, xUDefaultModelConfig);
+  return __cpUseResolvedModelsConfig(t);
 }
 const __cpModelsConfigReader = xU;
 const xUDefaultModelConfig = {};
 const __cpModelsConfigDefaultValue = xUDefaultModelConfig;
+function __cpNormalizeProviderModelOptionEntry(e) {
+  if (typeof e == "string") {
+    const t = String(e).trim();
+    return t ? { model: t, name: t } : null;
+  }
+  if (!e || typeof e != "object") {
+    return null;
+  }
+  const t = String(e?.model || e?.value || "").trim();
+  if (!t) {
+    return null;
+  }
+  return {
+    ...e,
+    model: t,
+    name: String(e?.name || e?.label || t).trim() || t
+  };
+}
+function __cpNormalizeProviderModelOptions(e) {
+  const t = new Map();
+  for (const n of Array.isArray(e) ? e : []) {
+    const e = __cpNormalizeProviderModelOptionEntry(n);
+    if (e && !t.has(e.model)) {
+      t.set(e.model, e);
+    }
+  }
+  return Array.from(t.values());
+}
+function __cpNormalizeProviderFormatForModels(e, t) {
+  const n = String(e || "").trim().toLowerCase();
+  if (n === "openai" || n === "openai_chat") {
+    return "openai_chat";
+  }
+  if (n === "responses" || n === "openai_responses") {
+    return "openai_responses";
+  }
+  if (n === "anthropic") {
+    return "anthropic";
+  }
+  const r = String(t || "").trim().toLowerCase();
+  if (/\/responses$/i.test(r)) {
+    return "openai_responses";
+  }
+  if (/\/chat\/completions$/i.test(r)) {
+    return "openai_chat";
+  }
+  return "anthropic";
+}
+function __cpHashProviderCacheKeyForModels(e) {
+  let t = 2166136261;
+  const n = String(e || "");
+  for (let r = 0; r < n.length; r += 1) {
+    t ^= n.charCodeAt(r);
+    t = Math.imul(t, 16777619);
+  }
+  return (t >>> 0).toString(36);
+}
+function __cpBuildFetchedModelsCacheEntryKeyForModels(e) {
+  const t = e && typeof e == "object" ? e : {};
+  const n = String(t.baseUrl || "").trim();
+  const r = String(t.apiKey || "").trim();
+  if (!n || !r) {
+    return "";
+  }
+  return "provider_" + __cpHashProviderCacheKeyForModels([
+    __cpNormalizeProviderFormatForModels(t.format, n),
+    n,
+    r
+  ].join("\n"));
+}
+function __cpReadCachedProviderModelOptionsForModels(e, t) {
+  const n = __cpBuildFetchedModelsCacheEntryKeyForModels(t);
+  if (!n) {
+    return [];
+  }
+  const r = e && typeof e == "object" ? e : {};
+  return __cpNormalizeProviderModelOptions(r[n]?.models);
+}
+function __cpMergeModelsConfigOptions(...e) {
+  const t = new Map();
+  for (const n of e) {
+    for (const e of Array.isArray(n) ? n : []) {
+      const n = __cpNormalizeModelsConfigOptionEntry(e, {});
+      if (!n) {
+        continue;
+      }
+      if (t.has(n.model)) {
+        const e = t.get(n.model);
+        if (e && (!e.name || e.name === e.model) && n.name && n.name !== n.model) {
+          t.set(n.model, { ...e, ...n });
+        }
+        continue;
+      }
+      t.set(n.model, n);
+    }
+  }
+  return Array.from(t.values());
+}
+function __cpBuildCustomProviderModelsConfig(e, t) {
+  const n = e && typeof e == "object" ? e : {};
+  const r = String(n.baseUrl || "").trim();
+  const o = String(n.defaultModel || "").trim();
+  if (!r || !o) {
+    return {};
+  }
+  const a = String(n.fastModel || n.small_fast_model || "").trim();
+  const i = __cpMergeModelsConfigOptions([
+    { model: o, name: o },
+    a ? { model: a, name: a } : null
+  ], __cpNormalizeProviderModelOptions(n.fetchedModels), __cpReadCachedProviderModelOptionsForModels(t, n));
+  return {
+    default: o,
+    default_model_override_id: null,
+    options: i,
+    quick_mode: undefined,
+    small_fast_model: a || o || undefined,
+    maxOutputTokens: n.maxOutputTokens,
+    contextWindow: n.contextWindow
+  };
+}
+function __cpApplyCustomProviderModelsConfig(e, t) {
+  if (!t?.default) {
+    return e || xUDefaultModelConfig;
+  }
+  return {
+    ...(e || xUDefaultModelConfig),
+    ...t,
+    options: t.options && t.options.length ? t.options : e?.options || []
+  };
+}
+function __cpAreResolvedModelsConfigEqual(e, t) {
+  try {
+    return JSON.stringify(e || {}) === JSON.stringify(t || {});
+  } catch {
+    return e === t;
+  }
+}
+function __cpUseResolvedModelsConfig(t) {
+  const [n, r] = e.useState(() => __cpBuildCustomProviderModelsConfig(null));
+  e.useEffect(() => {
+    if (!globalThis.chrome?.storage?.local) {
+      return;
+    }
+    let e = false;
+    const t = async () => {
+      try {
+        const [t, o] = await Promise.all([
+          chrome.storage.local.get(__cpCustomProviderConfigStorageKeyForModels),
+          chrome.storage.local.get(__cpFetchedModelsCacheKeyForModels)
+        ]);
+        if (e) {
+          return;
+        }
+        const a = __cpBuildCustomProviderModelsConfig(t[__cpCustomProviderConfigStorageKeyForModels], o[__cpFetchedModelsCacheKeyForModels]);
+        r(e => __cpAreResolvedModelsConfigEqual(e, a) ? e : a);
+      } catch {
+        if (!e) {
+          r(e => __cpAreResolvedModelsConfigEqual(e, {}) ? e : {});
+        }
+      }
+    };
+    t();
+    const n = (e, r) => {
+      if (r !== "local" || !e[__cpCustomProviderConfigStorageKeyForModels] && !e[__cpFetchedModelsCacheKeyForModels]) {
+        return;
+      }
+      t();
+    };
+    chrome.storage.onChanged.addListener(n);
+    return () => {
+      e = true;
+      chrome.storage.onChanged.removeListener(n);
+    };
+  }, []);
+  return e.useMemo(() => __cpApplyCustomProviderModelsConfig(t, n), [t, n]);
+}
 function __cpNormalizeModelsConfigOptionEntry(e, t = {}) {
   if (typeof e == "string") {
     const n = String(e).trim();

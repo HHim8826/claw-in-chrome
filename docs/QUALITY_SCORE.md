@@ -22,3 +22,13 @@ The target is four or higher in every category.
 Use one for undocumented/manual behavior, three for documented and partially
 tested behavior, and five for an enforced, observable, and low-maintenance
 contract. Do not raise a score without repository evidence.
+
+## Current recovery debt
+
+The upstream e58 recovery adds tested semantic anchors to the side-panel,
+options, and storage bundles because those React owners have no readable
+extension seam. Future upstream rebases should extract the model resolver,
+session text normalizers, and context-usage selector into readable modules.
+The source commit's font-preload-only HTML churn is intentionally excluded: it
+is not one of the seven advertised functional or bug-fix behaviors and would
+expand page/release churn without changing their contract.

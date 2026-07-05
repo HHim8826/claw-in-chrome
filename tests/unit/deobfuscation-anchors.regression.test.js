@@ -204,6 +204,56 @@ ${source.slice(builderStart, builderEnd)}
     maxOutputTokens: 10000,
   });
   assert.equal(displayMetrics.contextWindow, 40000);
+
+  const usageMetrics = ZX.calculateMetricsFromMessages(
+    [
+      {
+        role: "assistant",
+        content: "measured",
+        usage: { input_tokens: 1200, output_tokens: 80 },
+      },
+      {
+        role: "assistant",
+        content: "restored without usage",
+        usage: { input_tokens: 0, output_tokens: 0 },
+      },
+    ],
+    1000,
+    10000,
+  );
+  assert.equal(
+    usageMetrics.totalTokens,
+    1280,
+    "zero-filled restored usage must not hide the last usable context metrics",
+  );
+}
+
+async function testSessionMarkdownPreservesContentButNormalizesLabels() {
+  const source = read(sidepanelPath);
+  const start = source.indexOf("function __cpTrimSessionText");
+  const end = source.indexOf("function __cpSerializeSessionMessage", start);
+  assert.notEqual(start, -1, "sidepanel should include session text helpers");
+  assert.notEqual(end, -1, "session helper slice should end before message serialization");
+
+  const helpers = vm.runInNewContext(
+    `const __CP_CHAT_SESSION_TEXT_LIMIT = 20000;
+const __CP_CHAT_SESSION_JSON_TEXT_LIMIT = 20000;
+const __CP_CHAT_SESSION_PREVIEW_LIMIT = 200;
+${source.slice(start, end)}
+({ __cpNormalizeSessionLabel, __cpSerializeSessionContent });`,
+    {},
+  );
+  const markdown = "# Heading\r\n\r\n- first\r\n  - nested\r\n\r\n```js\r\nconst x = 1;\r\n```";
+  assert.equal(
+    helpers.__cpSerializeSessionContent(markdown),
+    "# Heading\n\n- first\n  - nested\n\n```js\nconst x = 1;\n```",
+    "local session content should preserve Markdown line structure",
+  );
+  assert.equal(
+    helpers.__cpNormalizeSessionLabel("  Project\n\n  notes  "),
+    "Project notes",
+    "session labels should remain single-line normalized text",
+  );
 }
 
 async function testSidepanelStripsCustomToolTypeForCustomAnthropicProviders() {
@@ -1487,6 +1537,7 @@ async function main() {
   await testCompactConversationCompactsWithoutTdz();
   await testSidepanelContextUsageIndicatorAnchorsExist();
   await testSidepanelContextUsageIndicatorUsesConfiguredWindowForDisplay();
+  await testSessionMarkdownPreservesContentButNormalizesLabels();
   await testSidepanelStripsCustomToolTypeForCustomAnthropicProviders();
   await testSidepanelCompactionBlocksConcurrentSendAnchorsExist();
   await testSidepanelRetriesTransientStreamErrorsAnchorsExist();

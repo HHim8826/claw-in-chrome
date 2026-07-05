@@ -19,6 +19,11 @@ Preserve these invariants.
 - Prompt-rule migrations normalize malformed scopes to the supported
   `main`, `relaxed`, and `quick` contexts, and settings writes preserve the
   background workflow mutation boundary.
+- Local history serialization preserves Markdown-significant newlines without
+  allowing multiline labels or search keys. Restored zero-filled usage
+  records do not replace the last usable context measurement.
+- Shortcut model selectors merge configured and cached provider models and
+  retain an explicitly saved model while replacing only stale defaults.
 - Session cleanup retains scopes needed for URL-based recovery.
 - Runtime message handlers acknowledge only messages they own.
 - Release packages contain every manifest, HTML, worker, and runtime dependency.

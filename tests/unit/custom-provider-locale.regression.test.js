@@ -39,6 +39,11 @@ function testPromptRulePayloadRoutesByContext(source) {
     Array.from(normalizePromptRuleScopes([])),
     ["main", "relaxed", "quick"]
   );
+  assert.deepEqual(
+    Array.from(normalizePromptRuleScopes(["unknown", null, ""])),
+    ["main", "relaxed", "quick"],
+    "malformed scopes should migrate to every supported context",
+  );
   const rules = [
     {
       name: "Language & tone",

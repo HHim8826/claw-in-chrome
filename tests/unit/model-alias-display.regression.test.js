@@ -1,10 +1,12 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
+const vm = require("node:vm");
 
 const rootDir = path.join(__dirname, "..", "..");
 const storageChunkPath = path.join(rootDir, "src", "assets", "useStorageState-hbwNMVUA.js");
 const sidepanelBundlePath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
+const optionsBundlePath = path.join(rootDir, "src", "assets", "options-Hyb_OzME.js");
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8");
@@ -54,6 +56,21 @@ function testModelsConfigReaderSupportsValueLabelAliases() {
   );
   assertIncludesNormalized(
     source,
+    'return __cpUseResolvedModelsConfig(t);',
+    "models config reader should overlay custom provider models",
+  );
+  assertIncludesNormalized(
+    source,
+    'function __cpBuildCustomProviderModelsConfig(e, t) {',
+    "models config reader should build selectable custom-provider options",
+  );
+  assertIncludesNormalized(
+    source,
+    '__cpReadCachedProviderModelOptionsForModels(t, n)',
+    "models config reader should include cached fetched provider models",
+  );
+  assertIncludesNormalized(
+    source,
     '.map(e => __cpNormalizeModelsConfigOptionEntry(e, R || {}))',
     "scheduler model selector should reuse normalized alias entries",
   );
@@ -91,11 +108,90 @@ function testSidepanelNormalizesAliasOptionsBeforeBootstrap() {
     'modelConfig: { ...__cpResolvedModelConfig, options: __cpNormalizedAvailableModelOptions }',
     "sidepanel should expose normalized options to the dropdown",
   );
+  assertIncludesNormalized(
+    source,
+    'const le = Ge();',
+    "sidepanel shortcut editor should read the resolved model config",
+  );
+  assertIncludesNormalized(
+    source,
+    'modelConfig: le',
+    "sidepanel scheduler should receive the resolved model config",
+  );
+  assertIncludesNormalized(
+    source,
+    'const r = n && (!e.length || t(n)) ? n : s;',
+    "sidepanel should reject a stale current model",
+  );
+}
+
+function testCustomProviderModelsConfigMergesFetchedSources() {
+  const source = read(storageChunkPath);
+  const providerStart = source.indexOf("function __cpNormalizeProviderModelOptionEntry");
+  const providerEnd = source.indexOf("function __cpUseResolvedModelsConfig", providerStart);
+  const normalizerStart = source.indexOf("function __cpNormalizeModelsConfigOptionEntry");
+  const normalizerEnd = source.indexOf("// 语义锚点：从模型配置", normalizerStart);
+  assert.notEqual(providerStart, -1);
+  assert.notEqual(providerEnd, -1);
+  assert.notEqual(normalizerStart, -1);
+  assert.notEqual(normalizerEnd, -1);
+
+  const helpers = vm.runInNewContext(
+    `${source.slice(normalizerStart, normalizerEnd)}
+${source.slice(providerStart, providerEnd)}
+({ __cpBuildFetchedModelsCacheEntryKeyForModels, __cpBuildCustomProviderModelsConfig });`,
+    {},
+  );
+  const profile = {
+    baseUrl: "https://provider.example/v1",
+    apiKey: "test-key",
+    format: "openai_chat",
+    defaultModel: "model-default",
+    fastModel: "model-fast",
+    fetchedModels: [{ value: "model-fetched", label: "Fetched alias" }],
+  };
+  const cacheKey = helpers.__cpBuildFetchedModelsCacheEntryKeyForModels(profile);
+  const config = helpers.__cpBuildCustomProviderModelsConfig(profile, {
+    [cacheKey]: {
+      models: [
+        { model: "model-fetched", name: "Cached duplicate" },
+        { model: "model-cached", name: "Cached model" },
+      ],
+    },
+  });
+
+  assert.equal(config.default, "model-default");
+  assert.equal(config.small_fast_model, "model-fast");
+  assert.deepEqual(
+    Array.from(config.options, (entry) => `${entry.model}:${entry.name}`),
+    [
+      "model-default:model-default",
+      "model-fast:model-fast",
+      "model-fetched:Fetched alias",
+      "model-cached:Cached model",
+    ],
+  );
+}
+
+function testShortcutModalTracksResolvedDefaultModel() {
+  const source = read(optionsBundlePath);
+  assertIncludesNormalized(
+    source,
+    'const __cpShortcutFallbackModelId = "claude-sonnet-4-5-20250929";',
+    "shortcut modal should identify its temporary fallback",
+  );
+  assertIncludesNormalized(
+    source,
+    'if (!r || r === __cpShortcutFallbackModelId || (t.length && !i)) { return e; }',
+    "shortcut modal should adopt the resolved provider default",
+  );
 }
 
 function main() {
   testModelsConfigReaderSupportsValueLabelAliases();
+  testCustomProviderModelsConfigMergesFetchedSources();
   testSidepanelNormalizesAliasOptionsBeforeBootstrap();
+  testShortcutModalTracksResolvedDefaultModel();
   console.log("model alias display regression tests passed");
 }
 
