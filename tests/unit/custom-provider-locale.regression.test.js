@@ -95,6 +95,14 @@ function testPromptRuleSettingsAnchors(source) {
   );
 }
 
+function testGeminiCompatibilityIsVisibleInProviderFormat(source) {
+  assert.match(
+    source,
+    /\["openai_chat", "OpenAI Chat Completions \/ Gemini"\]/,
+    "the provider format selector should make Gemini compatibility visible",
+  );
+}
+
 function testSidepanelPromptRuleBranches() {
   const source = fs.readFileSync(sidepanelPath, "utf8");
   assert.match(
@@ -128,6 +136,7 @@ function main() {
 
   testPromptRulePayloadRoutesByContext(source);
   testPromptRuleSettingsAnchors(source);
+  testGeminiCompatibilityIsVisibleInProviderFormat(source);
   testSidepanelPromptRuleBranches();
 
   assert.match(

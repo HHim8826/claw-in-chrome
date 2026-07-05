@@ -4201,7 +4201,7 @@
     form.className = "cp-page-stack cp-page-fieldset";
     const providerFormatOptions = [
       ["anthropic", "Anthropic Messages"],
-      ["openai_chat", "OpenAI Chat Completions"],
+      ["openai_chat", "OpenAI Chat Completions / Gemini"],
       ["openai_responses", "OpenAI Responses API"],
     ];
     const identityGrid = createNode("div", "cp-page-grid cp-page-grid-2");
