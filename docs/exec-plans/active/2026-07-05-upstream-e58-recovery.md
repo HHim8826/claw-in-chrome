@@ -35,11 +35,10 @@ The baseline is `main` at
 `origin/main`, with a clean task-owned working tree. The source commit was
 fetched directly from `S-Trespassing/claw-in-chrome`.
 
-Initial inspection shows two source behaviors already have local equivalents:
-Markdown preservation exists in commit `4989244`, and bounded `429` retry logic
-exists in commit `907730a`. Their exact semantics still require regression
-comparison because the source commit narrows Markdown preservation to content
-and changes request-candidate fallback behavior.
+Initial inspection shows that Markdown preservation already has a local
+equivalent in commit `4989244`. The current `main` branch doesn't contain the
+bounded retry work visible on another branch, so this recovery must preserve
+the source commit's `429` status, message, and no-fallback behavior directly.
 
 ## Execution slices
 
@@ -79,8 +78,8 @@ the current adapter.
 1. Test Gemini health-check candidates, endpoint suffix handling, unsupported
    field omission, and chat conversion.
 2. Test DeepSeek compaction replay with reasoning and tool content.
-3. Retain the current bounded `429` retry behavior and test exhausted responses
-   against unrelated fallback or disable branches.
+3. Preserve `429` status and messages, and test responses against unrelated
+   format fallback, account redirects, or disable branches.
 4. Implement only the missing provider logic in readable shared modules.
 
 The primary focused tests will extend the existing custom-provider model and
@@ -159,8 +158,8 @@ conditions are satisfied.
 - [ ] All seven source behavior groups are implemented, proven equivalent, or
   explicitly excluded with evidence and user-impact reasoning.
 - [ ] Every implemented behavior has recorded RED and GREEN evidence.
-- [ ] Existing local Markdown and `429` fixes remain covered and aren't
-  weakened.
+- [ ] Existing local Markdown behavior and current provider error handling
+  remain covered and aren't weakened.
 - [ ] `npm run validate:fast` passes.
 - [ ] `npm run validate:full` passes without extension page or console errors.
 - [ ] `npm run inspect:runtime` shows unchanged permissions and entry points.
@@ -198,3 +197,10 @@ results, review findings, commits, and push state here as work proceeds.
 - Incognito GREEN: request filtering, temporary boundaries, persistence guards,
   options placement and toggle behavior, bundle anchors, contract checks, i18n
   parity, and syntax checks passed their focused commands.
+- Provider RED: Gemini health checks selected `/responses`, runtime `429`
+  handling fell through to another API format, DeepSeek compaction replayed
+  structured tool history, and Responses tool calls used the item ID instead
+  of `call_id`.
+- Provider GREEN: focused model and adapter suites pass Gemini endpoint and
+  field filtering, endpoint normalization, `429` no-fallback behavior,
+  DeepSeek transcript flattening, and Responses tool-call replay.

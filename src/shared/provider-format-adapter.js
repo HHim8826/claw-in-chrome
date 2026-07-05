@@ -32,6 +32,7 @@
   const THINK_CLOSE_TAG = "</think>";
   const TOOL_CALL_OPEN_TAG = "<tool_call>";
   const TOOL_CALL_CLOSE_TAG = "</tool_call>";
+  const OPENAI_RESPONSES_ITEM_KEY = "openai_responses_item";
   const ANTHROPIC_FORMAT = "anthropic";
   if (globalThis[PATCH_FLAG]) {
     return;
@@ -176,6 +177,48 @@
     const modelName = String(model || config?.defaultModel || "").trim().toLowerCase();
     const name = String(config?.name || "").trim().toLowerCase();
     return baseUrl.includes("deepseek") || modelName.startsWith("deepseek") || name.includes("deepseek");
+  }
+  function isGeminiOpenAICompatibleProvider(config, model) {
+    const baseUrl = String(config?.baseUrl || "").trim().toLowerCase();
+    const modelName = String(model || config?.defaultModel || "")
+      .trim()
+      .toLowerCase();
+    const name = String(config?.name || "").trim().toLowerCase();
+    return (
+      modelName.startsWith("gemini") ||
+      name.includes("gemini") ||
+      baseUrl.includes("generativelanguage.googleapis.com") ||
+      (baseUrl.includes("googleapis.com") && baseUrl.includes("/openai"))
+    );
+  }
+  function shouldSendPromptCacheKey(config, model) {
+    return !isGeminiOpenAICompatibleProvider(config, model);
+  }
+  function cloneOpenAIResponsesContextItem(item) {
+    if (!item || typeof item !== "object") {
+      return null;
+    }
+    const type = String(item.type || "");
+    if (type !== "reasoning" && type !== "function_call") {
+      return null;
+    }
+    try {
+      return JSON.parse(JSON.stringify(item));
+    } catch {
+      return null;
+    }
+  }
+  function readOpenAIResponsesContextItem(block) {
+    return cloneOpenAIResponsesContextItem(
+      block?.[OPENAI_RESPONSES_ITEM_KEY],
+    );
+  }
+  function attachOpenAIResponsesContextItem(block, item) {
+    const cloned = cloneOpenAIResponsesContextItem(item);
+    if (block && cloned) {
+      block[OPENAI_RESPONSES_ITEM_KEY] = cloned;
+    }
+    return block;
   }
   function getChatCompatibilityProfile(config, model) {
     return isDeepSeekChatProvider(config, model) ? DEEPSEEK_CHAT_COMPATIBILITY : DEFAULT_CHAT_COMPATIBILITY;
@@ -576,6 +619,39 @@
       return "[System segment " + (index + 1) + "]\n" + text;
     }).join("\n\n");
   }
+  function extractAnthropicTextForRequestDetection(content) {
+    if (typeof content === "string") {
+      return content;
+    }
+    if (!Array.isArray(content)) {
+      return "";
+    }
+    return content.map(function (part) {
+      if (typeof part === "string") {
+        return part;
+      }
+      return typeof part?.text === "string" ? part.text : "";
+    }).filter(Boolean).join("\n");
+  }
+  function isAnthropicContextCompactionRequest(body) {
+    const systemText = formatAnthropicSystemForSingleMessage(
+      body?.system,
+    ).toLowerCase();
+    if (systemText.includes("summarizing browser automation conversations")) {
+      return true;
+    }
+    const messages = Array.isArray(body?.messages) ? body.messages : [];
+    const lastMessage = messages.length ? messages[messages.length - 1] : null;
+    if (!lastMessage || lastMessage.role !== "user") {
+      return false;
+    }
+    const lastText = extractAnthropicTextForRequestDetection(
+      lastMessage.content,
+    ).toLowerCase();
+    return lastText.includes(
+      "create a detailed summary of the conversation so far",
+    );
+  }
   function createOmittedBinarySummary(value) {
     const text = typeof value === "string" ? value : String(value || "");
     return {
@@ -695,6 +771,50 @@
       return THINK_OPEN_TAG + thinking + THINK_CLOSE_TAG;
     }
     return null;
+  }
+  function serializeAnthropicBlockForCompactionTranscript(block) {
+    const type = String(block?.type || "");
+    if (type === "text") {
+      return typeof block?.text === "string" ? block.text : "";
+    }
+    if (type === "image") {
+      return "[Image omitted from compaction transcript: " +
+        String(block?.source?.media_type || "image/png") + "]";
+    }
+    if (type === "tool_use") {
+      return [
+        "[Tool use]",
+        "id: " + String(block?.id || ""),
+        "name: " + String(block?.name || ""),
+        "input: " + stringifyContent(block?.input || {})
+      ].join("\n");
+    }
+    if (type === "tool_result") {
+      return [
+        "[Tool result]",
+        "tool_use_id: " + String(block?.tool_use_id || ""),
+        ...(block?.is_error ? ["is_error: true"] : []),
+        "content: " + serializeToolResultForOpenAI(block)
+      ].join("\n");
+    }
+    if (type === "thinking") {
+      return "";
+    }
+    return stringifyContent(block);
+  }
+  function convertMessageToOpenAICompactionTranscript(role, content) {
+    if (typeof content === "string") {
+      return content.trim() ? [{ role, content }] : [];
+    }
+    if (!Array.isArray(content)) {
+      const text = stringifyContent(content);
+      return text.trim() ? [{ role, content: text }] : [];
+    }
+    const text = content
+      .map(serializeAnthropicBlockForCompactionTranscript)
+      .filter(Boolean)
+      .join("\n\n");
+    return text.trim() ? [{ role, content: text }] : [];
   }
   function appendToolResultImageDataUrls(value, output, depth) {
     if (!output || value == null || depth > 4) {
@@ -1054,6 +1174,15 @@
   }
   function buildProviderRequestCandidates(config, body) {
     const requestedFormat = normalizeFormat(config?.format);
+    if (
+      requestedFormat === OPENAI_RESPONSES_FORMAT &&
+      isGeminiOpenAICompatibleProvider(config, body?.model)
+    ) {
+      return [{
+        format: OPENAI_CHAT_FORMAT,
+        reason: "gemini_openai_chat_only"
+      }];
+    }
     const candidates = [{
       format: requestedFormat,
       reason: "configured_format"
@@ -1069,6 +1198,39 @@
       });
     }
     return candidates;
+  }
+  function normalizeResponsesFunctionCallToolUse(parsedToolCall, item) {
+    if (!parsedToolCall) {
+      return null;
+    }
+    const callId = String(item?.call_id || "").trim();
+    if (!callId) {
+      return parsedToolCall;
+    }
+    return {
+      ...parsedToolCall,
+      id: callId
+    };
+  }
+  function shouldTryNextProviderRequestCandidate(providerError) {
+    const status = Number(providerError?.status || 0);
+    const text = String(
+      providerError?.message || providerError?.text || "",
+    ).toLowerCase();
+    if (status === 404 || status === 405 || status === 501) {
+      return true;
+    }
+    if (!(status === 400 || status === 422)) {
+      return false;
+    }
+    return (
+      /\b(endpoint|route|path|url|format|responses?|chat completions?)\b/.test(
+        text,
+      ) &&
+      /\b(unsupported|not supported|not found|unknown|invalid|unrecognized)\b/.test(
+        text,
+      )
+    );
   }
   function buildAnthropicUsageFromChat(usage) {
     const inputTokens = Number(usage?.prompt_tokens || 0);
@@ -1415,13 +1577,25 @@
       hasToolReasoningContext: false,
       previousMessageHadToolResult: false
     };
+    const flattenDeepSeekCompactionTranscript =
+      isDeepSeekChatProvider(config, body?.model) &&
+      isAnthropicContextCompactionRequest(body);
     for (const message of Array.isArray(body?.messages) ? body.messages : []) {
       const role = message?.role || "user";
       const content = message?.content;
-      messages.push(...convertMessageToOpenAI(role, content, chatCompatibility, {
-        allowRequestReasoning: shouldReplayOpenAIChatRequestReasoning(role, content, chatCompatibility, requestReasoningState)
-      }));
-      updateOpenAIChatRequestReasoningState(requestReasoningState, content);
+      if (flattenDeepSeekCompactionTranscript) {
+        messages.push(...convertMessageToOpenAICompactionTranscript(role, content));
+      } else {
+        messages.push(...convertMessageToOpenAI(role, content, chatCompatibility, {
+          allowRequestReasoning: shouldReplayOpenAIChatRequestReasoning(
+            role,
+            content,
+            chatCompatibility,
+            requestReasoningState,
+          )
+        }));
+        updateOpenAIChatRequestReasoningState(requestReasoningState, content);
+      }
     }
     result.messages = messages;
     if (body?.max_tokens != null) {
@@ -1472,7 +1646,7 @@
     if (tools.length && toolChoice !== undefined) {
       result.tool_choice = toolChoice;
     }
-    if (promptCacheKey) {
+    if (promptCacheKey && shouldSendPromptCacheKey(config, body?.model)) {
       result.prompt_cache_key = promptCacheKey;
     }
     return result;
@@ -1892,6 +2066,17 @@
       const messageContent = [];
       for (const block of content) {
         const type = block?.type || "";
+        const preservedItem = readOpenAIResponsesContextItem(block);
+        if (preservedItem) {
+          if (messageContent.length) {
+            input.push({
+              role,
+              content: messageContent.splice(0)
+            });
+          }
+          input.push(preservedItem);
+          continue;
+        }
         if (type === "text" && typeof block.text === "string") {
           messageContent.push({
             type: role === "assistant" ? "output_text" : "input_text",
@@ -1958,7 +2143,7 @@
     }
     return input;
   }
-  function anthropicToOpenAIResponses(body, promptCacheKey) {
+  function anthropicToOpenAIResponses(body, promptCacheKey, config) {
     const result = {};
     if (body?.model) {
       result.model = body.model;
@@ -2007,7 +2192,7 @@
     if (toolChoice !== undefined) {
       result.tool_choice = toolChoice;
     }
-    if (promptCacheKey) {
+    if (promptCacheKey && shouldSendPromptCacheKey(config, body?.model)) {
       result.prompt_cache_key = promptCacheKey;
     }
     return result;
@@ -2074,9 +2259,18 @@
         continue;
       }
       if (type === "function_call") {
-        const normalizedToolCall = parseInlineToolCallPayload(item, "responses_function_call_" + inlineToolCallCount++);
+        const normalizedToolCall = normalizeResponsesFunctionCallToolUse(
+          parseInlineToolCallPayload(
+            item,
+            "responses_function_call_" + inlineToolCallCount++,
+          ),
+          item,
+        );
         if (normalizedToolCall) {
-          content.push(createAnthropicToolUseBlock(normalizedToolCall));
+          content.push(attachOpenAIResponsesContextItem(
+            createAnthropicToolUseBlock(normalizedToolCall),
+            item,
+          ));
           hasToolUse = true;
         }
         continue;
@@ -2088,11 +2282,12 @@
         }).map(function (part) {
           return part.text;
         }).join("");
-        if (thinking) {
-          content.push({
+        const reasoningBlock = attachOpenAIResponsesContextItem({
             type: "thinking",
             thinking
-          });
+          }, item);
+        if (thinking || reasoningBlock?.[OPENAI_RESPONSES_ITEM_KEY]) {
+          content.push(reasoningBlock);
         }
       }
     }
@@ -2691,18 +2886,19 @@
       }
       return index;
     }
-    function ensureThinkingBlock(output, data) {
+    function ensureThinkingBlock(output, data, item) {
       closeCurrentText(output);
       const index = currentThinkingIndex != null ? currentThinkingIndex : resolveContentIndex(data, currentThinkingIndex);
       currentThinkingIndex = index;
       if (!openIndices.has(index)) {
+        const contentBlock = attachOpenAIResponsesContextItem({
+          type: "thinking",
+          thinking: ""
+        }, item);
         output.push(sseChunk("content_block_start", {
           type: "content_block_start",
           index,
-          content_block: {
-            type: "thinking",
-            thinking: ""
-          }
+          content_block: contentBlock
         }));
         openIndices.add(index);
       }
@@ -2746,14 +2942,15 @@
       const index = resolveToolIndex(data, item);
       lastToolIndex = index;
       if (!openIndices.has(index)) {
+        const contentBlock = attachOpenAIResponsesContextItem({
+          type: "tool_use",
+          id: String(item ? item?.call_id || "" : data?.call_id || data?.item_id || ""),
+          name: String(item ? item?.name || "" : data?.name || "")
+        }, item);
         output.push(sseChunk("content_block_start", {
           type: "content_block_start",
           index,
-          content_block: {
-            type: "tool_use",
-            id: String(item ? item?.call_id || "" : data?.call_id || data?.item_id || ""),
-            name: String(item ? item?.name || "" : data?.name || "")
-          }
+          content_block: contentBlock
         }));
         openIndices.add(index);
       }
@@ -2813,7 +3010,7 @@
         ensureMessageStart(output, responseObject);
         const delta = typeof data.delta === "string" ? data.delta : typeof data.text === "string" ? data.text : "";
         if (delta) {
-          const index = ensureThinkingBlock(output, data);
+          const index = ensureThinkingBlock(output, data, data.item);
           output.push(sseChunk("content_block_delta", {
             type: "content_block_delta",
             index,
@@ -2835,6 +3032,9 @@
           hasToolUse = true;
           ensureMessageStart(output, responseObject);
           ensureToolBlock(output, data, data.item);
+        } else if (itemType === "reasoning") {
+          ensureMessageStart(output, responseObject);
+          ensureThinkingBlock(output, data, data.item);
         } else if (itemType === "message") {
           ensureMessageStart(output, responseObject);
         }
@@ -2963,20 +3163,26 @@
     }
     return requestUrl.startsWith(config.baseUrl) && isAnthropicMessagesPath(new URL(requestUrl));
   }
+  function stripOpenAIEndpointSuffix(baseUrl) {
+    return String(baseUrl || "")
+      .replace(/\/+$/, "")
+      .replace(/\/(?:chat\/completions|responses)$/i, "");
+  }
   function buildProviderUrl(config) {
     const baseUrl = config.baseUrl.replace(/\/+$/, "");
+    const openAIBaseUrl = stripOpenAIEndpointSuffix(baseUrl);
     if (config.format === OPENAI_CHAT_FORMAT) {
       if (/\/chat\/completions$/i.test(baseUrl)) {
         return baseUrl;
       } else {
-        return baseUrl + "/chat/completions";
+        return openAIBaseUrl + "/chat/completions";
       }
     }
     if (config.format === OPENAI_RESPONSES_FORMAT) {
       if (/\/responses$/i.test(baseUrl)) {
         return baseUrl;
       } else {
-        return baseUrl + "/responses";
+        return openAIBaseUrl + "/responses";
       }
     }
     return baseUrl;
@@ -3074,7 +3280,17 @@
         ...config,
         format: candidate.format
       };
-      const providerBody = candidate.format === OPENAI_CHAT_FORMAT ? anthropicToOpenAIChat(body, candidateConfig.promptCacheKey, candidateConfig) : anthropicToOpenAIResponses(body, candidateConfig.promptCacheKey);
+      const providerBody = candidate.format === OPENAI_CHAT_FORMAT
+        ? anthropicToOpenAIChat(
+          body,
+          candidateConfig.promptCacheKey,
+          candidateConfig,
+        )
+        : anthropicToOpenAIResponses(
+          body,
+          candidateConfig.promptCacheKey,
+          candidateConfig,
+        );
       const providerUrl = buildProviderUrl(candidateConfig);
       const isStreamRequest = !!providerBody.stream;
       debugLog("provider.request_attempt", {
@@ -3127,7 +3343,10 @@
             message: providerError.message,
             bodyPreview: truncateText(providerError.text, 500)
           }, "warn");
-          if (index < candidates.length - 1) {
+          if (
+            index < candidates.length - 1 &&
+            shouldTryNextProviderRequestCandidate(providerError)
+          ) {
             shouldTryNextCandidate = true;
             break;
           }

@@ -292,6 +292,11 @@ async function testSidepanelRetriesTransientStreamErrorsAnchorsExist() {
 
 async function testSidepanelAnchorsExist() {
   const source = read(sidepanelPath);
+  assert.equal(
+    source.includes("https://claude.ai/settings/usage"),
+    false,
+    "custom-provider errors must not redirect to Claude account usage settings"
+  );
   assertIncludes(source, "const __cpPermissionPromptStore = t1;", "sidepanel bundle");
   assertIncludes(source, "const __cpHandlePermissionRequiredPrompt = async e => {", "sidepanel bundle");
   assertIncludes(source, "const __cpPermissionRetryHelper = OQ;", "sidepanel bundle");

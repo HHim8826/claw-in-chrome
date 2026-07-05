@@ -62,6 +62,9 @@ The current recovered layer protects these workflows.
 - Tool-result visualization and diagnostic logging.
 - Incognito request and persistence boundaries for standard chat, quick mode,
   small-model helpers, and local session snapshots.
+- Custom-provider errors stay inside the provider flow. The quick-mode bundle
+  displays the returned error and never redirects custom-provider failures to
+  Claude account usage settings.
 
 ## Known constraint
 

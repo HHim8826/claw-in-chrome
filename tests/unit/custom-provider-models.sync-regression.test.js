@@ -565,6 +565,88 @@ async function testLegacyActiveHttpProfileMigratesToggleToEnabled() {
   assert.equal(storageArea.state.customProviderAllowHttpMigrated, true);
 }
 
+async function testGeminiResponsesProbeUsesChatCompletionsFirst() {
+  const geminiProfile = createProfile({
+    name: "Gemini",
+    format: "openai_responses",
+    baseUrl:
+      "https://generativelanguage.googleapis.com/v1beta/openai/responses",
+    defaultModel: "gemini-3-flash-preview",
+    fastModel: ""
+  });
+  const storageArea = createStorageArea({});
+  const fetchCalls = [];
+  const fetchImpl = async (input, init) => {
+    fetchCalls.push({
+      url: String(input),
+      body: init && typeof init.body === "string" ? JSON.parse(init.body) : null
+    });
+    return {
+      ok: true,
+      status: 200,
+      headers: { get() { return "application/json"; } },
+      async text() {
+        return JSON.stringify({
+          choices: [{ message: { content: "OK" } }]
+        });
+      }
+    };
+  };
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  const probe = await models.probeProviderModel(geminiProfile, {
+    storageArea,
+    fetchImpl
+  });
+
+  assert.equal(probe.ok, true);
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(
+    fetchCalls[0].url,
+    "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+  );
+  assert.equal(Array.isArray(fetchCalls[0].body.messages), true);
+  assert.equal("input" in fetchCalls[0].body, false);
+}
+
+async function testResponsesProbeDoesNotFallbackOnProviderRateLimit() {
+  const profile = createProfile({
+    format: "openai_responses",
+    baseUrl: "https://provider-a.example/v1",
+    defaultModel: "gpt-5.4",
+    fastModel: ""
+  });
+  const storageArea = createStorageArea({});
+  const fetchCalls = [];
+  const fetchImpl = async (input, init) => {
+    fetchCalls.push({
+      url: String(input),
+      body: init && typeof init.body === "string" ? JSON.parse(init.body) : null
+    });
+    return {
+      ok: false,
+      status: 429,
+      headers: { get() { return "application/json"; } },
+      async text() {
+        return JSON.stringify({
+          error: { message: "quota exceeded: provider rate limit" }
+        });
+      }
+    };
+  };
+  const models = loadModels(storageArea);
+  await waitForMicrotasks();
+
+  await assert.rejects(models.probeProviderModel(profile, {
+    storageArea,
+    fetchImpl
+  }), /provider rate limit/);
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0].url, "https://provider-a.example/v1/responses");
+}
+
 async function main() {
   await testSavingActiveProfileSyncsSelectedModels();
   await testSavingNonModelFieldsKeepsExistingStickySelection();
@@ -579,6 +661,8 @@ async function main() {
   await testActivatingHttpProfileDefaultsToEnabled();
   await testFetchAndProbeAllowHttpByDefault();
   await testFetchAndProbeRejectWhenHttpExplicitlyDisabled();
+  await testGeminiResponsesProbeUsesChatCompletionsFirst();
+  await testResponsesProbeDoesNotFallbackOnProviderRateLimit();
   await testLegacyActiveHttpProfileMigratesToggleToEnabled();
   console.log("custom-provider-models sync regression tests passed");
 }

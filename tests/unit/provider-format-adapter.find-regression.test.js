@@ -85,7 +85,9 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
       }
     ]
   };
-  const request = new Request("https://provider.example/v1/messages", {
+  const request = new Request(
+    options.requestUrl || "https://provider.example/v1/messages",
+    {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -93,7 +95,8 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
       "anthropic-version": "2023-06-01"
     },
     body: JSON.stringify(requestBody)
-  });
+    }
+  );
   const response = await sandbox.fetch(request);
   if (options.responseType === "text") {
     return {
@@ -444,6 +447,274 @@ async function testResponsesRuntimeFallsBackToChatWhenConfiguredEndpointFails() 
       text: "FOUND: 1\nSHOWING: 1\n---\nref_fallback | textbox | Search | textbox | runtime fallback"
     }
   ]);
+}
+
+async function testResponsesFunctionCallUsesCallIdForToolResultReplay() {
+  const first = await runAdapterWithUpstreamHandler(async () =>
+    new Response(JSON.stringify({
+      id: "resp-call-id",
+      model: "gpt-5.4",
+      status: "completed",
+      output: [{
+        type: "function_call",
+        id: "fc_item_123",
+        call_id: "call_search_123",
+        name: "search",
+        arguments: "{\"query\":\"cats\"}"
+      }],
+      usage: { input_tokens: 12, output_tokens: 4 }
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    }), {
+      config: { format: "openai_responses" },
+      requestBody: {
+        model: "gpt-5.4",
+        max_tokens: 128,
+        stream: false,
+        tools: [{
+          name: "search",
+          description: "Search",
+          input_schema: { type: "object", properties: {} }
+        }],
+        messages: [{ role: "user", content: "Find cats" }]
+      }
+    }
+  );
+
+  const toolUse = first.json.content[0];
+  assert.equal(toolUse.id, "call_search_123");
+  assert.equal(toolUse.openai_responses_item.id, "fc_item_123");
+
+  const second = await runAdapterWithUpstreamHandler(async ({ call }) => {
+    const replayedCall = call.body.input.find(
+      item => item.type === "function_call"
+    );
+    const replayedOutput = call.body.input.find(
+      item => item.type === "function_call_output"
+    );
+    assert.equal(replayedCall.id, "fc_item_123");
+    assert.equal(replayedCall.call_id, "call_search_123");
+    assert.equal(replayedOutput.call_id, "call_search_123");
+    return new Response(JSON.stringify({
+      id: "resp-tool-result",
+      model: "gpt-5.4",
+      status: "completed",
+      output: [{
+        type: "message",
+        content: [{ type: "output_text", text: "Found cats." }]
+      }]
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }, {
+    config: { format: "openai_responses" },
+    requestBody: {
+      model: "gpt-5.4",
+      max_tokens: 128,
+      stream: false,
+      messages: [
+        { role: "user", content: "Find cats" },
+        { role: "assistant", content: [toolUse] },
+        {
+          role: "user",
+          content: [{
+            type: "tool_result",
+            tool_use_id: toolUse.id,
+            content: "cats found"
+          }]
+        }
+      ]
+    }
+  });
+  assert.equal(second.json.content[0].text, "Found cats.");
+}
+
+async function testResponsesRuntimeDoesNotFallbackOnProviderRateLimit() {
+  const result = await runAdapterWithUpstreamHandler(async ({ call }) => {
+    assert.equal(call.url, "https://provider.example/v1/responses");
+    return new Response(JSON.stringify({
+      error: { message: "quota exceeded: provider rate limit" }
+    }), {
+      status: 429,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }, {
+    config: {
+      format: "openai_responses",
+      defaultModel: "gpt-5.4"
+    },
+    requestBody: {
+      model: "gpt-5.4",
+      max_tokens: 128,
+      stream: false,
+      messages: [{ role: "user", content: "Find cats" }]
+    }
+  });
+  assert.equal(result.status, 429);
+  assert.equal(result.upstreamCalls.length, 1);
+  assert.equal(result.json.error.message, "quota exceeded: provider rate limit");
+}
+
+async function testGeminiChatOmitsPromptCacheKey() {
+  const result = await runAdapterWithUpstreamHandler(async ({ call }) => {
+    assert.equal(
+      call.url,
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    );
+    return new Response(JSON.stringify({
+      id: "chatcmpl-gemini",
+      model: "gemini-2.5-flash-lite",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content: "Gemini response" }
+      }]
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }, {
+    config: {
+      name: "Gemini",
+      baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai",
+      defaultModel: "gemini-2.5-flash-lite",
+      promptCacheKey: "gemini-profile"
+    },
+    requestUrl:
+      "https://generativelanguage.googleapis.com/v1beta/openai/messages",
+    requestBody: {
+      model: "gemini-2.5-flash-lite",
+      max_tokens: 128,
+      stream: false,
+      messages: [{ role: "user", content: "Find cats" }]
+    }
+  });
+  assert.equal(result.upstreamCalls.length, 1);
+  assert.equal("prompt_cache_key" in result.upstreamCalls[0].body, false);
+}
+
+async function testGeminiResponsesConfiguredUsesChatCompletionsFirst() {
+  const result = await runAdapterWithUpstreamHandler(async ({ call }) => {
+    assert.equal(
+      call.url,
+      "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    );
+    return new Response(JSON.stringify({
+      id: "chatcmpl-gemini-responses-config",
+      model: "gemini-3-flash-preview",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content: "Gemini response" }
+      }]
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }, {
+    config: {
+      name: "Gemini",
+      format: "openai_responses",
+      baseUrl:
+        "https://generativelanguage.googleapis.com/v1beta/openai/responses",
+      defaultModel: "gemini-3-flash-preview",
+      promptCacheKey: "gemini-profile"
+    },
+    requestUrl:
+      "https://generativelanguage.googleapis.com/v1beta/openai/responses/messages",
+    requestBody: {
+      model: "gemini-3-flash-preview",
+      max_tokens: 128,
+      stream: false,
+      messages: [{ role: "user", content: "Find cats" }]
+    }
+  });
+  assert.equal(result.upstreamCalls.length, 1);
+  assert.equal("prompt_cache_key" in result.upstreamCalls[0].body, false);
+}
+
+async function testDeepSeekCompactionRequestFlattensToolHistory() {
+  const result = await runAdapterWithUpstreamHandler(async ({ call }) => {
+    const messages = call.body.messages;
+    assert.equal(
+      messages.some(message => Array.isArray(message.tool_calls)),
+      false
+    );
+    assert.equal(messages.some(message => message.role === "tool"), false);
+    assert.equal(
+      messages.some(message => "reasoning_content" in message),
+      false
+    );
+    assert.equal(
+      messages.some(message =>
+        typeof message.content === "string" &&
+        message.content.includes("[Tool use]") &&
+        message.content.includes("read_page")
+      ),
+      true
+    );
+    assert.equal(
+      messages.some(message =>
+        typeof message.content === "string" &&
+        message.content.includes("[Tool result]") &&
+        message.content.includes("Example page text")
+      ),
+      true
+    );
+    return new Response(JSON.stringify({
+      id: "chatcmpl-deepseek-compaction",
+      model: "deepseek-chat",
+      choices: [{
+        index: 0,
+        finish_reason: "stop",
+        message: { role: "assistant", content: "<summary>body</summary>" }
+      }]
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json; charset=utf-8" }
+    });
+  }, {
+    config: { name: "DeepSeek", defaultModel: "deepseek-chat" },
+    requestBody: {
+      model: "deepseek-chat",
+      max_tokens: 10000,
+      stream: false,
+      system: [{
+        type: "text",
+        text: "You are summarizing browser automation conversations."
+      }],
+      messages: [
+        { role: "user", content: "Open the page." },
+        {
+          role: "assistant",
+          content: [
+            { type: "thinking", thinking: "Inspect the page." },
+            {
+              type: "tool_use",
+              id: "toolu_read_page_1",
+              name: "read_page",
+              input: { tabId: 1 }
+            }
+          ]
+        },
+        {
+          role: "user",
+          content: [{
+            type: "tool_result",
+            tool_use_id: "toolu_read_page_1",
+            content: [{ type: "text", text: "Example page text" }]
+          }]
+        },
+        {
+          role: "user",
+          content: "Create a detailed summary of the conversation so far."
+        }
+      ]
+    }
+  });
+  assert.equal(result.status, 200);
 }
 
 async function testGpt54ChatToolCallsDropReasoningEffort() {
@@ -1441,7 +1712,11 @@ async function main() {
   await testJsonContentToolCallIsConvertedToToolUse();
   await testNestedFunctionWrapperContentIsConvertedToToolUse();
   await testResponsesTextWrappedToolCallIsConvertedToToolUse();
+  await testResponsesFunctionCallUsesCallIdForToolResultReplay();
   await testResponsesRuntimeFallsBackToChatWhenConfiguredEndpointFails();
+  await testResponsesRuntimeDoesNotFallbackOnProviderRateLimit();
+  await testGeminiChatOmitsPromptCacheKey();
+  await testGeminiResponsesConfiguredUsesChatCompletionsFirst();
   await testGpt54ChatToolCallsDropReasoningEffort();
   await testConfiguredProviderDefaultsFillMissingAnthropicFields();
   await testStreamFallbackJsonToolCallContentIsConvertedToToolUse();
@@ -1453,6 +1728,7 @@ async function main() {
   await testMessageOutputTextFallbackCanPromoteInlineToolCall();
   await testStreamingDeltaToolCallsAreReassembledAcrossChunks();
   await testContentFilterMapsToEndTurnWithoutToolUse();
+  await testDeepSeekCompactionRequestFlattensToolHistory();
   await testDeepSeekReasoningContentIsConvertedToThinking();
   await testDeepSeekReasoningContentDoesNotPrecedeToolUseBlocks();
   await testDeepSeekThinkingIsRoundTrippedAsReasoningContent();

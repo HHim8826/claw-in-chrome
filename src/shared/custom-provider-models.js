@@ -152,6 +152,11 @@
   function joinUrl(baseUrl, suffix) {
     return `${String(baseUrl || "").replace(/\/+$/, "")}/${String(suffix || "").replace(/^\/+/, "")}`;
   }
+  function stripOpenAIEndpointSuffix(baseUrl) {
+    return String(baseUrl || "")
+      .replace(/\/+$/, "")
+      .replace(/\/(?:chat\/completions|responses)$/i, "");
+  }
   function buildRequestUrl(baseUrl, format) {
     const normalizedBaseUrl = String(baseUrl || "")
       .trim()
@@ -164,14 +169,14 @@
       if (/\/chat\/completions$/i.test(normalizedBaseUrl)) {
         return normalizedBaseUrl;
       } else {
-        return normalizedBaseUrl + "/chat/completions";
+        return stripOpenAIEndpointSuffix(normalizedBaseUrl) + "/chat/completions";
       }
     }
     if (normalizedFormat === OPENAI_RESPONSES_FORMAT) {
       if (/\/responses$/i.test(normalizedBaseUrl)) {
         return normalizedBaseUrl;
       } else {
-        return normalizedBaseUrl + "/responses";
+        return stripOpenAIEndpointSuffix(normalizedBaseUrl) + "/responses";
       }
     }
     if (/\/messages$/i.test(normalizedBaseUrl)) {
@@ -985,8 +990,31 @@
       (model.length > 1 && model.startsWith("o") && /\d/.test(model[1]))
     );
   }
+  function isGeminiOpenAICompatibleProvider(config) {
+    const baseUrl = String(config?.baseUrl || "")
+      .trim()
+      .toLowerCase();
+    const model = String(config?.defaultModel || "")
+      .trim()
+      .toLowerCase();
+    const name = String(config?.name || "")
+      .trim()
+      .toLowerCase();
+    return (
+      model.startsWith("gemini") ||
+      name.includes("gemini") ||
+      baseUrl.includes("generativelanguage.googleapis.com") ||
+      (baseUrl.includes("googleapis.com") && baseUrl.includes("/openai"))
+    );
+  }
   function buildHealthCheckCandidates(config) {
     const requestedFormat = normalizeFormat(config?.format);
+    if (
+      requestedFormat === OPENAI_RESPONSES_FORMAT &&
+      isGeminiOpenAICompatibleProvider(config)
+    ) {
+      return [OPENAI_CHAT_FORMAT];
+    }
     const candidates = [requestedFormat];
     const baseUrl = String(config?.baseUrl || "")
       .trim()
@@ -1009,6 +1037,29 @@
       candidates.push(OPENAI_CHAT_FORMAT);
     }
     return candidates;
+  }
+  function shouldTryNextHealthCheckCandidate(error) {
+    const status = Number(error?.status || 0);
+    if (!status) {
+      return true;
+    }
+    const text = String(error?.message || "")
+      .trim()
+      .toLowerCase();
+    if (status === 404 || status === 405 || status === 501) {
+      return true;
+    }
+    if (!(status === 400 || status === 422)) {
+      return false;
+    }
+    return (
+      /\b(endpoint|route|path|url|format|responses?|chat completions?)\b/.test(
+        text,
+      ) &&
+      /\b(unsupported|not supported|not found|unknown|invalid|unrecognized)\b/.test(
+        text,
+      )
+    );
   }
   function buildHealthCheckBody(config, format) {
     const model = String(config?.defaultModel || "").trim();
@@ -1335,12 +1386,14 @@
           });
           const payload = await parseJsonSafe(response);
           if (!response.ok) {
-            throw new Error(
+            const error = new Error(
               extractErrorMessage(
                 payload,
                 `健康检测失败（${response.status}）`,
               ),
             );
+            error.status = response.status;
+            throw error;
           }
           const replyText = extractProbeReply(payload);
           const responseDetected = hasProbeResponseSignal(payload);
@@ -1356,6 +1409,9 @@
           };
         } catch (error) {
           lastError = error;
+          if (!shouldTryNextHealthCheckCandidate(error)) {
+            throw error;
+          }
         }
       }
       throw lastError || new Error("健康检测失败。");

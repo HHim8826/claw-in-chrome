@@ -91065,22 +91065,7 @@ function FQ(e) {
             return;
           }
           const e = o instanceof Error ? o.message : "An unexpected error occurred.";
-          if (e.toLowerCase().includes("extra usage is required for fast mode")) {
-            w("Extra usage must be enabled to use this model in quick mode. Open claude.ai/settings/usage to enable it.");
-            chrome.tabs.query({
-              active: true,
-              currentWindow: true
-            }, e => {
-              const t = e[0]?.id;
-              if (t) {
-                chrome.tabs.update(t, {
-                  url: "https://claude.ai/settings/usage"
-                });
-              }
-            });
-          } else {
-            w(e);
-          }
+          w(e);
           if (o instanceof Error) {
             o.message;
           } else {

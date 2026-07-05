@@ -60,9 +60,9 @@ sessions.
   doesn't replay incompatible reasoning fields.
 - Stored chat content preserves Markdown-significant newlines while labels,
   titles, and search text retain bounded normalization.
-- A provider `429` response follows the existing bounded retry policy and, if
-  exhausted, surfaces the provider error without triggering unrelated product
-  account or feature-disable flows.
+- A provider `429` response preserves its status and message without switching
+  API formats or triggering unrelated product-account or feature-disable
+  flows.
 - Shortcut creation resolves configured and fetched custom-provider models.
   Context controls remain visible only in their valid states.
 
@@ -81,8 +81,8 @@ claims.
    reasoning replay or tool-order corruption.
 5. A multiline Markdown session round-trip preserves newlines and existing
    local history behavior.
-6. `429` retry success and exhaustion remain tested, and no exhausted response
-   enters an unrelated self-disable branch.
+6. A `429` response retains its status and message, doesn't enter API-format
+   fallback, and doesn't redirect to an unrelated account-usage flow.
 7. Shortcut creation receives the resolved custom-provider model list, and
    context-control anchors pass regression tests.
 8. `npm run validate:fast`, `npm run validate:full`, and
