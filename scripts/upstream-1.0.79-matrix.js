@@ -77,7 +77,7 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
     risk: "Adds an external bearer-token and organization-bound remote browser-control trust boundary without a local product contract.",
     owners: [
       "docs/product-specs/upstream-1.0.79-recovery.md",
-      "docs/exec-plans/active/2026-07-06-upstream-1.0.79-recovery.md",
+      "docs/exec-plans/completed/2026-07-06-upstream-1.0.79-recovery.md",
     ],
     testTarget: "tests/unit/upstream-1.0.79-matrix.test.js",
   },
