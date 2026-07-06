@@ -10,7 +10,7 @@ Treat these surfaces as security-critical.
 
 - `host_permissions` includes `<all_urls>`.
 - Extension permissions include `debugger`, `nativeMessaging`, `downloads`,
-  `identity`, `scripting`, and `unlimitedStorage`.
+  `scripting`, and `unlimitedStorage`.
 - Provider configuration may contain API keys, access tokens, and refresh
   tokens in `chrome.storage.local`.
 - The content security policy permits HTTPS, HTTP, WebSocket, and localhost
@@ -33,15 +33,17 @@ Apply these controls to every security-sensitive change.
 - Treat editable prompt rules and built-in prompt overrides as model
   instructions, not authorization. They must not grant Chrome permissions,
   bypass permission prompts, or mutate permission policy.
-- Treat `blockedUrlPatterns` and `forceLoginOrgUUID` as administrator-owned,
-  read-only policy. Normalize malformed values without writing them to local
-  storage, and apply managed-storage changes without requiring a reload.
-- Keep MCP OAuth on the reviewed `chrome.identity` PKCE path. Validate redirect
-  state, bound silent authorization waits, and redact authorization codes,
-  access tokens, refresh tokens, and PKCE material from diagnostics.
-- Keep managed-policy logout narrow: clear OAuth token, verifier, state,
-  expiry, failure, and account records without deleting custom-provider
-  credentials or user content.
+- Treat `blockedUrlPatterns` as administrator-owned, read-only policy.
+  Normalize malformed values without writing them to local storage, and apply
+  managed-storage changes without requiring a reload.
+- Keep the product provider-independent. Don't add Claude-only origins,
+  organization gates, onboarding bridges, or the `identity` permission without
+  an approved feature brief and security review.
+- Keep MCP on the reviewed `nativeMessaging` bridge. Chrome Identity isn't
+  required for generic MCP browser tools.
+- Redact authorization codes, access tokens, refresh tokens, and verifier
+  material from diagnostics even when configured providers introduce those
+  fields.
 - Render Mermaid with strict security, disabled HTML labels, text and edge
   limits, and a bounded timeout. Remove executable, embedded, animated, event,
   and external-link SVG content before inserting a diagram into the side panel.

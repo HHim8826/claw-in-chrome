@@ -17,14 +17,6 @@
   },
   "content_scripts": [
     {
-      "js": [
-        "shared/onboarding-tasks.js",
-        "assets/content-script.ts-Bwa5rY9t.js"
-      ],
-      "matches": ["https://claude.ai/*", "https://*.claude.ai/*"],
-      "run_at": "document_end"
-    },
-    {
       "all_frames": true,
       "js": ["assets/accessibility-tree.js-D8KNCIWO.js"],
       "matches": ["\u003Call_urls>"],
@@ -41,9 +33,6 @@
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https: http: wss: http://localhost:* http://127.0.0.1:* ws://localhost:* ws://127.0.0.1:*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;"
   },
   "description": "Claw",
-  "externally_connectable": {
-    "matches": ["https://claude.ai/*", "https://*.claude.ai/*"]
-  },
   "host_permissions": ["\u003Call_urls>"],
   "icons": {
     "128": "icon-128.png"
@@ -68,7 +57,6 @@
     "declarativeNetRequestWithHostAccess",
     "offscreen",
     "nativeMessaging",
-    "identity",
     "unlimitedStorage",
     "downloads"
   ],
@@ -77,11 +65,6 @@
   },
   "version": "1.0.79.1",
   "web_accessible_resources": [
-    {
-      "matches": ["https://*.claude.ai/*", "https://claude.ai/*"],
-      "resources": ["assets/content-script.ts-Bwa5rY9t.js"],
-      "use_dynamic_url": false
-    },
     {
       "matches": ["\u003Call_urls>"],
       "resources": [

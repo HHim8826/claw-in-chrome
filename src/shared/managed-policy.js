@@ -6,7 +6,6 @@
   root.__CP_MANAGED_POLICY__ = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   const BLOCKED_URL_PATTERNS_KEY = "blockedUrlPatterns";
-  const FORCE_LOGIN_ORG_UUID_KEY = "forceLoginOrgUUID";
   let runtimeChromeApi = null;
   let runtimeInstance = null;
 
@@ -91,41 +90,6 @@
     });
   }
 
-  function parseForceLoginOrgUUIDs(value) {
-    if (typeof value !== "string") {
-      return null;
-    }
-    const normalized = value.trim();
-    if (!normalized) {
-      return null;
-    }
-    if (!normalized.startsWith("[")) {
-      return [normalized.toLowerCase()];
-    }
-    try {
-      const parsed = JSON.parse(normalized);
-      if (
-        !Array.isArray(parsed) ||
-        parsed.length === 0 ||
-        !parsed.every((item) => typeof item === "string")
-      ) {
-        return null;
-      }
-      return parsed.map((item) => item.trim().toLowerCase());
-    } catch {
-      return null;
-    }
-  }
-
-  function isOrganizationAllowed(organizationUUID, allowedOrganizationUUIDs) {
-    if (!allowedOrganizationUUIDs) {
-      return true;
-    }
-    return allowedOrganizationUUIDs.includes(
-      String(organizationUUID || "").toLowerCase(),
-    );
-  }
-
   function getRuntime(chromeApi) {
     if (!runtimeInstance || runtimeChromeApi !== chromeApi) {
       runtimeChromeApi = chromeApi;
@@ -136,11 +100,8 @@
 
   return Object.freeze({
     BLOCKED_URL_PATTERNS_KEY,
-    FORCE_LOGIN_ORG_UUID_KEY,
     createManagedPolicyRuntime,
     getRuntime,
-    isOrganizationAllowed,
     matchesBlockedUrlPattern,
-    parseForceLoginOrgUUIDs,
   });
 });

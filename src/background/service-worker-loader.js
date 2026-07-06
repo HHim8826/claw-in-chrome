@@ -1,7 +1,5 @@
 import "../shared/claw-contract.js";
-import "../shared/auth-session.js";
 import "../shared/managed-policy.js";
-import "../shared/onboarding-tasks.js";
 // 先补原生宿主显式绑定补丁，确保后续 bundle connectNative 时会主动上报 browser/profile 实例归属。
 import "../shared/native-host-binding.js";
 import "../shared/mcp-permission-popup-protocol.js";

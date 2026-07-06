@@ -50250,82 +50250,6 @@ const vA = (e) =>
       d: "M15.147 4.146a.5.5 0 0 1 .707.707L10.707 10l5.147 5.147a.5.5 0 0 1-.63.771l-.078-.064L10 10.707l-5.146 5.147a.5.5 0 0 1-.708-.707L9.293 10 4.146 4.853a.5.5 0 0 1 .708-.707L10 9.293z",
     }),
   });
-const yA = () => {
-  const [t, r] = e.useState(false);
-  const [o, a] = e.useState(false);
-  return n.jsx("div", {
-    className:
-      "flex flex-col items-center justify-center min-h-screen bg-bg-100 p-4",
-    children: n.jsx("div", {
-      className: "max-w-md w-full",
-      children: n.jsx("div", {
-        className:
-          "bg-bg-000 rounded-xl shadow-sm border border-border-200 p-6",
-        children: n.jsxs("div", {
-          className: "flex flex-col items-center text-center",
-          children: [
-            n.jsx("div", {
-              className:
-                "w-12 h-12 bg-danger-900 rounded-full flex items-center justify-center mb-3",
-              children: n.jsx(gA, {
-                className: "w-6 h-6 text-danger-200",
-              }),
-            }),
-            n.jsx("h2", {
-              className: "font-xl-bold text-text-100 mb-2",
-              children: n.jsx(c, {
-                defaultMessage:
-                  "This account is not approved by your enterprise admin",
-                id: "9mEpIaBJPG",
-              }),
-            }),
-            n.jsx("p", {
-              className: "font-base-sm text-text-300 mb-4",
-              children: n.jsx(c, {
-                defaultMessage:
-                  "Your organization requires you to sign in with a specific account. Log out and sign in with an approved account.",
-                id: "/LzCz+T6Ti",
-              }),
-            }),
-            n.jsx(uA, {
-              size: "lg",
-              onClick: async () => {
-                r(true);
-                a(false);
-                try {
-                  const e = await chrome.runtime.sendMessage({
-                    type: "logout",
-                  });
-                  if (!e?.success) {
-                    throw new Error(e?.error || "Logout failed");
-                  }
-                  window.location.reload();
-                } catch (e) {
-                  a(true);
-                  r(false);
-                }
-              },
-              disabled: t,
-              className: "w-full",
-              children: n.jsx(c, {
-                defaultMessage: "Log out",
-                id: "PlBReUqqzW",
-              }),
-            }),
-            o &&
-              n.jsx("p", {
-                className: "font-base-sm text-danger-200 mt-3",
-                children: n.jsx(c, {
-                  defaultMessage: "Logout failed. You can try again.",
-                  id: "LlZ0G1XALH",
-                }),
-              }),
-          ],
-        }),
-      }),
-    }),
-  });
-};
 const bA = () =>
   n.jsx("div", {
     className: "flex items-center justify-center h-screen",
@@ -50661,46 +50585,7 @@ const OA = ({ children: t, pageName: r }) => {
     })()),
     AA),
   );
-  const { userProfile: a, isAuthenticated: i, isLoading: s } = EA();
-  const [u, __cpSetManagedOrganizationPolicy] = e.useState({
-    forceLoginOrgUUIDs: null,
-    isLoading: true,
-  });
-  e.useEffect(() => {
-    let active = true;
-    const loadManagedOrganizationPolicy = async () => {
-      try {
-        const values = await chrome.storage.managed.get("forceLoginOrgUUID");
-        if (active) {
-          __cpSetManagedOrganizationPolicy({
-            forceLoginOrgUUIDs:
-              globalThis.__CP_MANAGED_POLICY__.parseForceLoginOrgUUIDs(
-                values.forceLoginOrgUUID,
-              ),
-            isLoading: false,
-          });
-        }
-      } catch {
-        if (active) {
-          __cpSetManagedOrganizationPolicy({
-            forceLoginOrgUUIDs: null,
-            isLoading: false,
-          });
-        }
-      }
-    };
-    loadManagedOrganizationPolicy();
-    const onManagedPolicyChanged = (changes, areaName) => {
-      if (areaName === "managed" && changes.forceLoginOrgUUID) {
-        loadManagedOrganizationPolicy();
-      }
-    };
-    chrome.storage.onChanged.addListener(onManagedPolicyChanged);
-    return () => {
-      active = false;
-      chrome.storage.onChanged.removeListener(onManagedPolicyChanged);
-    };
-  }, []);
+  const { userProfile: a, isLoading: s } = EA();
   e.useEffect(() => {
     if (i && a && o) {
       o.identify(a.account.uuid, {
@@ -50748,20 +50633,6 @@ const OA = ({ children: t, pageName: r }) => {
     return n.jsx(bA, {});
   } else if (r === "Options") {
     return d();
-  } else if (i) {
-    if (u.isLoading) {
-      return n.jsx(bA, {});
-    } else if (
-      a &&
-      !globalThis.__CP_MANAGED_POLICY__.isOrganizationAllowed(
-        a.organization.uuid,
-        u.forceLoginOrgUUIDs,
-      )
-    ) {
-      return n.jsx(yA, {});
-    } else {
-      return d();
-    }
   } else {
     return d();
   }

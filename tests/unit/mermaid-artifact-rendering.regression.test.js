@@ -114,11 +114,83 @@ function testPackagedSidePanelOwnsALazyMermaidEnhancer() {
   assert.ok(enhancer.includes("pre > code.language-mermaid"));
   assert.ok(enhancer.includes("assets/vendor/mermaid-11.15.0.min.js"));
   assert.ok(enhancer.includes("MutationObserver"));
+  assert.ok(enhancer.includes("characterData: true"));
+}
+
+async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
+  const modulePath = path.join(
+    __dirname,
+    "..",
+    "..",
+    "src",
+    "sidepanel",
+    "mermaid-markdown.js",
+  );
+  const originalDocument = global.document;
+  const originalMatchMedia = global.matchMedia;
+  const originalMermaid = global.mermaid;
+  const originalRenderer = global.__CP_MERMAID_RENDERER__;
+  let renderCount = 0;
+  let replacement;
+
+  global.document = {
+    documentElement: { dataset: { theme: "claude", mode: "dark" } },
+    createElement() {
+      return {
+        dataset: {},
+        setAttribute() {},
+        set innerHTML(value) {
+          this.svg = value;
+        },
+      };
+    },
+  };
+  global.matchMedia = () => ({ matches: false });
+  global.mermaid = { render() {} };
+  global.__CP_MERMAID_RENDERER__ = {
+    createMermaidRenderRuntime() {
+      return {
+        async render() {
+          renderCount += 1;
+          return renderCount === 1
+            ? { ok: false, reason: "render_failed" }
+            : { ok: true, svg: "<svg></svg>" };
+        },
+      };
+    },
+  };
+
+  delete require.cache[require.resolve(modulePath)];
+  const enhancer = require(modulePath);
+  const pre = {
+    dataset: {},
+    replaceWith(value) {
+      replacement = value;
+    },
+  };
+  const code = { parentElement: pre, textContent: "graph TD\nA -" };
+
+  try {
+    assert.equal(enhancer.getTheme(), "dark");
+    await enhancer.renderCodeBlock(code);
+    assert.equal(pre.dataset.cpMermaidState, "render_failed");
+    code.textContent = "graph TD\nA --> B";
+    await enhancer.renderCodeBlock(code);
+    assert.equal(renderCount, 2);
+    assert.equal(replacement.dataset.cpMermaidState, "rendered");
+  } finally {
+    delete require.cache[require.resolve(modulePath)];
+    global.document = originalDocument;
+    global.matchMedia = originalMatchMedia;
+    global.mermaid = originalMermaid;
+    global.__CP_MERMAID_RENDERER__ = originalRenderer;
+  }
 }
 
 async function main() {
   testMermaidSourceLimitsAreEnforcedBeforeRendering();
   testPackagedSidePanelOwnsALazyMermaidEnhancer();
+  await testStreamedMermaidRetriesChangedSourceAndUsesDataMode();
   await testRuntimeUsesStrictBoundedMermaidConfiguration();
   await testRuntimeBoundsHungRenders();
   console.log("Mermaid artifact rendering regression tests passed");

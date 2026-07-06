@@ -40,17 +40,9 @@ Prefer these seams when implementing behavior.
   reads the same storage record through a Chrome storage subscription and a
   narrow built-in-override reader; workflow-store writes still cross the
   background mutation boundary.
-- `managed-policy.js` owns managed URL-pattern matching, live policy updates,
-  forced-organization parsing, and organization membership checks. Generated
-  permission and account bundles delegate policy semantics to this readable
-  runtime.
-- `auth-session.js` owns the narrow OAuth logout boundary used by managed
-  organization enforcement. It removes OAuth session records without deleting
-  custom-provider configuration, API keys, or chat history.
-- `onboarding-tasks.js` owns the allowed Claude.ai starter-task identifiers and
-  prompts. The content script sends only a validated identifier, and the
-  service worker resolves it again before opening the side panel and retrying
-  prompt delivery.
+- `managed-policy.js` owns managed URL-pattern matching and live policy updates.
+  The generated permission bundle delegates URL policy semantics to this
+  readable runtime.
 - `mermaid-renderer.js` owns Mermaid source limits, strict renderer
   configuration, timeout handling, and SVG sanitization. The side-panel
   Markdown enhancer lazy-loads the packaged Mermaid 11.15.0 UMD asset only when
@@ -62,10 +54,9 @@ Prefer these seams when implementing behavior.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
-- The existing MCP OAuth runtime uses `chrome.identity` with PKCE, state
-  validation, and a bounded silent-auth timeout. The reviewed manifest baseline
-  includes `identity`, and diagnostic sanitizers redact access and refresh
-  tokens.
+- The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
+  Diagnostic sanitizers continue to redact access and refresh tokens because
+  configured providers may use those fields.
 
 ## Bundle patch contract
 
@@ -100,13 +91,10 @@ The current recovered layer protects these workflows.
   titles, labels, and search keys use single-line whitespace normalization.
   Context metrics skip restored assistant records whose usage fields are all
   zero so an earlier usable measurement remains visible.
-- Enterprise-managed URL patterns block matching browser targets, and a forced
-  organization policy blocks authenticated accounts outside the configured
-  UUID set. Missing or malformed managed values preserve normal unmanaged
-  behavior.
-- Claude.ai onboarding buttons can open the current tab's side panel and
-  populate a known starter task. Unknown task identifiers don't cross the
-  content-script boundary.
+- Enterprise-managed URL patterns block matching browser targets. Missing or
+  malformed managed values preserve normal unmanaged behavior.
+- Generic internal `OPEN_SIDE_PANEL` messages can open the current tab's side
+  panel and populate a direct prompt. No external website owns this bridge.
 - Mermaid Markdown fences render as isolated SVG diagrams. Invalid, oversized,
   over-connected, timed-out, or unsanitizable diagrams remain readable as code
   instead of replacing the conversation with a failed render.
@@ -116,3 +104,8 @@ The current recovered layer protects these workflows.
 The side-panel bundle remains large and expensive to review. New behavior must
 move toward readable modules where practical; the quality score tracks this
 debt explicitly.
+
+The generated bundles retain historical compatibility names and dormant
+upstream code. These strings don't make Claude an active product dependency.
+Agents must follow the provider-independent boundary in `AGENTS.md` and
+`ARCHITECTURE.md` instead of inferring product scope from bundled names.

@@ -6,8 +6,8 @@ const UPSTREAM_1_0_79_SOURCE = Object.freeze({
 const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   {
     id: "managed-url-policy",
-    status: "divergent",
-    evidence: "Source reads blockedUrlPatterns; local bundle has disabled policy stubs.",
+    status: "equivalent",
+    evidence: "The generated permission runtime delegates blockedUrlPatterns to the tested readable policy module.",
     owners: [
       "src/manifest.json",
       "src/managed_schema.json",
@@ -17,36 +17,36 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "forced-organization-login",
-    status: "divergent",
-    evidence: "Source reads forceLoginOrgUUID; local storage runtime hard-codes no policy.",
+    status: "excluded",
+    evidence: "The provider-independent product removes forceLoginOrgUUID and its Claude account gate.",
+    risk: "Reintroduces a Claude organization dependency and policy-specific OAuth maintenance with no custom-provider benefit.",
     owners: [
-      "src/managed_schema.json",
-      "src/assets/useStorageState-hbwNMVUA.js",
+      "docs/product-specs/remove-claude-specific-slices.md",
+      "tests/unit/provider-independence.regression.test.js",
     ],
-    testTarget: "tests/unit/managed-organization-policy.regression.test.js",
+    testTarget: "tests/unit/provider-independence.regression.test.js",
   },
   {
     id: "mcp-oauth-identity",
-    status: "equivalent",
-    evidence: "Local PKCE OAuth guards are preserved and the manifest now grants identity.",
+    status: "excluded",
+    evidence: "Generic MCP uses Native Messaging; the manifest no longer grants Chrome Identity for Claude OAuth.",
+    risk: "Adds a privileged permission and Claude-specific OAuth endpoints that generic MCP doesn't require.",
     owners: [
+      "docs/product-specs/remove-claude-specific-slices.md",
       "src/manifest.json",
-      "src/assets/PermissionManager-9s959502.js",
-      "src/assets/mcpPermissions-qqAoJjJ8.js",
     ],
-    testTarget: "tests/unit/mcp-oauth-identity.regression.test.js",
+    testTarget: "tests/unit/provider-independence.regression.test.js",
   },
   {
     id: "claude-ai-onboarding-task-bridge",
-    status: "equivalent",
-    evidence: "The local bridge now resolves validated task ids through a readable prompt map.",
+    status: "excluded",
+    evidence: "The manifest and worker no longer expose a Claude.ai onboarding or external-message bridge.",
+    risk: "Creates a Claude-only web origin boundary and prompt injection surface outside the provider-independent product.",
     owners: [
-      "src/assets/content-script.ts-Bwa5rY9t.js",
+      "docs/product-specs/remove-claude-specific-slices.md",
       "src/assets/service-worker.ts-H0DVM1LS.js",
-      "src/shared/claw-contract.js",
-      "src/shared/onboarding-tasks.js",
     ],
-    testTarget: "tests/integration/onboarding-task-bridge.integration.test.js",
+    testTarget: "tests/unit/provider-independence.regression.test.js",
   },
   {
     id: "mermaid-artifact-rendering",

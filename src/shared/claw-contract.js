@@ -35,11 +35,7 @@
     auth: {
       ACCESS_TOKEN_STORAGE_KEY: "accessToken",
       REFRESH_TOKEN_STORAGE_KEY: "refreshToken",
-      TOKEN_EXPIRY_STORAGE_KEY: "tokenExpiry",
-      OAUTH_STATE_STORAGE_KEY: "oauthState",
-      CODE_VERIFIER_STORAGE_KEY: "codeVerifier",
       LAST_AUTH_FAILURE_REASON_STORAGE_KEY: "lastAuthFailureReason",
-      ACCOUNT_UUID_STORAGE_KEY: "accountUuid",
     },
     prompts: {
       SYSTEM_PROMPT_STORAGE_KEY: "chrome_ext_system_prompt",

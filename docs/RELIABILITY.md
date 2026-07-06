@@ -32,13 +32,12 @@ Preserve these invariants.
   overwrite assets for an existing release.
 - Offscreen GIF generation rejects more than 50 frames or more than 50,000,000
   decoded pixels before starting the encoder.
-- Managed URL and organization policies use safe defaults when policy storage
-  is unavailable or malformed, and they refresh when managed storage changes.
-- A user blocked by forced-organization policy can clear the OAuth session and
-  sign in again; logout leaves provider settings and conversation data intact.
-- The Claude.ai onboarding bridge validates task identifiers in both the
-  content script and service worker, then uses the existing bounded side-panel
-  readiness retry before delivering the prompt.
+- Managed URL policy uses safe defaults when policy storage is unavailable or
+  malformed, and it refreshes when managed storage changes.
+- The manifest remains provider-independent: it has no Claude.ai site bridge,
+  external Claude origin, forced-organization policy, or `identity` permission.
+- Generic internal side-panel prompt delivery retains its bounded readiness
+  retry without exposing that bridge to external websites.
 - Mermaid rendering rejects source over 20,000 encoded bytes or 400 likely
   edges, times out after five seconds, and preserves the original code block on
   any load, render, or sanitization failure.

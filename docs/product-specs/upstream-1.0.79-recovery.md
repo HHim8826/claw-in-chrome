@@ -5,6 +5,12 @@ locally supplied Claude in Chrome 1.0.79 package without replacing Claw in
 Chrome's readable recovery layer or its existing hardening. The source package
 is an input specification, not a directory tree to copy over this repository.
 
+> **Current status:** The provider-independent product keeps Mermaid and managed
+> URL blocking but removes the recovered Claude.ai onboarding,
+> forced-organization, and Chrome Identity slices. The
+> [removal specification](./remove-claude-specific-slices.md) overrides those
+> historical acceptance criteria.
+
 ## User and problem
 
 The current extension is based on an older upstream runtime and contains local

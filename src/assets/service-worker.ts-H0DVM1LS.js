@@ -116,12 +116,6 @@ const __cpStaticIndicatorAckPayloadFieldSecondaryTabId = "secondaryTabId";
 const __cpStaticIndicatorAckPayloadFieldMainTabId = "mainTabId";
 const __cpStaticIndicatorAckPayloadFieldTimestamp = "timestamp";
 const __cpStaticIndicatorAckCacheTtlMs = 3000;
-const __cpBackgroundMessageTypeLogout = "logout";
-const __cpExternalMessageTypeOauthRedirect = "oauth_redirect";
-const __cpExternalMessageTypePing = "ping";
-const __cpExternalMessageTypeOnboardingTask = "onboarding_task";
-const __cpTrustedExternalOriginClaudeAi = "https://claude.ai";
-const __cpTrustedExternalOrigins = [__cpTrustedExternalOriginClaudeAi];
 const __cpPermissionManagerStorageKeyMcpConnected =
   __cpContractPermissionManagerKeys.MCP_CONNECTED_STORAGE_KEY ||
   p.MCP_CONNECTED;
@@ -150,7 +144,6 @@ const __cpScheduledTaskExecutionTypeManual = "manual";
 const __cpScheduledTaskExecutionTypeAutomatic = "automatic";
 const __cpSwitchToMainTabErrorNoMainTab = "No main tab found";
 const __cpSwitchToMainTabErrorNoSenderTab = "No sender tab";
-const __cpExternalBridgeErrorUntrustedOrigin = "Untrusted origin";
 function L(e) {
   if (e?.includes("native messaging host not found")) {
     k = false;
@@ -884,11 +877,7 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
             return;
           }
           await W(t);
-          const __cpOpenSidePanelPrompt = e.onboardingTaskId
-            ? globalThis.__CP_ONBOARDING_TASKS__?.resolveOnboardingTaskPrompt(
-                e.onboardingTaskId,
-              )
-            : e.prompt;
+          const __cpOpenSidePanelPrompt = e.prompt;
           if (__cpOpenSidePanelPrompt) {
             const t = async (s = 0) => {
               try {
@@ -926,20 +915,8 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
           });
           return;
         }
-        // 企业账号策略阻挡页使用这条窄桥清理 OAuth session，不删除 provider 或聊天数据。
-        if (e.type === __cpBackgroundMessageTypeLogout) {
-          try {
-            await globalThis.__CP_AUTH_SESSION__.clearAuthSession(chrome);
-            a({ success: true });
-          } catch (t) {
-            a({
-              success: false,
-              error: t instanceof Error ? t.message : String(t || "Logout failed"),
-            });
-          }
-          return;
-          // 原生宿主 / MCP bridge 状态读取：优先向 native host 请求最新状态，失败时回退本地缓存。
-        } else if (e.type === __cpBackgroundMessageTypeCheckNativeHostStatus) {
+        // 原生宿主 / MCP bridge 状态读取：优先向 native host 请求最新状态，失败时回退本地缓存。
+        if (e.type === __cpBackgroundMessageTypeCheckNativeHostStatus) {
           const e = await (async function () {
             if (A && k) {
               if (M) {
@@ -1392,43 +1369,4 @@ chrome.alarms.onAlarm.addListener(async (e) => {
       }
     } catch (t) {}
   }
-});
-// 外部页面桥：只信任 claude.ai，用于 onboarding prompt 注入与存在性探测。
-chrome.runtime.onMessageExternal.addListener((e, t, s) => {
-  (async () => {
-    var a;
-    if ((a = t.origin) && __cpTrustedExternalOrigins.includes(a)) {
-      if (e.type === __cpExternalMessageTypeOauthRedirect) {
-        s({
-          success: false,
-          disabled: true,
-        });
-      } else if (e.type === __cpExternalMessageTypePing) {
-        s({
-          success: true,
-          exists: true,
-        });
-      } else if (e.type === __cpExternalMessageTypeOnboardingTask) {
-        chrome.runtime.sendMessage(
-          {
-            type: __cpBackgroundMessageTypePopulateInputText,
-            prompt: e.payload?.prompt,
-          },
-          (e) => {
-            const t = chrome.runtime.lastError?.message;
-            s({
-              success: !t && !!e?.success,
-              error: t ?? (e?.success ? undefined : "side panel not ready"),
-            });
-          },
-        );
-      }
-    } else {
-      s({
-        success: false,
-        error: __cpExternalBridgeErrorUntrustedOrigin,
-      });
-    }
-  })();
-  return true;
 });

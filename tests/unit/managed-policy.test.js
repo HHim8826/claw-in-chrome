@@ -3,9 +3,7 @@ const path = require("node:path");
 
 const {
   createManagedPolicyRuntime,
-  isOrganizationAllowed,
   matchesBlockedUrlPattern,
-  parseForceLoginOrgUUIDs,
 } = require(path.join(__dirname, "..", "..", "src", "shared", "managed-policy.js"));
 
 function testBlockedUrlPatternsMatchNormalizedUrls() {
@@ -22,19 +20,6 @@ function testBlockedUrlPatternsMatchNormalizedUrls() {
     true,
   );
   assert.equal(matchesBlockedUrlPattern("not a url", "example.com/*"), false);
-}
-
-function testForcedOrganizationPolicyAcceptsOneOrManyNormalizedIds() {
-  assert.deepEqual(parseForceLoginOrgUUIDs(" ORG-A "), ["org-a"]);
-  assert.deepEqual(parseForceLoginOrgUUIDs('["ORG-A", "org-b"]'), [
-    "org-a",
-    "org-b",
-  ]);
-  assert.equal(parseForceLoginOrgUUIDs("[]"), null);
-  assert.equal(parseForceLoginOrgUUIDs('["org-a", 3]'), null);
-  assert.equal(isOrganizationAllowed("ORG-B", ["org-a", "org-b"]), true);
-  assert.equal(isOrganizationAllowed("org-c", ["org-a", "org-b"]), false);
-  assert.equal(isOrganizationAllowed("org-c", null), true);
 }
 
 async function testBlockedPolicyUpdatesWithoutReloadingTheExtension() {
@@ -67,7 +52,6 @@ async function testBlockedPolicyUpdatesWithoutReloadingTheExtension() {
 
 async function main() {
   testBlockedUrlPatternsMatchNormalizedUrls();
-  testForcedOrganizationPolicyAcceptsOneOrManyNormalizedIds();
   await testBlockedPolicyUpdatesWithoutReloadingTheExtension();
   console.log("managed policy tests passed");
 }

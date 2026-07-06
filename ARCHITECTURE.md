@@ -5,6 +5,18 @@ plus a maintainable recovery layer. The primary architecture constraint is to
 keep new behavior in readable modules and use bundle edits only when no stable
 extension seam exists.
 
+## Product boundary
+
+Claw in Chrome is provider-independent. Custom providers and the MCP Native
+Messaging bridge are product capabilities; Claude accounts, Claude.ai origins,
+Claude organization policy, and Claude-only onboarding are not.
+
+New Claude-only behavior requires a separate approved feature brief, a security
+review, and an explicit product justification. The `identity` permission is not
+part of the default architecture because generic MCP uses `nativeMessaging`.
+Legacy native-host names may remain only as tested compatibility identifiers
+and don't authorize new Claude-specific dependencies.
+
 ## Runtime layers
 
 The extension loads code in four layers.
@@ -46,4 +58,3 @@ Use the narrowest test that proves the behavior, then run the project gate.
 Prefer a readable adapter or extracted module over another direct bundle edit.
 When a direct bundle patch is unavoidable, keep it small, add a stable semantic
 name, test the observable behavior, and record the seam in the recovery model.
-

@@ -4,6 +4,21 @@ Use this file as the entry point for automated development in this repository.
 Keep detailed behavior and decisions in the linked documents and executable
 checks.
 
+## Product direction
+
+Claw in Chrome is provider-independent and doesn't depend on Claude accounts,
+Claude.ai pages, or Claude organization policy.
+
+- Don't add Claude-only integrations, origins, account gates, or onboarding
+  flows without a new feature brief and explicit user approval.
+- Treat the `identity` permission as prohibited by default. Generic MCP uses
+  `nativeMessaging` and doesn't require Chrome Identity.
+- Preserve legacy native-host identifiers only where compatibility tests prove
+  they are required; don't treat those identifiers as product dependencies.
+- Use the
+  [provider-independence specification](./docs/product-specs/remove-claude-specific-slices.md)
+  when evaluating upstream features or permission changes.
+
 ## Required workflow
 
 Follow these steps for every change.
@@ -41,4 +56,3 @@ Use these documents for decisions that must survive a chat or agent reset.
 - [Reliability](./docs/RELIABILITY.md)
 - [Quality score](./docs/QUALITY_SCORE.md)
 - [Contributing](./CONTRIBUTING.md)
-

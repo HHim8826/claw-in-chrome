@@ -29,6 +29,11 @@ function testEveryBehaviorHasAnAuditableOwner() {
     assert.ok(allowedStatuses.has(behavior.status), `${behavior.id} has invalid status`);
     assert.ok(behavior.evidence, `${behavior.id} must record source evidence`);
     assert.ok(behavior.testTarget, `${behavior.id} must record a test target`);
+    assert.equal(
+      fs.existsSync(path.join(repoRoot, behavior.testTarget)),
+      true,
+      `${behavior.id} test target is missing: ${behavior.testTarget}`,
+    );
     assert.ok(behavior.owners.length > 0, `${behavior.id} must have an owner`);
     for (const owner of behavior.owners) {
       assert.equal(
@@ -43,9 +48,20 @@ function testEveryBehaviorHasAnAuditableOwner() {
   }
 }
 
+function testCurrentStatusesMatchTheProviderIndependentProduct() {
+  const statuses = Object.fromEntries(
+    UPSTREAM_1_0_79_BEHAVIOR_MATRIX.map(({ id, status }) => [id, status]),
+  );
+  assert.equal(statuses["managed-url-policy"], "equivalent");
+  assert.equal(statuses["forced-organization-login"], "excluded");
+  assert.equal(statuses["mcp-oauth-identity"], "excluded");
+  assert.equal(statuses["claude-ai-onboarding-task-bridge"], "excluded");
+}
+
 function main() {
   testSourceIdentityIsPinned();
   testEveryBehaviorHasAnAuditableOwner();
+  testCurrentStatusesMatchTheProviderIndependentProduct();
   console.log("upstream 1.0.79 behavior matrix tests passed");
 }
 

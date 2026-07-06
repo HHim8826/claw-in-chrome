@@ -38,3 +38,10 @@ browser asset. This avoids loading upstream application bundles as Mermaid
 dependencies, but release-size tracking remains necessary. The opaque
 `Conway` and `squares` remote-host surfaces remain excluded until they have a
 stable local user contract and security model.
+
+The provider-independence pass removes the recovered Claude.ai onboarding,
+forced-organization, and Chrome Identity slices while retaining generic MCP
+Native Messaging, Mermaid, and managed URL policy. The upstream behavior matrix
+now fails when any `testTarget` path is missing, preventing documentation-only
+false-green entries. Historical Claude names remain in generated compatibility
+surfaces and are not an active product contract.

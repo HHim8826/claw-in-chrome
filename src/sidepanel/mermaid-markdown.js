@@ -14,6 +14,7 @@
   let vendorPromise;
   let renderRuntimePromise;
   let nextDiagramId = 0;
+  const renderAttempts = new WeakMap();
 
   function loadMermaidVendor() {
     const existing = root.mermaid?.default || root.mermaid;
@@ -53,11 +54,14 @@
   }
 
   function getTheme() {
-    const documentTheme = String(
-      root.document.documentElement.dataset.theme || "",
+    const documentMode = String(
+      root.document.documentElement.dataset.mode || "",
     ).toLowerCase();
-    if (documentTheme === "dark") {
+    if (documentMode === "dark") {
       return "dark";
+    }
+    if (documentMode === "light") {
+      return "light";
     }
     return root.matchMedia?.("(prefers-color-scheme: dark)")?.matches
       ? "dark"
@@ -66,16 +70,26 @@
 
   async function renderCodeBlock(codeElement) {
     const pre = codeElement?.parentElement;
-    if (!pre || pre.dataset.cpMermaidState) {
+    if (!pre) {
       return;
     }
+    const source = String(codeElement.textContent || "");
+    const previousAttempt = renderAttempts.get(pre);
+    if (previousAttempt?.source === source) {
+      return;
+    }
+    const attempt = { source };
+    renderAttempts.set(pre, attempt);
     pre.dataset.cpMermaidState = "loading";
     try {
       const runtime = await getRenderRuntime();
-      const result = await runtime.render(codeElement.textContent, {
+      const result = await runtime.render(source, {
         id: `cp-mermaid-${++nextDiagramId}`,
         theme: getTheme(),
       });
+      if (renderAttempts.get(pre) !== attempt) {
+        return;
+      }
       if (!result.ok) {
         pre.dataset.cpMermaidState = result.reason || "error";
         return;
@@ -88,6 +102,9 @@
       container.innerHTML = result.svg;
       pre.replaceWith(container);
     } catch (error) {
+      if (renderAttempts.get(pre) !== attempt) {
+        return;
+      }
       pre.dataset.cpMermaidState = "error";
       root.console?.warn?.("[mermaid] diagram render failed", {
         message: error instanceof Error ? error.message : String(error || ""),
@@ -108,17 +125,33 @@
     scanForMermaidCodeBlocks(root.document);
     const observer = new root.MutationObserver((records) => {
       for (const record of records) {
+        if (record.type === "characterData") {
+          const codeElement = record.target?.parentElement;
+          if (codeElement?.matches?.(MERMAID_SELECTOR)) {
+            renderCodeBlock(codeElement);
+          }
+          continue;
+        }
         for (const node of record.addedNodes) {
           if (node.nodeType === 1) {
             if (node.matches?.(MERMAID_SELECTOR)) {
               renderCodeBlock(node);
             }
             scanForMermaidCodeBlocks(node);
+          } else if (node.nodeType === 3) {
+            const codeElement = node.parentElement;
+            if (codeElement?.matches?.(MERMAID_SELECTOR)) {
+              renderCodeBlock(codeElement);
+            }
           }
         }
       }
     });
-    observer.observe(root.document.body, { childList: true, subtree: true });
+    observer.observe(root.document.body, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
     return observer;
   }
 
@@ -136,6 +169,7 @@
     MERMAID_SELECTOR,
     VENDOR_PATH,
     bootstrap,
+    getTheme,
     loadMermaidVendor,
     renderCodeBlock,
     scanForMermaidCodeBlocks,

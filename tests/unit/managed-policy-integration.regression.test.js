@@ -27,7 +27,7 @@ function testManifestRegistersManagedPolicySchema() {
 
   const schema = JSON.parse(read("src", "managed_schema.json"));
   assert.equal(schema.properties.blockedUrlPatterns.type, "array");
-  assert.equal(schema.properties.forceLoginOrgUUID.type, "string");
+  assert.ok(!Object.hasOwn(schema.properties, "forceLoginOrgUUID"));
 }
 
 function testManagedPolicyRuntimeLoadsBeforeGeneratedConsumers() {
@@ -47,7 +47,7 @@ function testManagedPolicyRuntimeLoadsBeforeGeneratedConsumers() {
   }
 }
 
-function testGeneratedConsumersDelegateToTheReadablePolicyRuntime() {
+function testGeneratedUrlConsumerDelegatesToTheReadablePolicyRuntime() {
   const permissions = read("src", "assets", "mcpPermissions-qqAoJjJ8.js");
   const storageState = read("src", "assets", "useStorageState-hbwNMVUA.js");
 
@@ -56,28 +56,14 @@ function testGeneratedConsumersDelegateToTheReadablePolicyRuntime() {
     "return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).isUrlBlocked(e);",
     "MCP URL policy must use the readable managed-policy runtime",
   );
-  assertIncludes(
-    storageState,
-    "globalThis.__CP_MANAGED_POLICY__.parseForceLoginOrgUUIDs",
-    "account policy must use the shared organization parser",
-  );
-  assertIncludes(
-    storageState,
-    "return n.jsx(yA, {});",
-    "disallowed organizations must render the enterprise policy blocker",
-  );
-  assertIncludes(
-    storageState,
-    'type: "logout"',
-    "enterprise blocker must let the user log out",
-  );
+  assert.ok(!storageState.includes("forceLoginOrgUUID"));
 }
 
 function testRuntimeInspectionReportsManagedPolicyAndMermaidVendor() {
   const inspection = inspectRuntime();
   assert.deepEqual(inspection.managedPolicy, {
     schema: "managed_schema.json",
-    keys: ["blockedUrlPatterns", "forceLoginOrgUUID"],
+    keys: ["blockedUrlPatterns"],
   });
   assert.equal(
     inspection.mermaidVendor,
@@ -88,7 +74,7 @@ function testRuntimeInspectionReportsManagedPolicyAndMermaidVendor() {
 function main() {
   testManifestRegistersManagedPolicySchema();
   testManagedPolicyRuntimeLoadsBeforeGeneratedConsumers();
-  testGeneratedConsumersDelegateToTheReadablePolicyRuntime();
+  testGeneratedUrlConsumerDelegatesToTheReadablePolicyRuntime();
   testRuntimeInspectionReportsManagedPolicyAndMermaidVendor();
   console.log("managed policy integration regression tests passed");
 }

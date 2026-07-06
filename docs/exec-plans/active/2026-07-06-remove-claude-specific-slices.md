@@ -207,5 +207,7 @@ Record implementation evidence here as work proceeds.
   organization policy, Chrome Identity permission, and their dedicated readable
   recovery modules. Preserve generic MCP Native Messaging, managed URL policy,
   Mermaid, telemetry suppression, custom providers, and persisted user data.
-- Approval state: awaiting user confirmation; no runtime or test implementation
-  has started.
+- Approval state: approved on July 6, 2026.
+- Slice 1 RED: `node tests/unit/provider-independence.regression.test.js`
+  failed because the manifest still granted `identity` and exposed Claude.ai
+  integration.

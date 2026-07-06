@@ -16,7 +16,6 @@ const agentVisualIndicatorBundlePath = path.join(rootDir, "src", "assets", "agen
 const startRecordingBundlePath = path.join(rootDir, "src", "assets", "startRecording-BeCDKY84.js");
 const pairingBootstrapBundlePath = path.join(rootDir, "src", "assets", "pairing-H3Cs7KHl.js");
 const pairingPromptBundlePath = path.join(rootDir, "src", "assets", "PairingPrompt-Do4C6yFu.js");
-const contentScriptBundlePath = path.join(rootDir, "src", "assets", "content-script.ts-Bwa5rY9t.js");
 const serviceWorkerBundlePath = path.join(rootDir, "src", "assets", "service-worker.ts-H0DVM1LS.js");
 const serviceWorkerRuntimePath = path.join(rootDir, "src", "background", "service-worker-runtime.js");
 const detachedWindowRuntimePath = path.join(rootDir, "src", "background", "service-worker-detached-window-runtime.js");
@@ -826,16 +825,11 @@ async function testServiceWorkerBundleAnchorsExist() {
   assertIncludes(source, "const __cpAgentIndicatorCurrentTabSentinel = __cpAgentIndicatorContract.CURRENT_TAB_SENTINEL || \"CURRENT_TAB\";", "service-worker bundle");
   assertIncludes(source, "const __cpStaticIndicatorAckPayloadFieldSecondaryTabId = \"secondaryTabId\";", "service-worker bundle");
   assertIncludes(source, "const __cpStaticIndicatorAckCacheTtlMs = 3000;", "service-worker bundle");
-  assertIncludes(source, "const __cpBackgroundMessageTypeLogout = \"logout\";", "service-worker bundle");
-  assertIncludes(source, "const __cpExternalMessageTypeOauthRedirect = \"oauth_redirect\";", "service-worker bundle");
-  assertIncludes(source, "const __cpTrustedExternalOriginClaudeAi = \"https://claude.ai\";", "service-worker bundle");
-  assertIncludes(source, "const __cpTrustedExternalOrigins = [__cpTrustedExternalOriginClaudeAi];", "service-worker bundle");
   assertIncludes(source, "const __cpNativePortNotificationJsonRpcVersion = \"2.0\";", "service-worker bundle");
   assertIncludes(source, "const __cpChromeNotificationTypeBasic = \"basic\";", "service-worker bundle");
   assertIncludes(source, "const __cpScheduledTaskFallbackName = \"Scheduled Task\";", "service-worker bundle");
   assertIncludes(source, "const __cpScheduledTaskExecutionTypeManual = \"manual\";", "service-worker bundle");
   assertIncludes(source, "const __cpSwitchToMainTabErrorNoMainTab = \"No main tab found\";", "service-worker bundle");
-  assertIncludes(source, "const __cpExternalBridgeErrorUntrustedOrigin = \"Untrusted origin\";", "service-worker bundle");
   assertIncludes(source, "原生宿主桥初始化入口", "service-worker bundle");
   assertIncludes(source, "原生宿主消息分发：工具执行、连接状态同步、状态查询回包。", "service-worker bundle");
   assertIncludes(source, "原生宿主 tool_response 回包桥：把后台工具结果 / 用户拒绝统一包装回 native host。", "service-worker bundle");
@@ -854,8 +848,6 @@ async function testServiceWorkerBundleAnchorsExist() {
   assertIncludes(source, "非音频类消息继续在主桥里细分；PLAY_NOTIFICATION_SOUND 则单独走 offscreen document。", "service-worker bundle");
   assertIncludes(source, "sidepanel 打开主链：打开侧栏后，按重试策略把 prompt/模型/附件注入输入框。", "service-worker bundle");
   assertIncludes(source, "语义锚点：OPEN_SIDE_PANEL 的 tabId 只负责打开/绑定目标 sidepanel；后续 POPULATE_INPUT_TEXT 不再携带 tabId。", "service-worker bundle");
-  assertIncludes(source, "企业账号策略阻挡页使用这条窄桥清理 OAuth session，不删除 provider 或聊天数据。", "service-worker bundle");
-  assertIncludes(source, "await globalThis.__CP_AUTH_SESSION__.clearAuthSession(chrome);", "service-worker bundle");
   assertIncludes(source, "原生宿主 / MCP bridge 状态读取：优先向 native host 请求最新状态，失败时回退本地缓存。", "service-worker bundle");
   assertIncludes(source, "MCP 通知桥：优先走 native host 的 notification 通道", "service-worker bundle");
   assertIncludes(source, "options 引导桥：把待执行任务先写入 storage，再聚焦或打开 options#prompts。", "service-worker bundle");
@@ -877,7 +869,6 @@ async function testServiceWorkerBundleAnchorsExist() {
   assertIncludes(source, "定时任务闹钟桥：`prompt_` 负责执行任务，`retry_` 负责补偿重排。", "service-worker bundle");
   assertIncludes(source, "tab 关闭同步入口：先让 tab-group 管理器更新主副 tab 账本；", "service-worker bundle");
   assertIncludes(source, "clau.de navigation bridge：消费 `/chrome/permissions` / `reconnect` / `tab/<id>` 这类扩展深链接。", "service-worker bundle");
-  assertIncludes(source, "外部页面桥：只信任 claude.ai", "service-worker bundle");
 }
 
 async function testAccessibilityTreeAnchorsExist() {
@@ -989,15 +980,6 @@ async function testPairingAnchorsExist() {
   assertIncludes(promptSource, "语义锚点：pairing 对话框打开后，默认把焦点放到浏览器命名输入框。", "PairingPrompt bundle");
   assertIncludes(promptSource, "语义锚点：确认分支会先 trim 浏览器名称；空字符串不会触发上层 onConfirm。", "PairingPrompt bundle");
   assertIncludes(promptSource, "语义锚点：PairingPrompt 组件导出（供 pairing 页面引用）", "PairingPrompt bundle");
-}
-
-async function testContentScriptAnchorsExist() {
-  const source = read(contentScriptBundlePath);
-  assertIncludes(source, "const __cpClaudeOnboardingButtonSelector = \"#claude-onboarding-button\";", "content-script bundle");
-  assertIncludes(source, "const __cpClaudeOnboardingTaskIdDataAttribute = \"data-task-id\";", "content-script bundle");
-  assertIncludes(source, "globalThis.__CP_ONBOARDING_TASKS__?.resolveOnboardingTaskPrompt(e)", "content-script bundle");
-  assertIncludes(source, "const __cpContentScriptContractMessages = globalThis.__CP_CONTRACT__?.messages || {};", "content-script bundle");
-  assertIncludes(source, "const __cpContentScriptMessageTypeOpenSidePanel = __cpContentScriptContractMessages.open_side_panel || \"open_side_panel\";", "content-script bundle");
 }
 
 async function testOptionsBundleAnchorsExist() {
@@ -1549,7 +1531,6 @@ async function main() {
   await testAgentVisualIndicatorAnchorsExist();
   await testStartRecordingAnchorsExist();
   await testPairingAnchorsExist();
-  await testContentScriptAnchorsExist();
   await testOptionsBundleAnchorsExist();
   await testOffscreenAnchorsExist();
   await testDetachedWindowRuntimeAnchorsExist();

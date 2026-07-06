@@ -14,13 +14,9 @@
     "declarativeNetRequestWithHostAccess",
     "offscreen",
     "nativeMessaging",
-    "identity",
     "unlimitedStorage",
     "downloads"
   ],
   "host_permissions": ["<all_urls>"],
-  "externally_connectable_matches": [
-    "https://claude.ai/*",
-    "https://*.claude.ai/*"
-  ]
+  "externally_connectable_matches": []
 }

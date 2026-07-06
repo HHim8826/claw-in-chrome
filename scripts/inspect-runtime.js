@@ -11,6 +11,15 @@ function inspectRuntime() {
         fs.readFileSync(path.join(repoRoot, "src", managedSchemaPath), "utf8"),
       )
     : null;
+  const contentScriptMatches = (manifest.content_scripts || []).flatMap(
+    (entry) => entry.matches || [],
+  );
+  const externallyConnectableOrigins =
+    manifest.externally_connectable?.matches || [];
+  const hasClaudeSiteIntegration = [
+    ...contentScriptMatches,
+    ...externallyConnectableOrigins,
+  ].some((value) => /claude\.ai/i.test(value));
   return {
     extensionRoot: path.join(repoRoot, "src"),
     version: manifest.version,
@@ -18,6 +27,16 @@ function inspectRuntime() {
     optionsPage: manifest.options_page || null,
     permissions: manifest.permissions || [],
     hostPermissions: manifest.host_permissions || [],
+    contentScriptMatches,
+    externallyConnectableOrigins,
+    productBoundary: {
+      providerIndependent:
+        !(manifest.permissions || []).includes("identity") &&
+        !hasClaudeSiteIntegration,
+      mcpTransport: (manifest.permissions || []).includes("nativeMessaging")
+        ? "nativeMessaging"
+        : null,
+    },
     managedPolicy: {
       schema: managedSchemaPath,
       keys: Object.keys(managedSchema?.properties || {}),
