@@ -51,6 +51,10 @@ Prefer these seams when implementing behavior.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
+- The existing MCP OAuth runtime uses `chrome.identity` with PKCE, state
+  validation, and a bounded silent-auth timeout. The reviewed manifest baseline
+  includes `identity`, and diagnostic sanitizers redact access and refresh
+  tokens.
 
 ## Bundle patch contract
 

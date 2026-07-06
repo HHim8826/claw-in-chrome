@@ -10,7 +10,7 @@ Treat these surfaces as security-critical.
 
 - `host_permissions` includes `<all_urls>`.
 - Extension permissions include `debugger`, `nativeMessaging`, `downloads`,
-  `scripting`, and `unlimitedStorage`.
+  `identity`, `scripting`, and `unlimitedStorage`.
 - Provider configuration may contain API keys, access tokens, and refresh
   tokens in `chrome.storage.local`.
 - The content security policy permits HTTPS, HTTP, WebSocket, and localhost
@@ -36,6 +36,9 @@ Apply these controls to every security-sensitive change.
 - Treat `blockedUrlPatterns` and `forceLoginOrgUUID` as administrator-owned,
   read-only policy. Normalize malformed values without writing them to local
   storage, and apply managed-storage changes without requiring a reload.
+- Keep MCP OAuth on the reviewed `chrome.identity` PKCE path. Validate redirect
+  state, bound silent authorization waits, and redact authorization codes,
+  access tokens, refresh tokens, and PKCE material from diagnostics.
 
 ## Reporting
 

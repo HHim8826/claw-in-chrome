@@ -65,6 +65,7 @@
     "declarativeNetRequestWithHostAccess",
     "offscreen",
     "nativeMessaging",
+    "identity",
     "unlimitedStorage",
     "downloads"
   ],

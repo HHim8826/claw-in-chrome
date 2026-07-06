@@ -151,6 +151,8 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
 
   await harness.__cpBackgroundDebugLog("claude_chrome.bridge.tool_call", {
     apiKey: "sk-top-secret",
+    accessToken: "oauth-access-secret",
+    refreshToken: "oauth-refresh-secret",
     authorization: "Bearer hidden-token",
     requestUrl: "https://api.example.com/v1/messages?api_key=123",
     prompt: "please keep this private",
@@ -189,6 +191,8 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
   assert.equal(entry.type, "claude_chrome.bridge.tool_call");
   assert.equal(entry.href, "/service-worker");
   assert.equal(entry.payload.apiKey, "[redacted-secret]");
+  assert.equal(entry.payload.accessToken, "[redacted-secret]");
+  assert.equal(entry.payload.refreshToken, "[redacted-secret]");
   assert.equal(entry.payload.authorization, "[redacted-secret]");
   assert.equal(entry.payload.requestUrl, "[redacted-url]");
   assert.equal(entry.payload.prompt.startsWith("[redacted-text]:"), true);
@@ -209,6 +213,8 @@ async function testBackgroundLoggerPersistsSanitizedMcpEntries() {
   assert.equal(harness.consoleMock.debugCalls.length >= 1, true);
   const consolePayload = harness.consoleMock.debugCalls.at(-1)[2];
   assert.equal(consolePayload.apiKey, "[redacted-secret]");
+  assert.equal(consolePayload.accessToken, "[redacted-secret]");
+  assert.equal(consolePayload.refreshToken, "[redacted-secret]");
   assert.equal(consolePayload.requestUrl, "[redacted-url]");
   assert.equal(String(consolePayload.action_data).startsWith("[redacted-text]"), true);
   assert.equal(JSON.stringify(harness.consoleMock.debugCalls).includes("typed customer secret"), false);

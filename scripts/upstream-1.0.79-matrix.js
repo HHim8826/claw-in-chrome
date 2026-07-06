@@ -27,8 +27,8 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "mcp-oauth-identity",
-    status: "divergent",
-    evidence: "Local OAuth code calls chrome.identity, but the manifest omits identity.",
+    status: "equivalent",
+    evidence: "Local PKCE OAuth guards are preserved and the manifest now grants identity.",
     owners: [
       "src/manifest.json",
       "src/assets/PermissionManager-9s959502.js",
