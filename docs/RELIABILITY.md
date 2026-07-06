@@ -34,6 +34,9 @@ Preserve these invariants.
   decoded pixels before starting the encoder.
 - Managed URL and organization policies use safe defaults when policy storage
   is unavailable or malformed, and they refresh when managed storage changes.
+- The Claude.ai onboarding bridge validates task identifiers in both the
+  content script and service worker, then uses the existing bounded side-panel
+  readiness retry before delivering the prompt.
 
 ## Local verification
 

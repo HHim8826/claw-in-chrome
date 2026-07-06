@@ -44,6 +44,10 @@ Prefer these seams when implementing behavior.
   forced-organization parsing, and organization membership checks. Generated
   permission and account bundles delegate policy semantics to this readable
   runtime.
+- `onboarding-tasks.js` owns the allowed Claude.ai starter-task identifiers and
+  prompts. The content script sends only a validated identifier, and the
+  service worker resolves it again before opening the side panel and retrying
+  prompt delivery.
 - The `useStorageState` model-config seam resolves configured, fetched, and
   cached custom-provider models before shortcut editors render. Both shortcut
   bundles track the resolved default and replace only empty, temporary, or
@@ -93,6 +97,9 @@ The current recovered layer protects these workflows.
   organization policy blocks authenticated accounts outside the configured
   UUID set. Missing or malformed managed values preserve normal unmanaged
   behavior.
+- Claude.ai onboarding buttons can open the current tab's side panel and
+  populate a known starter task. Unknown task identifiers don't cross the
+  content-script boundary.
 
 ## Known constraint
 

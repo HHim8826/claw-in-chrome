@@ -1,7 +1,7 @@
 (function () {
-  // 语义锚点：claude.ai onboarding 按钮 DOM 与 prompt 数据来源
+  // 语义锚点：claude.ai onboarding 按钮 DOM 与白名单 task id 数据来源
   const __cpClaudeOnboardingButtonSelector = "#claude-onboarding-button";
-  const __cpClaudeOnboardingPromptDataAttribute = "data-task-prompt";
+  const __cpClaudeOnboardingTaskIdDataAttribute = "data-task-id";
 
   // 语义锚点：content-script -> service worker 的动作名（打开 sidepanel 并填充 prompt）
   const __cpContentScriptContractMessages =
@@ -13,11 +13,12 @@
     const e = t.target.closest(__cpClaudeOnboardingButtonSelector);
     if (e) {
       (async function (t) {
-        const e = t.getAttribute(__cpClaudeOnboardingPromptDataAttribute);
-        if (e) {
+        const e = t.getAttribute(__cpClaudeOnboardingTaskIdDataAttribute);
+        const n = globalThis.__CP_ONBOARDING_TASKS__?.resolveOnboardingTaskPrompt(e);
+        if (n) {
           await chrome.runtime.sendMessage({
             type: __cpContentScriptMessageTypeOpenSidePanel,
-            prompt: e,
+            onboardingTaskId: e,
           });
         }
       })(e);

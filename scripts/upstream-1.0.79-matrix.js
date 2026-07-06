@@ -38,12 +38,13 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "claude-ai-onboarding-task-bridge",
-    status: "divergent",
-    evidence: "Local bridge accepts raw prompt text; source resolves a validated task id.",
+    status: "equivalent",
+    evidence: "The local bridge now resolves validated task ids through a readable prompt map.",
     owners: [
       "src/assets/content-script.ts-Bwa5rY9t.js",
-      "src/background/service-worker-runtime.js",
+      "src/assets/service-worker.ts-H0DVM1LS.js",
       "src/shared/claw-contract.js",
+      "src/shared/onboarding-tasks.js",
     ],
     testTarget: "tests/integration/onboarding-task-bridge.integration.test.js",
   },

@@ -884,7 +884,12 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
             return;
           }
           await W(t);
-          if (e.prompt) {
+          const __cpOpenSidePanelPrompt = e.onboardingTaskId
+            ? globalThis.__CP_ONBOARDING_TASKS__?.resolveOnboardingTaskPrompt(
+                e.onboardingTaskId,
+              )
+            : e.prompt;
+          if (__cpOpenSidePanelPrompt) {
             const t = async (s = 0) => {
               try {
                 const t = s === 0 ? 800 : 500;
@@ -893,7 +898,7 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
                   chrome.runtime.sendMessage(
                     {
                       type: __cpBackgroundMessageTypePopulateInputText,
-                      prompt: e.prompt,
+                      prompt: __cpOpenSidePanelPrompt,
                       permissionMode: e.permissionMode,
                       selectedModel: e.selectedModel,
                       attachments: e.attachments,

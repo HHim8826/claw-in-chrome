@@ -993,7 +993,8 @@ async function testPairingAnchorsExist() {
 async function testContentScriptAnchorsExist() {
   const source = read(contentScriptBundlePath);
   assertIncludes(source, "const __cpClaudeOnboardingButtonSelector = \"#claude-onboarding-button\";", "content-script bundle");
-  assertIncludes(source, "const __cpClaudeOnboardingPromptDataAttribute = \"data-task-prompt\";", "content-script bundle");
+  assertIncludes(source, "const __cpClaudeOnboardingTaskIdDataAttribute = \"data-task-id\";", "content-script bundle");
+  assertIncludes(source, "globalThis.__CP_ONBOARDING_TASKS__?.resolveOnboardingTaskPrompt(e)", "content-script bundle");
   assertIncludes(source, "const __cpContentScriptContractMessages = globalThis.__CP_CONTRACT__?.messages || {};", "content-script bundle");
   assertIncludes(source, "const __cpContentScriptMessageTypeOpenSidePanel = __cpContentScriptContractMessages.open_side_panel || \"open_side_panel\";", "content-script bundle");
 }
