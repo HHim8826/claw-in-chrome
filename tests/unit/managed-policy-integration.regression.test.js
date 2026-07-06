@@ -3,6 +3,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const repoRoot = path.join(__dirname, "..", "..");
+const { inspectRuntime } = require(path.join(
+  repoRoot,
+  "scripts",
+  "inspect-runtime.js",
+));
 
 function read(...parts) {
   return fs.readFileSync(path.join(repoRoot, ...parts), "utf8");
@@ -68,10 +73,23 @@ function testGeneratedConsumersDelegateToTheReadablePolicyRuntime() {
   );
 }
 
+function testRuntimeInspectionReportsManagedPolicyAndMermaidVendor() {
+  const inspection = inspectRuntime();
+  assert.deepEqual(inspection.managedPolicy, {
+    schema: "managed_schema.json",
+    keys: ["blockedUrlPatterns", "forceLoginOrgUUID"],
+  });
+  assert.equal(
+    inspection.mermaidVendor,
+    "assets/vendor/mermaid-11.15.0.min.js",
+  );
+}
+
 function main() {
   testManifestRegistersManagedPolicySchema();
   testManagedPolicyRuntimeLoadsBeforeGeneratedConsumers();
   testGeneratedConsumersDelegateToTheReadablePolicyRuntime();
+  testRuntimeInspectionReportsManagedPolicyAndMermaidVendor();
   console.log("managed policy integration regression tests passed");
 }
 

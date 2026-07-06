@@ -37,6 +37,9 @@ function testEveryBehaviorHasAnAuditableOwner() {
         `${behavior.id} owner is missing: ${owner}`,
       );
     }
+    if (behavior.status === "excluded") {
+      assert.ok(behavior.risk, `${behavior.id} exclusion must record its risk`);
+    }
   }
 }
 

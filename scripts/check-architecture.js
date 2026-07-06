@@ -5,6 +5,7 @@ const repoRoot = path.join(__dirname, "..");
 const loaderPath = path.join(repoRoot, "src", "background", "service-worker-loader.js");
 const expectedLoaderImports = [
   "../shared/claw-contract.js",
+  "../shared/auth-session.js",
   "../shared/managed-policy.js",
   "../shared/onboarding-tasks.js",
   "../shared/native-host-binding.js",

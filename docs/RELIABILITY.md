@@ -34,9 +34,14 @@ Preserve these invariants.
   decoded pixels before starting the encoder.
 - Managed URL and organization policies use safe defaults when policy storage
   is unavailable or malformed, and they refresh when managed storage changes.
+- A user blocked by forced-organization policy can clear the OAuth session and
+  sign in again; logout leaves provider settings and conversation data intact.
 - The Claude.ai onboarding bridge validates task identifiers in both the
   content script and service worker, then uses the existing bounded side-panel
   readiness retry before delivering the prompt.
+- Mermaid rendering rejects source over 20,000 encoded bytes or 400 likely
+  edges, times out after five seconds, and preserves the original code block on
+  any load, render, or sanitization failure.
 
 ## Local verification
 

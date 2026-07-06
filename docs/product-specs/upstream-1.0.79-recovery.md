@@ -64,9 +64,11 @@ as the Claw release version. It doesn't remove local permissions, relax the
 configured-provider content security policy, re-enable telemetry, or discard
 existing readable adapters.
 
-The feature doesn't promise to ship an opaque `Conway` or `squares` capability
-until its behavior, data flow, service dependencies, security impact, and test
-surface are understood and accepted.
+The feature doesn't ship the `Conway` or `squares` capability. Source inspection
+shows that it provisions a remote container, sends organization and bearer-token
+credentials to `/sandbox/proxy/my`, and exposes browser tools to that remote
+host. This is a new external browser-control trust boundary without a stable
+local product contract.
 
 ## User-visible contract
 
@@ -150,4 +152,3 @@ an independently tested and revertible slice.
 Rollback removes the affected slice, its new assets, manifest declaration, and
 contract additions together. It must not restore an older complete source tree
 or revert unrelated local recovery work.
-

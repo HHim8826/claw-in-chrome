@@ -5,6 +5,7 @@ const fastChecks = [
   "check:docs",
   "check:architecture",
   "check:manifest",
+  "check:mermaid-vendor",
   "check:release-package",
   "test:node",
 ];

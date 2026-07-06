@@ -390,6 +390,49 @@ async function testExtensionPagesLoad() {
     assert.equal(sidepanelManifest.runtimeId, extensionId);
     assert.equal(sidepanelManifest.name, manifest.name);
     assert.equal(sidepanelManifest.version, manifest.version);
+    await sidepanelPage.evaluate(() => {
+      const pre = document.createElement("pre");
+      const code = document.createElement("code");
+      code.className = "language-mermaid";
+      code.textContent = "graph TD\nStart --> Finish";
+      pre.appendChild(code);
+      document.body.appendChild(pre);
+    });
+    await sidepanelPage.waitForSelector(
+      ".cp-mermaid-diagram[data-cp-mermaid-state='rendered'] svg",
+      { timeout: 15000 },
+    );
+    const mermaidEvidence = await sidepanelPage.evaluate(() => ({
+      vendorCount: document.querySelectorAll(
+        "script[data-cp-mermaid-vendor='true']",
+      ).length,
+      forbiddenCount: document.querySelectorAll(
+        ".cp-mermaid-diagram script, .cp-mermaid-diagram foreignObject, .cp-mermaid-diagram iframe, .cp-mermaid-diagram image",
+      ).length,
+      sanitizerEvidence: (() => {
+        const sanitized = globalThis.__CP_MERMAID_RENDERER__.sanitizeMermaidSvg(
+          '<svg xmlns="http://www.w3.org/2000/svg" onload="bad()"><script>bad()</script><foreignObject><div>bad</div></foreignObject><a href="https://example.com"><text>safe</text></a></svg>',
+        );
+        const parsed = new DOMParser().parseFromString(
+          sanitized,
+          "image/svg+xml",
+        );
+        return {
+          forbiddenCount: parsed.querySelectorAll("script, foreignObject").length,
+          eventAttributeCount: parsed.querySelectorAll("[onload]").length,
+          externalHrefCount: parsed.querySelectorAll('[href^="http"]').length,
+        };
+      })(),
+    }));
+    assert.deepEqual(mermaidEvidence, {
+      vendorCount: 1,
+      forbiddenCount: 0,
+      sanitizerEvidence: {
+        forbiddenCount: 0,
+        eventAttributeCount: 0,
+        externalHrefCount: 0,
+      },
+    });
     assert.deepEqual(sidepanelResult.pageErrors, []);
     assert.deepEqual(sidepanelResult.consoleErrors, []);
     await sidepanelPage.waitForSelector("#cp-github-update-sidepanel-root", {

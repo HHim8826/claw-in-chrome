@@ -50605,6 +50605,9 @@ const OA = ({ children: t, pageName: r }) => {
   const { analytics: o } = e.use(
     ((AA ||= (async () => {
       try {
+        if (globalThis.__CP_TELEMETRY_DISABLED__ === true) {
+          return { analytics: null };
+        }
         const { customProviderConfig: r } = await chrome.storage.local.get(
           "customProviderConfig",
         );

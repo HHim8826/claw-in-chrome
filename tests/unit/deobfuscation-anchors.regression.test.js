@@ -854,7 +854,8 @@ async function testServiceWorkerBundleAnchorsExist() {
   assertIncludes(source, "非音频类消息继续在主桥里细分；PLAY_NOTIFICATION_SOUND 则单独走 offscreen document。", "service-worker bundle");
   assertIncludes(source, "sidepanel 打开主链：打开侧栏后，按重试策略把 prompt/模型/附件注入输入框。", "service-worker bundle");
   assertIncludes(source, "语义锚点：OPEN_SIDE_PANEL 的 tabId 只负责打开/绑定目标 sidepanel；后续 POPULATE_INPUT_TEXT 不再携带 tabId。", "service-worker bundle");
-  assertIncludes(source, "退出登录探测：当前发行版只需要告诉调用方该能力已禁用。", "service-worker bundle");
+  assertIncludes(source, "企业账号策略阻挡页使用这条窄桥清理 OAuth session，不删除 provider 或聊天数据。", "service-worker bundle");
+  assertIncludes(source, "await globalThis.__CP_AUTH_SESSION__.clearAuthSession(chrome);", "service-worker bundle");
   assertIncludes(source, "原生宿主 / MCP bridge 状态读取：优先向 native host 请求最新状态，失败时回退本地缓存。", "service-worker bundle");
   assertIncludes(source, "MCP 通知桥：优先走 native host 的 notification 通道", "service-worker bundle");
   assertIncludes(source, "options 引导桥：把待执行任务先写入 storage，再聚焦或打开 options#prompts。", "service-worker bundle");

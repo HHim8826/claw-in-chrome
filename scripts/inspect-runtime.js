@@ -5,6 +5,12 @@ const repoRoot = path.join(__dirname, "..");
 
 function inspectRuntime() {
   const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "src", "manifest.json"), "utf8"));
+  const managedSchemaPath = manifest.storage?.managed_schema || null;
+  const managedSchema = managedSchemaPath
+    ? JSON.parse(
+        fs.readFileSync(path.join(repoRoot, "src", managedSchemaPath), "utf8"),
+      )
+    : null;
   return {
     extensionRoot: path.join(repoRoot, "src"),
     version: manifest.version,
@@ -12,6 +18,11 @@ function inspectRuntime() {
     optionsPage: manifest.options_page || null,
     permissions: manifest.permissions || [],
     hostPermissions: manifest.host_permissions || [],
+    managedPolicy: {
+      schema: managedSchemaPath,
+      keys: Object.keys(managedSchema?.properties || {}),
+    },
+    mermaidVendor: "assets/vendor/mermaid-11.15.0.min.js",
     diagnostics: {
       sidepanel: "globalThis.__CP_SIDEPANEL_DEBUG__",
       options: "globalThis.__CP_OPTIONS_DEBUG__",

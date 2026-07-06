@@ -926,12 +926,18 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
           });
           return;
         }
-        // 退出登录探测：当前发行版只需要告诉调用方该能力已禁用。
+        // 企业账号策略阻挡页使用这条窄桥清理 OAuth session，不删除 provider 或聊天数据。
         if (e.type === __cpBackgroundMessageTypeLogout) {
-          a({
-            success: true,
-            disabled: true,
-          });
+          try {
+            await globalThis.__CP_AUTH_SESSION__.clearAuthSession(chrome);
+            a({ success: true });
+          } catch (t) {
+            a({
+              success: false,
+              error: t instanceof Error ? t.message : String(t || "Logout failed"),
+            });
+          }
+          return;
           // 原生宿主 / MCP bridge 状态读取：优先向 native host 请求最新状态，失败时回退本地缓存。
         } else if (e.type === __cpBackgroundMessageTypeCheckNativeHostStatus) {
           const e = await (async function () {

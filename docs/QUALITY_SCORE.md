@@ -32,3 +32,9 @@ session text normalizers, and context-usage selector into readable modules.
 The source commit's font-preload-only HTML churn is intentionally excluded: it
 is not one of the seven advertised functional or bug-fix behaviors and would
 expand page/release churn without changing their contract.
+
+The upstream 1.0.79 recovery vendors Mermaid 11.15.0 as a 3.3 MB lazy-loaded
+browser asset. This avoids loading upstream application bundles as Mermaid
+dependencies, but release-size tracking remains necessary. The opaque
+`Conway` and `squares` remote-host surfaces remain excluded until they have a
+stable local user contract and security model.

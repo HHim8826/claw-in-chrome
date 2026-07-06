@@ -1,0 +1,21 @@
+.cp-mermaid-diagram {
+  contain: paint;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, currentColor 3%, transparent);
+}
+
+.cp-mermaid-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+pre[data-cp-mermaid-state="loading"] {
+  min-height: 6rem;
+  opacity: 0.72;
+}

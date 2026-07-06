@@ -44,10 +44,17 @@ Prefer these seams when implementing behavior.
   forced-organization parsing, and organization membership checks. Generated
   permission and account bundles delegate policy semantics to this readable
   runtime.
+- `auth-session.js` owns the narrow OAuth logout boundary used by managed
+  organization enforcement. It removes OAuth session records without deleting
+  custom-provider configuration, API keys, or chat history.
 - `onboarding-tasks.js` owns the allowed Claude.ai starter-task identifiers and
   prompts. The content script sends only a validated identifier, and the
   service worker resolves it again before opening the side panel and retrying
   prompt delivery.
+- `mermaid-renderer.js` owns Mermaid source limits, strict renderer
+  configuration, timeout handling, and SVG sanitization. The side-panel
+  Markdown enhancer lazy-loads the packaged Mermaid 11.15.0 UMD asset only when
+  a `language-mermaid` code fence appears.
 - The `useStorageState` model-config seam resolves configured, fetched, and
   cached custom-provider models before shortcut editors render. Both shortcut
   bundles track the resolved default and replace only empty, temporary, or
@@ -100,6 +107,9 @@ The current recovered layer protects these workflows.
 - Claude.ai onboarding buttons can open the current tab's side panel and
   populate a known starter task. Unknown task identifiers don't cross the
   content-script boundary.
+- Mermaid Markdown fences render as isolated SVG diagrams. Invalid, oversized,
+  over-connected, timed-out, or unsanitizable diagrams remain readable as code
+  instead of replacing the conversation with a failed render.
 
 ## Known constraint
 

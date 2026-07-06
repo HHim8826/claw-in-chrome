@@ -50,18 +50,31 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "mermaid-artifact-rendering",
-    status: "divergent",
-    evidence: "Local side panel recognizes the Mermaid MIME type but lacks the source renderer.",
+    status: "equivalent",
+    evidence: "Markdown Mermaid fences render through a strict, bounded, packaged 11.15.0 runtime.",
     owners: [
       "src/assets/sidepanel-BoLm9pmH.js",
-      "src/visualizer/visualizer-core.js",
+      "src/shared/mermaid-renderer.js",
+      "src/sidepanel/mermaid-markdown.js",
     ],
     testTarget: "tests/unit/mermaid-artifact-rendering.regression.test.js",
   },
   {
+    id: "connected-apps-workflow-and-safety-surfaces",
+    status: "equivalent",
+    evidence: "Current Claw bundles retain connectors, workflow teaching, planning, safety, blocked-site, paid-plan, and version-gate surfaces.",
+    owners: [
+      "src/assets/sidepanel-BoLm9pmH.js",
+      "src/assets/startRecording-BeCDKY84.js",
+      "src/assets/options-Hyb_OzME.js",
+    ],
+    testTarget: "tests/unit/deobfuscation-anchors.regression.test.js",
+  },
+  {
     id: "conway-squares-runtime",
     status: "excluded",
-    evidence: "Source exposes opaque remote-host settings without a stable local user contract.",
+    evidence: "Source provisions a remote container and connects browser tools to /sandbox/proxy/my behind squares_enabled.",
+    risk: "Adds an external bearer-token and organization-bound remote browser-control trust boundary without a local product contract.",
     owners: [
       "docs/product-specs/upstream-1.0.79-recovery.md",
       "docs/exec-plans/active/2026-07-06-upstream-1.0.79-recovery.md",
@@ -70,8 +83,8 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "generated-runtime-reconciliation",
-    status: "divergent",
-    evidence: "Source entry bundles changed; local readable recovery and bundle anchors must remain.",
+    status: "equivalent",
+    evidence: "Accepted deltas use current loaders and narrow anchors; complete bundle replacement is unnecessary.",
     owners: [
       "src/background/service-worker-loader.js",
       "src/options/options.html",

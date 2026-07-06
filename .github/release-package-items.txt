@@ -5,7 +5,9 @@ sounds
 pages/blocked.html
 claude_icon.svg
 shared/claw-contract.js
+shared/auth-session.js
 shared/managed-policy.js
+shared/mermaid-renderer.js
 shared/onboarding-tasks.js
 shared/custom-provider-models.js
 shared/custom-provider-settings.js
@@ -16,6 +18,8 @@ visualizer/gif_viewer.js
 options/github-update-options.js
 shared/github-update-shared.js
 sidepanel/github-update-sidepanel.js
+sidepanel/mermaid-markdown.css
+sidepanel/mermaid-markdown.js
 background/github-update-worker.js
 background/github-update-worker-runtime.js
 icon-128.png

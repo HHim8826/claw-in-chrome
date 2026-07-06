@@ -6,6 +6,7 @@
     "check:architecture": "node scripts/check-architecture.js",
     "check:docs": "node scripts/check-docs.js",
     "check:manifest": "node scripts/check-manifest.js",
+    "check:mermaid-vendor": "node scripts/vendor-mermaid.js --check",
     "check:release-package": "node scripts/check-release-package.js",
     "check:syntax": "node scripts/check-syntax.js",
     "inspect:runtime": "node scripts/inspect-runtime.js",
@@ -14,10 +15,12 @@
     "test:unit": "node tests/run-suite.js unit",
     "test:integration": "node tests/run-suite.js integration",
     "test:e2e": "node tests/run-suite.js e2e",
+    "vendor:mermaid": "node scripts/vendor-mermaid.js",
     "validate:fast": "node scripts/validate-feature.js",
     "validate:full": "node scripts/validate-feature.js --full"
   },
   "devDependencies": {
+    "mermaid": "^11.15.0",
     "playwright": "^1.59.1"
   }
 }

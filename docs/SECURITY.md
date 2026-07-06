@@ -39,6 +39,12 @@ Apply these controls to every security-sensitive change.
 - Keep MCP OAuth on the reviewed `chrome.identity` PKCE path. Validate redirect
   state, bound silent authorization waits, and redact authorization codes,
   access tokens, refresh tokens, and PKCE material from diagnostics.
+- Keep managed-policy logout narrow: clear OAuth token, verifier, state,
+  expiry, failure, and account records without deleting custom-provider
+  credentials or user content.
+- Render Mermaid with strict security, disabled HTML labels, text and edge
+  limits, and a bounded timeout. Remove executable, embedded, animated, event,
+  and external-link SVG content before inserting a diagram into the side panel.
 
 ## Reporting
 
