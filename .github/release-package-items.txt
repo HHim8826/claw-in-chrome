@@ -5,6 +5,7 @@ sounds
 pages/blocked.html
 claude_icon.svg
 shared/claw-contract.js
+shared/managed-policy.js
 shared/custom-provider-models.js
 shared/custom-provider-settings.js
 visualizer/gif.js

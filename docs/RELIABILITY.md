@@ -32,6 +32,8 @@ Preserve these invariants.
   overwrite assets for an existing release.
 - Offscreen GIF generation rejects more than 50 frames or more than 50,000,000
   decoded pixels before starting the encoder.
+- Managed URL and organization policies use safe defaults when policy storage
+  is unavailable or malformed, and they refresh when managed storage changes.
 
 ## Local verification
 

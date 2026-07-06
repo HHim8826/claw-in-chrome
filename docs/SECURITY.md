@@ -33,6 +33,9 @@ Apply these controls to every security-sensitive change.
 - Treat editable prompt rules and built-in prompt overrides as model
   instructions, not authorization. They must not grant Chrome permissions,
   bypass permission prompts, or mutate permission policy.
+- Treat `blockedUrlPatterns` and `forceLoginOrgUUID` as administrator-owned,
+  read-only policy. Normalize malformed values without writing them to local
+  storage, and apply managed-storage changes without requiring a reload.
 
 ## Reporting
 

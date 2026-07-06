@@ -1,4 +1,18 @@
 {
   "type": "object",
-  "properties": {}
+  "properties": {
+    "blockedUrlPatterns": {
+      "title": "Blocked URL patterns",
+      "description": "URL patterns where Claw in Chrome is blocked. Patterns match the hostname and path, use '*' as a wildcard, and ignore case, scheme, and a leading 'www.'.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "forceLoginOrgUUID": {
+      "title": "Force login organization UUID",
+      "description": "Restricts signed-in use to one organization UUID or a JSON-encoded array of organization UUID strings.",
+      "type": "string"
+    }
+  }
 }

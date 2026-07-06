@@ -50283,7 +50283,7 @@ const yA = () => {
               className: "font-base-sm text-text-300 mb-4",
               children: n.jsx(c, {
                 defaultMessage:
-                  "This enterprise account policy is not applicable in the current build.",
+                  "Your organization requires you to sign in with a specific account. Log out and sign in with an approved account.",
                 id: "/LzCz+T6Ti",
               }),
             }),
@@ -50294,10 +50294,10 @@ const yA = () => {
                 a(false);
                 try {
                   const e = await chrome.runtime.sendMessage({
-                    type: "noop",
+                    type: "logout",
                   });
                   if (!e?.success) {
-                    throw new Error(e?.error || "Reload failed");
+                    throw new Error(e?.error || "Logout failed");
                   }
                   window.location.reload();
                 } catch (e) {
@@ -50308,7 +50308,7 @@ const yA = () => {
               disabled: t,
               className: "w-full",
               children: n.jsx(c, {
-                defaultMessage: "Reload",
+                defaultMessage: "Log out",
                 id: "PlBReUqqzW",
               }),
             }),
@@ -50316,7 +50316,7 @@ const yA = () => {
               n.jsx("p", {
                 className: "font-base-sm text-danger-200 mt-3",
                 children: n.jsx(c, {
-                  defaultMessage: "Reload failed. You can try again.",
+                  defaultMessage: "Logout failed. You can try again.",
                   id: "LlZ0G1XALH",
                 }),
               }),
@@ -50659,10 +50659,45 @@ const OA = ({ children: t, pageName: r }) => {
     AA),
   );
   const { userProfile: a, isAuthenticated: i, isLoading: s } = EA();
-  const u = {
+  const [u, __cpSetManagedOrganizationPolicy] = e.useState({
     forceLoginOrgUUIDs: null,
-    isLoading: false,
-  };
+    isLoading: true,
+  });
+  e.useEffect(() => {
+    let active = true;
+    const loadManagedOrganizationPolicy = async () => {
+      try {
+        const values = await chrome.storage.managed.get("forceLoginOrgUUID");
+        if (active) {
+          __cpSetManagedOrganizationPolicy({
+            forceLoginOrgUUIDs:
+              globalThis.__CP_MANAGED_POLICY__.parseForceLoginOrgUUIDs(
+                values.forceLoginOrgUUID,
+              ),
+            isLoading: false,
+          });
+        }
+      } catch {
+        if (active) {
+          __cpSetManagedOrganizationPolicy({
+            forceLoginOrgUUIDs: null,
+            isLoading: false,
+          });
+        }
+      }
+    };
+    loadManagedOrganizationPolicy();
+    const onManagedPolicyChanged = (changes, areaName) => {
+      if (areaName === "managed" && changes.forceLoginOrgUUID) {
+        loadManagedOrganizationPolicy();
+      }
+    };
+    chrome.storage.onChanged.addListener(onManagedPolicyChanged);
+    return () => {
+      active = false;
+      chrome.storage.onChanged.removeListener(onManagedPolicyChanged);
+    };
+  }, []);
   e.useEffect(() => {
     if (i && a && o) {
       o.identify(a.account.uuid, {
@@ -50713,6 +50748,14 @@ const OA = ({ children: t, pageName: r }) => {
   } else if (i) {
     if (u.isLoading) {
       return n.jsx(bA, {});
+    } else if (
+      a &&
+      !globalThis.__CP_MANAGED_POLICY__.isOrganizationAllowed(
+        a.organization.uuid,
+        u.forceLoginOrgUUIDs,
+      )
+    ) {
+      return n.jsx(yA, {});
     } else {
       return d();
     }

@@ -457,11 +457,13 @@ class $ {
   static blockedUrlPatterns = null;
   static listenerRegistered = false;
   static async isUrlBlockedByManagedPolicy(e) {
-    return false;
+    return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).isUrlBlocked(e);
   }
   static registerChangeListener() {}
   static async loadBlockedUrlPatterns() {
-    return [];
+    return globalThis.__CP_MANAGED_POLICY__
+      .getRuntime(chrome)
+      .loadBlockedUrlPatterns();
   }
   static _resetForTests() {
     this.blockedUrlPatterns = null;

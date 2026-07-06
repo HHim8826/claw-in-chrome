@@ -13,7 +13,7 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
       "src/managed_schema.json",
       "src/assets/mcpPermissions-qqAoJjJ8.js",
     ],
-    testTarget: "tests/unit/domain-policy-disabled.regression.test.js",
+    testTarget: "tests/unit/managed-policy-integration.regression.test.js",
   },
   {
     id: "forced-organization-login",

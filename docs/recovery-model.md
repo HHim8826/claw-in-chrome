@@ -40,6 +40,10 @@ Prefer these seams when implementing behavior.
   reads the same storage record through a Chrome storage subscription and a
   narrow built-in-override reader; workflow-store writes still cross the
   background mutation boundary.
+- `managed-policy.js` owns managed URL-pattern matching, live policy updates,
+  forced-organization parsing, and organization membership checks. Generated
+  permission and account bundles delegate policy semantics to this readable
+  runtime.
 - The `useStorageState` model-config seam resolves configured, fetched, and
   cached custom-provider models before shortcut editors render. Both shortcut
   bundles track the resolved default and replace only empty, temporary, or
@@ -81,6 +85,10 @@ The current recovered layer protects these workflows.
   titles, labels, and search keys use single-line whitespace normalization.
   Context metrics skip restored assistant records whose usage fields are all
   zero so an earlier usable measurement remains visible.
+- Enterprise-managed URL patterns block matching browser targets, and a forced
+  organization policy blocks authenticated accounts outside the configured
+  UUID set. Missing or malformed managed values preserve normal unmanaged
+  behavior.
 
 ## Known constraint
 
