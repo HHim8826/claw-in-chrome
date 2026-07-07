@@ -433,6 +433,36 @@ async function testExtensionPagesLoad() {
         externalHrefCount: 0,
       },
     });
+    await sidepanelPage.evaluate(() => {
+      document.documentElement.dataset.mode = "dark";
+      const pre = document.createElement("pre");
+      pre.id = "cp-streamed-mermaid";
+      const code = document.createElement("code");
+      code.className = "language-mermaid";
+      code.textContent = "not a diagram";
+      pre.appendChild(code);
+      document.body.appendChild(pre);
+    });
+    await sidepanelPage.waitForFunction(() => {
+      const pre = document.querySelector("#cp-streamed-mermaid");
+      return pre?.dataset.cpMermaidState === "render_failed";
+    }, null, { timeout: 15000 });
+    await sidepanelPage.evaluate(() => {
+      document.querySelector("#cp-streamed-mermaid code").textContent =
+        "graph TD\nStream --> Complete";
+    });
+    await sidepanelPage.waitForFunction(() => {
+      return !document.querySelector("#cp-streamed-mermaid") &&
+        document.querySelectorAll(
+          ".cp-mermaid-diagram[data-cp-mermaid-state='rendered'] svg",
+        ).length === 2;
+    }, null, { timeout: 15000 });
+    assert.equal(
+      await sidepanelPage.evaluate(
+        () => globalThis.__CP_MERMAID_MARKDOWN__.getTheme(),
+      ),
+      "dark",
+    );
     assert.deepEqual(sidepanelResult.pageErrors, []);
     assert.deepEqual(sidepanelResult.consoleErrors, []);
     await sidepanelPage.waitForSelector("#cp-github-update-sidepanel-root", {

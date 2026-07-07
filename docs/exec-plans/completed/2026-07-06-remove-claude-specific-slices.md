@@ -131,31 +131,31 @@ implementation.
 
 - [x] The feature brief records the goal, scope, non-goals, user contract,
   permissions, data behavior, risks, and rollback.
-- [x] This active plan records vertical slices, the first RED behavior,
+- [x] This plan records vertical slices, the first RED behavior,
   validation, runtime evidence, and an approval gate.
-- [ ] A focused removal regression test proves both absence and retained
+- [x] A focused removal regression test proves both absence and retained
   provider-independent behavior.
-- [ ] Manifest validation rejects `identity` and stale Claude.ai site bridges.
-- [ ] The permission baseline retains `nativeMessaging` while removing only
+- [x] Manifest validation rejects `identity` and stale Claude.ai site bridges.
+- [x] The permission baseline retains `nativeMessaging` while removing only
   `identity`.
-- [ ] Managed-policy tests retain URL blocking and reject organization-policy
+- [x] Managed-policy tests retain URL blocking and reject organization-policy
   drift.
-- [ ] Semantic anchor tests cover every generated bundle removal.
-- [ ] Release-package validation rejects removed onboarding and auth-session
+- [x] Semantic anchor tests cover every generated bundle removal.
+- [x] Release-package validation rejects removed onboarding and auth-session
   modules.
-- [ ] Runtime inspection exposes permissions, managed keys, external origins,
+- [x] Runtime inspection exposes permissions, managed keys, external origins,
   and content-script matches.
-- [ ] MCP regression tests prove native-host tool request, response, connection,
+- [x] MCP regression tests prove native-host tool request, response, connection,
   and permission flows remain intact.
-- [ ] Custom-provider regression tests prove configuration, models, credentials,
+- [x] Custom-provider regression tests prove configuration, models, credentials,
   and side-panel operation remain intact.
-- [ ] Headed E2E loads the unpacked and packaged extension without page or
+- [x] Headed E2E loads the unpacked and packaged extension without page or
   console errors.
-- [ ] Security and reliability docs describe the narrower permission and site
+- [x] Security and reliability docs describe the narrower permission and site
   integration surface.
-- [ ] Spec, harness, architecture, security, reliability, and regression review
+- [x] Spec, harness, architecture, security, reliability, and regression review
   findings are resolved or recorded as blockers.
-- [ ] Each coherent GREEN slice is committed without unrelated changes.
+- [x] Each coherent GREEN slice is committed without unrelated changes.
 
 No new external test service is required. Existing Chrome mocks, storage
 fixtures, native-host fakes, manifest checks, release-package checks, and headed
@@ -166,33 +166,33 @@ extension E2E provide deterministic evidence.
 The feature is done only when behavior, validation, documentation, and Git
 conditions are all satisfied.
 
-- [ ] The extension manifest contains no `identity`, Claude.ai content-script
+- [x] The extension manifest contains no `identity`, Claude.ai content-script
   match, Claude.ai `externally_connectable` entry, or onboarding resource.
-- [ ] The package contains no onboarding task module, dedicated Claude
+- [x] The package contains no onboarding task module, dedicated Claude
   onboarding content script, or policy-only auth-session module.
-- [ ] The background worker contains no Claude external-message listener,
+- [x] The background worker contains no Claude external-message listener,
   `onboardingTaskId` branch, forced-organization gate, or policy logout bridge.
-- [ ] The managed schema contains `blockedUrlPatterns` and doesn't contain
+- [x] The managed schema contains `blockedUrlPatterns` and doesn't contain
   `forceLoginOrgUUID`.
-- [ ] `nativeMessaging`, MCP setup, MCP permission prompts, and MCP browser tools
+- [x] `nativeMessaging`, MCP setup, MCP permission prompts, and MCP browser tools
   remain covered and green.
-- [ ] Mermaid, telemetry suppression, custom providers, workflows, scheduled
+- [x] Mermaid, telemetry suppression, custom providers, workflows, scheduled
   tasks, history, incognito, diagnostics, and detached windows remain covered
   and green.
-- [ ] Existing user storage is not deleted or migrated.
-- [ ] Every generated bundle edit has a semantic anchor and recovery-model
+- [x] Existing user storage is not deleted or migrated.
+- [x] Every generated bundle edit has a semantic anchor and recovery-model
   update.
-- [ ] `npm run validate:fast` passes.
-- [ ] `npm run validate:full` passes without extension-page or console errors.
-- [ ] `npm run inspect:runtime` shows no Claude site bridge or `identity` and
+- [x] `npm run validate:fast` passes.
+- [x] `npm run validate:full` passes without extension-page or console errors.
+- [x] `npm run inspect:runtime` shows no Claude site bridge or `identity` and
   reports the retained MCP and managed URL surfaces.
-- [ ] The browser-importable release passes its critical E2E flow.
-- [ ] Documentation links pass `npm run check:docs`.
-- [ ] Review findings are fixed or recorded as explicit blockers.
-- [ ] This plan moves to `docs/exec-plans/completed/` with RED, GREEN, runtime,
+- [x] The browser-importable release passes its critical E2E flow.
+- [x] Documentation links pass `npm run check:docs`.
+- [x] Review findings are fixed or recorded as explicit blockers.
+- [x] This plan moves to `docs/exec-plans/completed/` with RED, GREEN, runtime,
   review, commit, and push evidence.
-- [ ] Task-owned changes are committed as coherent GREEN checkpoints.
-- [ ] The final handoff reports commit hashes and the push result or exact push
+- [x] Task-owned changes are committed as coherent GREEN checkpoints.
+- [x] The final handoff reports commit hashes and the push result or exact push
   blocker.
 
 ## Progress evidence
@@ -211,3 +211,45 @@ Record implementation evidence here as work proceeds.
 - Slice 1 RED: `node tests/unit/provider-independence.regression.test.js`
   failed because the manifest still granted `identity` and exposed Claude.ai
   integration.
+- Slice 1 GREEN: the provider-independence test passes after removing the
+  Claude.ai manifest surface and `identity` while retaining `nativeMessaging`.
+- Slice 2 RED: the provider-independence test failed on the worker's Claude
+  external-message and onboarding constants.
+- Slice 2 GREEN: the worker now accepts only generic internal
+  `OPEN_SIDE_PANEL` prompts; onboarding modules, assets, tests, and release
+  entries are removed.
+- Slice 3 RED: the provider-independence test failed because the managed schema
+  still exposed `forceLoginOrgUUID`.
+- Slice 3 GREEN: organization policy, account blocker, policy logout, and
+  `auth-session.js` are removed while managed URL blocking remains green.
+- Review finding fixed: Mermaid observes streamed character-data updates,
+  retries only changed source, ignores stale async results, and reads
+  `data-mode` for the selected theme.
+- Review finding fixed: the upstream behavior matrix now verifies every
+  `testTarget` exists and records current equivalent or excluded statuses.
+- Review findings removed with their features: the arbitrary Claude external
+  prompt, OAuth execution-lock path, and blank organization entry no longer
+  have active product surfaces.
+- Durable agent rule: `AGENTS.md`, `ARCHITECTURE.md`, the recovery model, and a
+  regression test declare the provider-independent boundary and prohibit
+  unapproved Claude-only integrations or `identity` permission.
+- GREEN checkpoint: `9a869b1` (`Remove Claude-specific runtime slices`).
+- Documentation completion: `README.md` and `README_EN.md` now state that Claw
+  in Chrome is provider-independent, doesn't depend on Claude.ai login or
+  Claude organization policy, and keeps MCP on `nativeMessaging` rather than
+  Chrome Identity.
+- Final validation: `npm run validate:fast` and `npm run validate:full` pass
+  58 unit/integration files and headed extension E2E without page or console
+  errors.
+- Runtime inspection reports `providerIndependent: true`, MCP transport
+  `nativeMessaging`, no external origins, no `identity`, and only
+  `blockedUrlPatterns` in managed policy.
+- Packaged runtime evidence: the 49-item, 181-file browser-importable release
+  passes E2E, including streamed Mermaid recovery and `data-mode` theme use.
+- Review limitation: independent sub-agent review wasn't available under the
+  active collaboration policy; focused spec, harness, architecture, security,
+  reliability, and regression self-review used deterministic tests and runtime
+  evidence instead.
+- Completion checkpoint: this plan moved to `docs/exec-plans/completed/`.
+  Final commit hash and push result are reported in the task handoff because
+  they can be known only after this completed plan is committed and pushed.

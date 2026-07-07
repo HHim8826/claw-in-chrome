@@ -11,7 +11,7 @@
 
 [简体中文](./README.md) | English
 
-Put Claw into Chrome's sidebar so you can connect your own model providers directly while giving AI access to browser-side assistance and task execution.
+Put Claw into Chrome's sidebar so you can connect your own model providers directly while giving AI access to browser-side assistance and task execution. This project is a provider-independent Chrome extension and doesn't depend on Claude accounts, Claude.ai pages, or Claude organization policy.
 
 <a href="#-quick-start"><b>🚀 Quick Start</b></a> | <a href="#-features"><b>✨ Features</b></a> | <a href="#-project-structure"><b>🗂️ Project Structure</b></a>
 
@@ -27,7 +27,7 @@ Put Claw into Chrome's sidebar so you can connect your own model providers direc
 - **🧩 Native sidebar workflow**
   - Run as a Chrome extension with no extra desktop client required. Open the sidebar and start using it directly in your browser.
 - **🔗 Works with Claw in Chrome MCP**
-  - Can be used together with [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) to expand browser-side automation and coordination capabilities.
+  - Can be used together with [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) to expand browser-side automation and coordination capabilities. MCP uses Chrome `nativeMessaging` and doesn't require Chrome Identity.
 - **⚙️ Finer-grained parameter control**
   - Edit provider parameters that are difficult or impossible to adjust in the original plugin, making it easier to support local models, custom gateways, and third-party platforms.
 - **🌍 Multilingual and UI enhancements**
@@ -38,6 +38,7 @@ Put Claw into Chrome's sidebar so you can connect your own model providers direc
 - Connect your own model APIs in Chrome instead of being limited to the default provider
 - Keep the sidebar workflow while integrating local models, proxy gateways, or third-party platforms
 - Let AI handle more browser-side assistance and information-organizing tasks for you
+- Use an extension version that doesn't depend on Claude.ai login state or Claude organization policy
 
 ## 🚀 Quick Start
 

@@ -11,7 +11,7 @@
 
 简体中文 | [English](./README_EN.md)
 
-把 Claw 放进 Chrome 侧边栏，让你在浏览网页时直接接入自己的模型供应商，并把浏览器内的部分操作能力交给 AI。
+把 Claw 放进 Chrome 侧边栏，让你在浏览网页时直接接入自己的模型供应商，并把浏览器内的部分操作能力交给 AI。本项目是供应商无关的 Chrome 扩展，不依赖 Claude 帐号、Claude.ai 页面或 Claude 组织策略。
 
 <a href="#-快速开始"><b>🚀 快速开始</b></a> | <a href="#-功能亮点"><b>✨ 功能亮点</b></a> | <a href="#-项目结构"><b>🗂️ 项目结构</b></a>
 
@@ -27,7 +27,7 @@
 - **🧩 侧边栏内直接使用**
   - 作为 Chrome 扩展运行，无需额外桌面客户端，打开侧边栏即可完成对话与任务辅助。
 - **🔗 可与 Claw in Chrome MCP 联动**
-  - 支持与 [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) 配合使用，扩展浏览器内的自动化与协同能力。
+  - 支持与 [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) 配合使用，扩展浏览器内的自动化与协同能力。MCP 使用 Chrome `nativeMessaging`，不需要 Chrome Identity 权限。
 - **⚙️ 更细粒度的参数控制**
   - 可编辑原插件中不方便调整的供应商参数，方便适配自建网关、本地模型和第三方平台。
 - **🌍 多语言与界面增强**
@@ -38,6 +38,7 @@
 - 想在 Chrome 里直接调用自己的模型接口，而不是受限于默认提供方
 - 想保留侧边栏工作流，同时接入本地模型、代理网关或第三方平台
 - 想让 AI 在浏览网页时承担更多辅助操作与信息整理工作
+- 想使用不依赖 Claude.ai 登录状态或 Claude 组织策略的扩展版本
 
 ## 🚀 快速开始
 
