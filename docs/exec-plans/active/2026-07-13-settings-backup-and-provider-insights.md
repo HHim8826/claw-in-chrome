@@ -132,3 +132,9 @@ and unresolved risk here while executing the plan.
   didn't exist.
 - Slice 2 core GREEN: inspection rejects unsupported schemas, restore accepts
   only reviewed keys, and omitted provider secrets preserve installed values.
+- Slice 3 RED cycles: measurement creation, retention and aggregation, storage
+  recording, and request tracking each failed first because its public
+  interface didn't exist.
+- Slice 3 core GREEN: focused tests prove strict record fields, 30-day and
+  500-record bounds, provider filtering, token aggregation, best-effort
+  storage, and one-shot header and total latency tracking.
