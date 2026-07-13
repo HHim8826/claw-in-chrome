@@ -127,3 +127,8 @@ and unresolved risk here while executing the plan.
   `MODULE_NOT_FOUND` for `src/shared/settings-backup.js`.
 - Slice 1 GREEN: the same command passed after adding the versioned envelope,
   reviewed-key allowlist, and recursive default secret exclusion.
+- Slice 2 RED: backup inspection first failed because `inspectBackup` didn't
+  exist; secret-preserving restore then failed because `buildRestoreChanges`
+  didn't exist.
+- Slice 2 core GREEN: inspection rejects unsupported schemas, restore accepts
+  only reviewed keys, and omitted provider secrets preserve installed values.

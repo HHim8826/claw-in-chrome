@@ -69,8 +69,70 @@ function testDefaultBackupExportsReviewedSettingsWithoutPrivateData() {
   assert.equal(JSON.stringify(document).includes("private conversation"), false);
 }
 
+function testInspectBackupRejectsUnsupportedSchemaWithoutChanges() {
+  const result = backup.inspectBackup({
+    kind: "claw-in-chrome-settings-backup",
+    schemaVersion: 99,
+    settings: {
+      preferred_locale: "zh-TW",
+    },
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.errorCode, "unsupported_schema");
+  assert.deepEqual(result.settings, {});
+}
+
+function testRestoreMergePreservesSecretsOmittedFromBackup() {
+  const exported = backup.createBackup({
+    customProviderProfiles: [{
+      id: "provider-main",
+      name: "Moved provider",
+      apiKey: "secret-not-exported",
+      defaultModel: "model-new",
+    }],
+    preferred_locale: "zh-TW",
+  });
+  const inspected = backup.inspectBackup(exported);
+  const changes = backup.buildRestoreChanges(inspected, {
+    customProviderProfiles: [{
+      id: "provider-main",
+      name: "Old provider",
+      apiKey: "secret-already-installed",
+      defaultModel: "model-old",
+    }],
+    preferred_locale: "en-US",
+    unknownSetting: "leave untouched",
+  });
+
+  assert.deepEqual(changes.customProviderProfiles, [{
+    id: "provider-main",
+    name: "Moved provider",
+    apiKey: "secret-already-installed",
+    defaultModel: "model-new",
+  }]);
+  assert.equal(changes.preferred_locale, "zh-TW");
+  assert.equal("unknownSetting" in changes, false);
+}
+
+function testExplicitSecretExportIncludesCredentialsAndMarksDocument() {
+  const document = backup.createBackup({
+    customProviderProfiles: [{ id: "provider-main", apiKey: "sk-exported" }],
+    anthropicApiKey: "legacy-exported",
+  }, {
+    includeSecrets: true,
+  });
+
+  assert.equal(document.includesSecrets, true);
+  assert.equal(document.settings.customProviderProfiles[0].apiKey, "sk-exported");
+  assert.equal(document.settings.anthropicApiKey, "legacy-exported");
+}
+
 function main() {
   testDefaultBackupExportsReviewedSettingsWithoutPrivateData();
+  testInspectBackupRejectsUnsupportedSchemaWithoutChanges();
+  testRestoreMergePreservesSecretsOmittedFromBackup();
+  testExplicitSecretExportIncludesCredentialsAndMarksDocument();
   console.log("settings backup tests passed");
 }
 
@@ -80,4 +142,3 @@ try {
   console.error(error.stack || error.message || error);
   process.exitCode = 1;
 }
-

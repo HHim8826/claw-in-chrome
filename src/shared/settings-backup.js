@@ -116,12 +116,117 @@
     };
   }
 
+  function inspectBackup(document) {
+    if (!document || typeof document !== "object" || Array.isArray(document)) {
+      return { ok: false, errorCode: "invalid_document", settings: {} };
+    }
+    if (document.kind !== BACKUP_KIND) {
+      return { ok: false, errorCode: "wrong_kind", settings: {} };
+    }
+    if (Number(document.schemaVersion) !== SCHEMA_VERSION) {
+      return { ok: false, errorCode: "unsupported_schema", settings: {} };
+    }
+    if (!document.settings || typeof document.settings !== "object" || Array.isArray(document.settings)) {
+      return { ok: false, errorCode: "invalid_settings", settings: {} };
+    }
+    const settings = {};
+    for (const key of REVIEWED_STORAGE_KEYS) {
+      if (!Object.prototype.hasOwnProperty.call(document.settings, key)) {
+        continue;
+      }
+      const cloned = cloneReviewedValue(
+        document.settings[key],
+        { includeSecrets: document.includesSecrets === true },
+        key,
+      );
+      if (cloned !== undefined) {
+        settings[key] = cloned;
+      }
+    }
+    if (Object.keys(settings).length === 0) {
+      return { ok: false, errorCode: "empty_settings", settings: {} };
+    }
+    return {
+      ok: true,
+      errorCode: "",
+      schemaVersion: SCHEMA_VERSION,
+      includesSecrets: document.includesSecrets === true,
+      keys: Object.keys(settings),
+      settings,
+    };
+  }
+
+  function mergeImportedValue(current, incoming, includesSecrets, fieldName) {
+    if (Array.isArray(incoming)) {
+      const currentList = Array.isArray(current) ? current : [];
+      return incoming.map(function (entry) {
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          return cloneReviewedValue(entry, { includeSecrets: includesSecrets }, "");
+        }
+        const identity = String(entry.id || entry.name || "").trim();
+        const previous = identity
+          ? currentList.find(function (candidate) {
+              return String(candidate?.id || candidate?.name || "").trim() === identity;
+            })
+          : null;
+        return mergeImportedValue(previous, entry, includesSecrets, "");
+      });
+    }
+    if (incoming && typeof incoming === "object") {
+      const currentObject = current && typeof current === "object" && !Array.isArray(current)
+        ? current
+        : {};
+      const output = {};
+      for (const key of Object.keys(currentObject)) {
+        if (!includesSecrets && isSecretField(key)) {
+          output[key] = cloneReviewedValue(currentObject[key], { includeSecrets: true }, key);
+        }
+      }
+      for (const key of Object.keys(incoming)) {
+        output[key] = mergeImportedValue(
+          currentObject[key],
+          incoming[key],
+          includesSecrets,
+          key,
+        );
+      }
+      return output;
+    }
+    if (!includesSecrets && isSecretField(fieldName) && incoming === undefined) {
+      return current;
+    }
+    return cloneReviewedValue(incoming, { includeSecrets: includesSecrets }, fieldName);
+  }
+
+  function buildRestoreChanges(inspectedBackup, currentSnapshot) {
+    if (!inspectedBackup || inspectedBackup.ok !== true) {
+      return {};
+    }
+    const current = currentSnapshot && typeof currentSnapshot === "object"
+      ? currentSnapshot
+      : {};
+    const changes = {};
+    for (const key of Object.keys(inspectedBackup.settings || {})) {
+      if (!REVIEWED_STORAGE_KEYS.includes(key)) {
+        continue;
+      }
+      changes[key] = mergeImportedValue(
+        current[key],
+        inspectedBackup.settings[key],
+        inspectedBackup.includesSecrets === true,
+        key,
+      );
+    }
+    return changes;
+  }
+
   return Object.freeze({
     BACKUP_KIND,
     SCHEMA_VERSION,
     REVIEWED_STORAGE_KEYS,
     createBackup,
+    inspectBackup,
+    buildRestoreChanges,
     isSecretField,
   });
 });
-
