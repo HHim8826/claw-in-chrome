@@ -32,25 +32,25 @@ This work requires the following harness updates before it is complete:
 
 - [x] Add a stable Options mount-target behavior test.
 - [x] Add packaged CSS and release-inventory coverage for the Options panel.
-- [ ] Add a strict `firstTokenLatencyMs` schema and retention test.
-- [ ] Add OpenAI Chat and Responses first-token timing tests and prove
+- [x] Add a strict `firstTokenLatencyMs` schema and retention test.
+- [x] Add OpenAI Chat and Responses first-token timing tests and prove
       non-stream timing remains unavailable.
-- [ ] Add the versioned completion event to `claw-contract.js` with producer
+- [x] Add the versioned completion event to `claw-contract.js` with producer
       and consumer contract tests.
-- [ ] Add a side-panel DOM harness for attachment, formatting, localization,
+- [x] Add a side-panel DOM harness for attachment, formatting, localization,
       duplicate prevention, exact ID correlation, both arrival orders,
       concurrency, expiry, and legacy-answer protection.
-- [ ] Add a semantic anchor test for `data-cp-provider-request-id` on normal
+- [x] Add a semantic anchor test for `data-cp-provider-request-id` on normal
       and tool-group answer wrappers.
-- [ ] Add the side-panel module and stylesheet to loader-order, architecture,
+- [x] Add the side-panel module and stylesheet to loader-order, architecture,
       and release checks.
 - [x] Extend headed E2E with Options computed-style evidence at desktop and
       320-pixel widths in light and dark themes.
-- [ ] Extend headed E2E with a synthetic answer and sanitized measurement
+- [x] Extend headed E2E with a synthetic answer and sanitized measurement
       event that proves the row is visible below the exact answer without
       horizontal overflow.
-- [ ] Update architecture, recovery, reliability, and security documentation.
-- [ ] Run focused tests, runtime inspection, `validate:fast`, and
+- [x] Update architecture, recovery, reliability, and security documentation.
+- [x] Run focused tests, runtime inspection, `validate:fast`, and
       `validate:full`.
 
 ## Sprint contract: Options presentation
@@ -105,27 +105,27 @@ The work proceeds through these vertical slices:
 
 The work is done only when every criterion below is satisfied:
 
-- [ ] All acceptance criteria have focused behavior tests.
-- [ ] Options no longer displays raw body-level content.
-- [ ] First-token timing is sanitized, bounded, retained, and aggregated only
+- [x] All acceptance criteria have focused behavior tests.
+- [x] Options no longer displays raw body-level content.
+- [x] First-token timing is sanitized, bounded, retained, and aggregated only
       where explicitly required.
-- [ ] Per-answer Token/s uses output Tokens and the post-first-token window.
-- [ ] One measurement produces at most one answer row.
-- [ ] DOM-first and metric-first arrivals attach by exact ID.
-- [ ] Concurrent requests can't swap rows, and separate contexts attach only
+- [x] Per-answer Token/s uses output Tokens and the post-first-token window.
+- [x] One measurement produces at most one answer row.
+- [x] DOM-first and metric-first arrivals attach by exact ID.
+- [x] Concurrent requests can't swap rows, and separate contexts attach only
       IDs present in their own DOM.
-- [ ] Pending unmatched entries expire after five minutes.
-- [ ] Legacy answers without correlation IDs aren't decorated.
-- [ ] Missing data renders an em dash without `NaN` or `Infinity`.
-- [ ] The UI works in English, Simplified Chinese, and Traditional Chinese.
-- [ ] Exact unit, rounding, grouping, and model-overflow examples pass focused
+- [x] Pending unmatched entries expire after five minutes.
+- [x] Legacy answers without correlation IDs aren't decorated.
+- [x] Missing data renders an em dash without `NaN` or `Infinity`.
+- [x] The UI works in English, Simplified Chinese, and Traditional Chinese.
+- [x] Exact unit, rounding, grouping, and model-overflow examples pass focused
       formatting tests.
-- [ ] The only generated bundle change is the reviewed semantic correlation
+- [x] The only generated bundle change is the reviewed semantic correlation
       attribute; no manifest permission, prompt, or response content is added.
-- [ ] Headed E2E proves both Options styling and answer-row placement.
-- [ ] Independent review findings are fixed, rejected with a concrete reason,
+- [x] Headed E2E proves both Options styling and answer-row placement.
+- [x] Independent review findings are fixed, rejected with a concrete reason,
       or recorded as blockers.
-- [ ] `npm run validate:fast`, `npm run validate:full`, and
+- [x] `npm run validate:fast`, `npm run validate:full`, and
       `npm run inspect:runtime` pass.
 - [ ] Task-owned changes are committed and pushed to the existing PR branch.
 
@@ -150,3 +150,35 @@ is `9a275f93b44e15a9cf7de7c592787e4a3c32531d`; the worktree started clean on
   GREEN proves a non-transparent bordered card, metric grid, correct mount,
   and no horizontal overflow at desktop and 320-pixel widths in light and dark
   themes.
+- First-token RED: the tracker test failed because `markFirstToken` did not
+  exist. GREEN records the first meaningful boundary once and preserves zero
+  for non-stream responses.
+- Correlation/event RED: adapter tests showed the upstream response ID instead
+  of the measurement ID. GREEN propagates one random ID, dispatches the frozen
+  versioned event with sanitized fields, and keeps storage non-blocking.
+- Answer-row RED: the readable side-panel module did not exist. GREEN covers
+  both arrival orders, concurrency, one row per ID, storage hydration,
+  five-minute expiry, legacy answers, unavailable values, and all three UI
+  locales.
+- Bundle-anchor RED: the generated renderer lacked both semantic data
+  attributes. GREEN adds only the normal-answer and final-assistant
+  tool-group ID anchors, protected by deobfuscation regression assertions.
+- Side-panel E2E GREEN: a real extension page at 320 pixels attaches one row
+  below the exact synthetic answer in light and dark modes, preserves the full
+  model title, and has no horizontal overflow or page errors.
+- Independent implementation review found four actionable issues and all were
+  adopted: preserve the original tool-group streaming boundary, truncate only
+  the model while keeping four metric spans visible, prevent storage snapshots
+  from reviving expired IDs, and ignore empty tool-call placeholders for TTFT.
+  Each fix has focused regression evidence; the side-panel E2E now verifies
+  every metric span at 320- and 1,280-pixel widths.
+- Targeted re-review found one matched-row expiry regression. The final state
+  expires only never-matched entries, preserves first-seen time, tombstones
+  expired unmatched IDs, and restores a matched row after a React-style DOM
+  replacement beyond five minutes. The reviewer confirmed all prior findings
+  resolved with no remaining issue.
+- Final runtime inspection confirms provider independence, local-only storage,
+  event version 1, and the readable answer enhancer. Final `validate:full`
+  passed syntax, docs, architecture, manifest, release packaging, 63 unit and
+  integration files, and the headed extension E2E with no page or console
+  errors. Expected negative-path fixture logs did not fail the suite.

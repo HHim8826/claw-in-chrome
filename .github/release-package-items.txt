@@ -45,6 +45,8 @@ shared/detached-window-title.js
 sidepanel/sidepanel-debug-logger.js
 sidepanel/sidepanel-inline-provider.css
 sidepanel/sidepanel-inline-provider.js
+sidepanel/answer-provider-metrics.css
+sidepanel/answer-provider-metrics.js
 sidepanel/sidepanel.html
 shared/telemetry-disable.js
 shared/theme-init.js

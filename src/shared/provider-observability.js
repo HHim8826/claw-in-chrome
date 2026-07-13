@@ -62,6 +62,7 @@
       errorCategory: boundedText(source.errorCategory, 80),
       retryCount: nonNegativeNumber(source.retryCount),
       headerLatencyMs: nonNegativeNumber(source.headerLatencyMs),
+      firstTokenLatencyMs: nonNegativeNumber(source.firstTokenLatencyMs),
       totalDurationMs: nonNegativeNumber(source.totalDurationMs),
       usage: normalizeUsage(source.usage),
     };
@@ -183,14 +184,32 @@
   function createRequestTracker(storageArea, metadata, options) {
     const settings = options && typeof options === "object" ? options : {};
     const now = typeof settings.now === "function" ? settings.now : Date.now;
+    const createId = typeof settings.createId === "function"
+      ? settings.createId
+      : function () {
+        if (typeof globalThis.crypto?.randomUUID === "function") {
+          return globalThis.crypto.randomUUID();
+        }
+        return `provider-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      };
+    const id = boundedText(createId(), 120);
     const startedAt = Number(now());
     let headerAt = 0;
+    let firstTokenAt = 0;
     let completed = false;
     return Object.freeze({
+      id,
       markHeaders() {
         if (!headerAt) {
           headerAt = Number(now());
         }
+      },
+      markFirstToken() {
+        if (completed || firstTokenAt) {
+          return false;
+        }
+        firstTokenAt = Number(now());
+        return true;
       },
       complete(result) {
         if (completed) {
@@ -198,13 +217,22 @@
         }
         completed = true;
         const finishedAt = Number(now());
-        const measurement = {
+        const measurement = createMeasurement({
           ...(metadata && typeof metadata === "object" ? metadata : {}),
           ...(result && typeof result === "object" ? result : {}),
+          id,
           startedAt,
           headerLatencyMs: headerAt ? Math.max(0, headerAt - startedAt) : 0,
+          firstTokenLatencyMs: firstTokenAt
+            ? Math.max(0, firstTokenAt - startedAt)
+            : 0,
           totalDurationMs: Math.max(0, finishedAt - startedAt),
-        };
+        }, { id, now: finishedAt });
+        if (typeof settings.onComplete === "function") {
+          try {
+            settings.onComplete(measurement);
+          } catch (_error) {}
+        }
         const write = recordMeasurement(storageArea, measurement, { now: finishedAt });
         pendingWrites.add(write);
         write.finally(function () {

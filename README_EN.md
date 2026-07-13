@@ -36,6 +36,9 @@ Put Claw into Chrome's sidebar so you can connect your own model providers direc
 - **📊 Local provider insights**
   - Review request count, success rate, tokens, latency, and error summaries in
     Options. Measurements stay local and don't record prompts or responses.
+    Completed custom-provider answers also show model, first-token latency,
+    Tokens/s, total Tokens, and total duration directly below the answer;
+    non-streaming answers don't invent first-token data.
 - **🌍 Multilingual and UI enhancements**
   - Includes multilingual resources, settings-page enhancements, and visualization-related modules for ongoing iteration and easier troubleshooting.
 

@@ -60,6 +60,8 @@
     STORAGE_KEY: "providerObservabilityRecords",
     MAX_RECORDS: 500,
     MAX_AGE_DAYS: 30,
+    MEASUREMENT_COMPLETE_EVENT: "cp:provider-measurement-complete",
+    EVENT_VERSION: 1,
   },
     models: {
       CONFIG_STORAGE_KEY: "chrome_ext_models",

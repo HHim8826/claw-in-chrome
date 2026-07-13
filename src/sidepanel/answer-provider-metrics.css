@@ -1,0 +1,36 @@
+.cp-answer-provider-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  overflow: hidden;
+  color: var(--text-400, #73726c);
+  border-top: 1px solid color-mix(in srgb, var(--border-300, #d8d7d0) 62%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+}
+
+.cp-answer-provider-metrics-model {
+  display: inline-block;
+  min-width: 0;
+  max-width: min(14rem, 100%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-answer-provider-metrics-value,
+.cp-answer-provider-metrics-separator {
+  white-space: nowrap;
+}
+
+@media (max-width: 360px) {
+  .cp-answer-provider-metrics {
+    font-size: 0.625rem;
+  }
+}

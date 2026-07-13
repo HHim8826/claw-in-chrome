@@ -23,6 +23,7 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
   const storageState = {
     providerObservabilityRecords: []
   };
+  const dispatchedEvents = [];
   const nativeFetch = async (input, init) => {
     upstreamCalls.push({
       url: String(input),
@@ -51,6 +52,16 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
     DOMException,
     setTimeout,
     clearTimeout,
+    CustomEvent: class CustomEvent {
+      constructor(type, init = {}) {
+        this.type = type;
+        this.detail = init.detail;
+      }
+    },
+    dispatchEvent(event) {
+      dispatchedEvents.push(event);
+      return true;
+    },
     fetch: nativeFetch,
     chrome: {
       storage: {
@@ -90,6 +101,15 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
   vm.runInNewContext(observabilitySource, sandbox, {
     filename: "provider-observability.js"
   });
+  if (typeof options.wrapRequestTracker === "function") {
+    const originalCreateRequestTracker = sandbox.__CP_PROVIDER_OBSERVABILITY__.createRequestTracker;
+    sandbox.__CP_PROVIDER_OBSERVABILITY__ = Object.freeze({
+      ...sandbox.__CP_PROVIDER_OBSERVABILITY__,
+      createRequestTracker(...args) {
+        return options.wrapRequestTracker(originalCreateRequestTracker(...args));
+      }
+    });
+  }
   vm.runInNewContext(adapterSource, sandbox, {
     filename: "provider-format-adapter.js"
   });
@@ -124,7 +144,8 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
       return {
         error,
         upstreamCalls,
-        measurements: storageState.providerObservabilityRecords
+        measurements: storageState.providerObservabilityRecords,
+        dispatchedEvents
       };
     }
     throw error;
@@ -139,7 +160,8 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
       text,
       headers: Object.fromEntries(response.headers.entries()),
       upstreamCalls,
-      measurements: storageState.providerObservabilityRecords
+      measurements: storageState.providerObservabilityRecords,
+      dispatchedEvents
     };
   }
   const json = await response.json();
@@ -150,7 +172,8 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
     status: response.status,
     json,
     upstreamCalls,
-    measurements: storageState.providerObservabilityRecords
+    measurements: storageState.providerObservabilityRecords,
+    dispatchedEvents
   };
 }
 
@@ -221,8 +244,14 @@ async function testSuccessfulProviderRequestRecordsSanitizedMeasurement() {
   assert.equal(result.measurements[0].outcome, "success");
   assert.equal(result.measurements[0].usage.inputTokens, 12);
   assert.equal(result.measurements[0].usage.outputTokens, 4);
+  assert.equal(result.measurements[0].firstTokenLatencyMs, 0, "non-stream timing must remain unavailable");
   assert.equal(JSON.stringify(result.measurements).includes("sk-private"), false);
   assert.equal(JSON.stringify(result.measurements).includes("Measured response"), false);
+  assert.equal(result.json.id, result.measurements[0].id, "response ID must correlate to telemetry");
+  assert.equal(result.dispatchedEvents.length, 1);
+  assert.equal(result.dispatchedEvents[0].type, "cp:provider-measurement-complete");
+  assert.equal(result.dispatchedEvents[0].detail.version, 1);
+  assert.equal(result.dispatchedEvents[0].detail.measurement.id, result.json.id);
 }
 
 async function testProviderHttpErrorRecordsCategoryWithoutResponseBody() {
@@ -268,6 +297,7 @@ async function testStreamingProviderUsageCompletesMeasurement() {
       controller.close();
     }
   });
+  let firstTokenMarks = 0;
   const result = await runAdapterWithUpstreamHandler(async () => new Response(stream, {
     status: 200,
     headers: { "content-type": "text/event-stream" }
@@ -278,13 +308,178 @@ async function testStreamingProviderUsageCompletesMeasurement() {
       stream: true,
       messages: [{ role: "user", content: "Measure stream" }]
     },
-    responseType: "text"
+    responseType: "text",
+    wrapRequestTracker(tracker) {
+      return Object.freeze({
+        ...tracker,
+        markFirstToken() {
+          firstTokenMarks += 1;
+          return tracker.markFirstToken();
+        }
+      });
+    }
   });
 
   assert.match(result.text, /Measured/);
   assert.equal(result.measurements.length, 1);
   assert.equal(result.measurements[0].usage.inputTokens, 9);
   assert.equal(result.measurements[0].usage.outputTokens, 2);
+  assert.equal(firstTokenMarks, 1, "first meaningful stream token must be marked once");
+  assert.match(result.text, new RegExp(`"id":"${result.measurements[0].id}"`));
+}
+
+async function testResponsesStreamingMarksFirstMeaningfulToken() {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode([
+        'event: response.created',
+        'data: {"type":"response.created","response":{"id":"resp-stream-metric","model":"gpt-5.4","status":"in_progress","usage":{}}}',
+        "",
+        'event: response.output_text.delta',
+        'data: {"type":"response.output_text.delta","delta":"Measured","output_index":0,"content_index":0}',
+        "",
+        'event: response.completed',
+        'data: {"type":"response.completed","response":{"id":"resp-stream-metric","model":"gpt-5.4","status":"completed","usage":{"input_tokens":11,"output_tokens":3}}}',
+        "",
+      ].join("\n")));
+      controller.close();
+    },
+  });
+  let firstTokenMarks = 0;
+  const result = await runAdapterWithUpstreamHandler(async () => new Response(stream, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" },
+  }), {
+    config: { format: "openai_responses" },
+    requestBody: {
+      model: "gpt-5.4",
+      max_tokens: 128,
+      stream: true,
+      messages: [{ role: "user", content: "Measure Responses stream" }],
+    },
+    responseType: "text",
+    wrapRequestTracker(tracker) {
+      return Object.freeze({
+        ...tracker,
+        markFirstToken() {
+          firstTokenMarks += 1;
+          return tracker.markFirstToken();
+        },
+      });
+    },
+  });
+
+  assert.equal(firstTokenMarks, 1);
+  assert.equal(result.measurements[0].usage.inputTokens, 11);
+  assert.equal(result.measurements[0].usage.outputTokens, 3);
+  assert.match(result.text, new RegExp(`"id":"${result.measurements[0].id}"`));
+}
+
+async function testChatToolPlaceholdersDoNotMarkFirstToken() {
+  async function runToolStream(toolCalls) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode(
+          `data: ${JSON.stringify({
+            id: "chatcmpl-tool-timing",
+            model: "gpt-5.4",
+            choices: [{ index: 0, delta: { tool_calls: toolCalls }, finish_reason: null }],
+          })}\n\n`,
+        ));
+        controller.enqueue(encoder.encode(
+          'data: {"id":"chatcmpl-tool-timing","model":"gpt-5.4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":1}}\n\n',
+        ));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      },
+    });
+    let firstTokenMarks = 0;
+    await runAdapterWithUpstreamHandler(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }), {
+      requestBody: {
+        model: "gpt-5.4",
+        max_tokens: 128,
+        stream: true,
+        messages: [{ role: "user", content: "Call a tool" }],
+      },
+      responseType: "text",
+      wrapRequestTracker(tracker) {
+        return Object.freeze({
+          ...tracker,
+          markFirstToken() {
+            firstTokenMarks += 1;
+            return tracker.markFirstToken();
+          },
+        });
+      },
+    });
+    return firstTokenMarks;
+  }
+
+  assert.equal(await runToolStream([{ index: 0 }]), 0);
+  assert.equal(await runToolStream([{
+    index: 0,
+    id: "call-search",
+    function: { name: "search", arguments: "{\"query\":" },
+  }]), 1);
+}
+
+async function testResponsesToolPlaceholdersDoNotMarkFirstToken() {
+  async function runToolStream(item) {
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode([
+          "event: response.created",
+          'data: {"type":"response.created","response":{"id":"resp-tool-timing","model":"gpt-5.4","status":"in_progress","usage":{}}}',
+          "",
+          "event: response.output_item.added",
+          `data: ${JSON.stringify({ type: "response.output_item.added", item, output_index: 0 })}`,
+          "",
+          "event: response.completed",
+          'data: {"type":"response.completed","response":{"id":"resp-tool-timing","model":"gpt-5.4","status":"completed","usage":{"input_tokens":5,"output_tokens":1}}}',
+          "",
+        ].join("\n")));
+        controller.close();
+      },
+    });
+    let firstTokenMarks = 0;
+    await runAdapterWithUpstreamHandler(async () => new Response(stream, {
+      status: 200,
+      headers: { "content-type": "text/event-stream" },
+    }), {
+      config: { format: "openai_responses" },
+      requestBody: {
+        model: "gpt-5.4",
+        max_tokens: 128,
+        stream: true,
+        messages: [{ role: "user", content: "Call a tool" }],
+      },
+      responseType: "text",
+      wrapRequestTracker(tracker) {
+        return Object.freeze({
+          ...tracker,
+          markFirstToken() {
+            firstTokenMarks += 1;
+            return tracker.markFirstToken();
+          },
+        });
+      },
+    });
+    return firstTokenMarks;
+  }
+
+  assert.equal(await runToolStream({ type: "function_call" }), 0);
+  assert.equal(await runToolStream({
+    type: "function_call",
+    id: "fc-search",
+    call_id: "call-search",
+    name: "search",
+  }), 1);
 }
 
 async function testInvalidProviderResponseRecordsInvalidResponseOutcome() {
@@ -1920,6 +2115,9 @@ async function main() {
   await testProviderHttpErrorRecordsCategoryWithoutResponseBody();
   await testProviderNetworkErrorRecordsWithoutChangingErrorResponse();
   await testStreamingProviderUsageCompletesMeasurement();
+  await testResponsesStreamingMarksFirstMeaningfulToken();
+  await testChatToolPlaceholdersDoNotMarkFirstToken();
+  await testResponsesToolPlaceholdersDoNotMarkFirstToken();
   await testInvalidProviderResponseRecordsInvalidResponseOutcome();
   await testStreamingAbortRecordsAbortedOutcome();
   await testOutputTextPartsSurviveOpenAIChatTransform();

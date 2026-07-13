@@ -81,6 +81,7 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(Object.isFrozen(contract.session), true);
   assert.equal(Object.isFrozen(contract.detachedWindow), true);
   assert.equal(Object.isFrozen(contract.offscreen), true);
+  assert.equal(Object.isFrozen(contract.providerObservability), true);
   assert.equal(Object.isFrozen(contract.pairing), true);
   assert.equal(Object.isFrozen(contract.pairing.QUERY_KEYS), true);
   assert.equal(Object.isFrozen(contract.pairing.MESSAGE_FIELDS), true);
@@ -98,6 +99,11 @@ async function testContractExposesFrozenStableKeys() {
   assert.equal(contract.customProvider.ANTHROPIC_API_KEY_STORAGE_KEY, "anthropicApiKey");
   assert.equal(contract.auth.ACCESS_TOKEN_STORAGE_KEY, "accessToken");
   assert.equal(contract.prompts.SYSTEM_PROMPT_STORAGE_KEY, "chrome_ext_system_prompt");
+  assert.equal(
+    contract.providerObservability.MEASUREMENT_COMPLETE_EVENT,
+    "cp:provider-measurement-complete",
+  );
+  assert.equal(contract.providerObservability.EVENT_VERSION, 1);
   assert.equal(contract.prompts.SKIP_PERMISSIONS_SYSTEM_PROMPT_STORAGE_KEY, "chrome_ext_skip_perms_system_prompt");
   assert.equal(contract.prompts.PROFILES_STORAGE_KEY, "customSystemPromptProfiles");
   assert.equal(contract.prompts.ACTIVE_PROFILE_STORAGE_KEY, "customSystemPromptActiveProfileId");
@@ -294,6 +300,10 @@ async function testShellEntryPointsLoadContractBeforeRecoveredModules() {
   assert.ok(sidepanelContractIndex < sidepanelProtocolIndex);
   assert.ok(sidepanelProtocolIndex < indexOfOrFail(sidepanelHtml, "/assets/sidepanel-BoLm9pmH.js", "sidepanel.html"));
   assert.ok(sidepanelContractIndex < indexOfOrFail(sidepanelHtml, "/assets/sidepanel-BoLm9pmH.js", "sidepanel.html"));
+  const sidepanelMetricsIndex = indexOfOrFail(sidepanelHtml, "/sidepanel/answer-provider-metrics.js", "sidepanel.html");
+  assert.ok(indexOfOrFail(sidepanelHtml, "/provider-observability.js", "sidepanel.html") < sidepanelMetricsIndex);
+  assert.ok(indexOfOrFail(sidepanelHtml, "/assets/sidepanel-BoLm9pmH.js", "sidepanel.html") < sidepanelMetricsIndex);
+  indexOfOrFail(sidepanelHtml, "/sidepanel/answer-provider-metrics.css", "sidepanel.html");
 
   const optionsContractIndex = indexOfOrFail(optionsHtml, "/claw-contract.js", "options.html");
   assert.ok(optionsContractIndex < indexOfOrFail(optionsHtml, "/assets/options-Hyb_OzME.js", "options.html"));
@@ -329,6 +339,8 @@ async function testReleaseAndManifestKeepFrozenShellInterfaces() {
   assert.match(releasePackageList, /\bnative-host-binding\.js\b/);
   assert.match(releasePackageList, /\bmcp-permission-popup-protocol\.js\b/);
   assert.match(releasePackageList, /\bservice-worker-detached-window-runtime\.js\b/);
+  assert.match(releasePackageList, /\banswer-provider-metrics\.js\b/);
+  assert.match(releasePackageList, /\banswer-provider-metrics\.css\b/);
 }
 
 async function main() {

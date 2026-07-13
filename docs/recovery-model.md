@@ -51,8 +51,14 @@ Prefer these seams when implementing behavior.
   allowlist, default credential exclusion, and secret-preserving import merge.
 - `provider-observability.js` owns the local-only provider measurement schema,
   30-day and 500-record retention limits, and dashboard aggregation. The
-  provider adapter records status, latency, errors, and normalized usage
-  without storing request or response content.
+  provider adapter records status, first-token and total latency, errors, and
+  normalized usage without storing request or response content. Its random
+  measurement ID becomes the transformed response ID and is published through
+  the versioned `cp:provider-measurement-complete` page event.
+- `answer-provider-metrics.js` consumes only sanitized measurements and joins
+  them to answers by exact ID. It supports event-first, DOM-first, and shared
+  storage arrival, expires unmatched entries after five minutes, and never
+  falls back to timestamps or DOM order.
 - The `useStorageState` model-config seam resolves configured, fetched, and
   cached custom-provider models before shortcut editors render. Both shortcut
   bundles track the resolved default and replace only empty, temporary, or
@@ -73,6 +79,14 @@ Direct bundle patches require stronger evidence than readable module changes.
 3. Keep the patch local and avoid global search-and-replace operations.
 4. Run `npm run validate:full`.
 5. Update this document when a new stable seam or ownership boundary emerges.
+
+The side-panel message renderer has one narrow provider-metrics patch. Normal
+assistant wrappers and tool-group wrappers expose the final assistant message
+ID as `data-cp-provider-request-id`. The value is a random correlation key
+created by `provider-observability.js`; the generated bundle does not receive
+token math, storage access, localization, or presentation logic. The
+`deobfuscation-anchors.regression.test.js` assertions protect both render
+paths.
 
 ## Critical workflows
 
@@ -108,6 +122,10 @@ The current recovered layer protects these workflows.
   diagnostics. Provider credentials require explicit plain-text export opt-in.
 - Options displays local provider request, token, latency, success, and error
   summaries and can clear only those measurement records.
+- Completed custom-provider answers display model, truthful streamed
+  first-token latency, output Tokens/s, total Tokens, and total duration in a
+  readable side-panel enhancer. Non-stream first-token values stay unavailable
+  instead of being inferred from the completed body.
 
 ## Known constraint
 

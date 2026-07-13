@@ -12,6 +12,7 @@ function testMeasurementKeepsMetricsAndDropsPrivateContent() {
     outcome: "success",
     retryCount: 1,
     headerLatencyMs: 120,
+    firstTokenLatencyMs: 842,
     totalDurationMs: 850,
     usage: {
       input_tokens: 100,
@@ -40,6 +41,7 @@ function testMeasurementKeepsMetricsAndDropsPrivateContent() {
     errorCategory: "",
     retryCount: 1,
     headerLatencyMs: 120,
+    firstTokenLatencyMs: 842,
     totalDurationMs: 850,
     usage: {
       inputTokens: 100,
@@ -176,6 +178,76 @@ async function testRequestTrackerRecordsHeaderAndTotalLatencyOnce() {
   assert.equal(state.providerObservabilityRecords[0].usage.inputTokens, 7);
 }
 
+async function testRequestTrackerRecordsFirstMeaningfulTokenLatency() {
+  const times = [1000, 1120, 1400, 1850];
+  const state = { providerObservabilityRecords: [] };
+  const storage = {
+    async get() {
+      return { providerObservabilityRecords: state.providerObservabilityRecords };
+    },
+    async set(changes) {
+      Object.assign(state, changes);
+    },
+  };
+  const tracker = observability.createRequestTracker(storage, {
+    profileId: "provider-main",
+    model: "model-main",
+  }, {
+    now() {
+      return times.shift();
+    },
+  });
+
+  tracker.markHeaders();
+  assert.equal(tracker.markFirstToken(), true);
+  assert.equal(tracker.markFirstToken(), false, "first-token boundary must be one-shot");
+  tracker.complete({ outcome: "success", status: 200 });
+  await observability.whenIdle();
+
+  assert.equal(state.providerObservabilityRecords[0].firstTokenLatencyMs, 400);
+}
+
+async function testRequestTrackerExposesCorrelationIdAndCompletesWithSanitizedMeasurement() {
+  const times = [1000, 1500];
+  const state = { providerObservabilityRecords: [] };
+  let completedMeasurement = null;
+  const storage = {
+    async get() {
+      return { providerObservabilityRecords: state.providerObservabilityRecords };
+    },
+    async set(changes) {
+      Object.assign(state, changes);
+    },
+  };
+  const tracker = observability.createRequestTracker(storage, {
+    profileId: "provider-main",
+    model: "model-main",
+  }, {
+    now() {
+      return times.shift();
+    },
+    createId() {
+      return "provider-request-123";
+    },
+    onComplete(measurement) {
+      completedMeasurement = measurement;
+    },
+  });
+
+  assert.equal(tracker.id, "provider-request-123");
+  tracker.complete({
+    outcome: "success",
+    prompt: "must not escape",
+    response: "must not escape",
+  });
+
+  assert.equal(completedMeasurement.id, tracker.id, "completion callback must run synchronously");
+  assert.equal("prompt" in completedMeasurement, false);
+  assert.equal("response" in completedMeasurement, false);
+  await observability.whenIdle();
+  assert.equal(state.providerObservabilityRecords[0].id, tracker.id);
+}
+
 async function testConcurrentStorageWritesRetainEveryMeasurement() {
   const state = { providerObservabilityRecords: [] };
   const storage = {
@@ -215,6 +287,8 @@ async function main() {
   testRetentionAndAggregationStayBoundedAndFilterByProvider();
   await testStorageRecordingIsBestEffortAndBounded();
   await testRequestTrackerRecordsHeaderAndTotalLatencyOnce();
+  await testRequestTrackerRecordsFirstMeaningfulTokenLatency();
+  await testRequestTrackerExposesCorrelationIdAndCompletesWithSanitizedMeasurement();
   await testConcurrentStorageWritesRetainEveryMeasurement();
   console.log("provider observability tests passed");
 }

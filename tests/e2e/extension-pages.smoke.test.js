@@ -430,7 +430,8 @@ async function testExtensionPagesLoad() {
       await sidepanelPage.waitForFunction(() => {
         return Boolean(document.querySelector("#root")) &&
           Boolean(globalThis.__CP_GITHUB_UPDATE_SHARED__) &&
-          Boolean(globalThis.CustomProviderModels);
+          Boolean(globalThis.CustomProviderModels) &&
+          Boolean(globalThis.__CP_ANSWER_PROVIDER_METRICS__);
       }, null, {
         timeout: 15000
       });
@@ -445,6 +446,100 @@ async function testExtensionPagesLoad() {
     assert.equal(sidepanelManifest.runtimeId, extensionId);
     assert.equal(sidepanelManifest.name, manifest.name);
     assert.equal(sidepanelManifest.version, manifest.version);
+    await sidepanelPage.setViewportSize({ width: 320, height: 800 });
+    await sidepanelPage.evaluate(() => {
+      const answer = document.createElement("section");
+      answer.id = "cp-e2e-provider-answer";
+      answer.setAttribute("data-cp-provider-request-id", "cp-e2e-request");
+      answer.style.width = "100%";
+      const content = document.createElement("p");
+      content.id = "cp-e2e-provider-answer-content";
+      content.textContent = "Synthetic provider answer";
+      answer.appendChild(content);
+      document.body.appendChild(answer);
+      dispatchEvent(new CustomEvent("cp:provider-measurement-complete", {
+        detail: {
+          version: 1,
+          measurement: {
+            id: "cp-e2e-request",
+            startedAt: Date.now(),
+            model: "provider-model-with-a-long-name-for-overflow-evidence",
+            outcome: "success",
+            firstTokenLatencyMs: 842,
+            totalDurationMs: 2700,
+            usage: { inputTokens: 100, outputTokens: 40 },
+          },
+        },
+      }));
+    });
+    await sidepanelPage.waitForSelector(
+      "#cp-e2e-provider-answer > [data-cp-provider-metrics-row='true']",
+      { timeout: 15000 },
+    );
+    for (const scenario of [
+      { width: 320, mode: "light" },
+      { width: 320, mode: "dark" },
+      { width: 1280, mode: "light" },
+    ]) {
+      await sidepanelPage.setViewportSize({ width: scenario.width, height: 800 });
+      const metricsEvidence = await sidepanelPage.evaluate((nextScenario) => {
+        document.documentElement.dataset.mode = nextScenario.mode;
+        const answer = document.querySelector("#cp-e2e-provider-answer");
+        const content = document.querySelector("#cp-e2e-provider-answer-content");
+        const row = answer.querySelector("[data-cp-provider-metrics-row='true']");
+        const rowRect = row.getBoundingClientRect();
+        const model = row.querySelector("[data-cp-provider-model='true']");
+        const metricRects = Array.from(
+          row.querySelectorAll(".cp-answer-provider-metrics-value"),
+        ).map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            width: rect.width,
+            height: rect.height,
+            right: rect.right,
+            bottom: rect.bottom,
+            scrollWidth: element.scrollWidth,
+            clientWidth: element.clientWidth,
+          };
+        });
+        return {
+          ...nextScenario,
+          rowCount: answer.querySelectorAll("[data-cp-provider-metrics-row='true']").length,
+          isLastChild: answer.lastElementChild === row,
+          isBelowAnswer: rowRect.top >= content.getBoundingClientRect().bottom,
+          rowBottom: rowRect.bottom,
+          rowRight: rowRect.right,
+          viewportWidth: document.documentElement.clientWidth,
+          bodyScrollWidth: document.body.scrollWidth,
+          overflow: getComputedStyle(row).overflow,
+          title: row.title,
+          modelTitle: model.title,
+          modelIsTruncated: model.scrollWidth > model.clientWidth,
+          metricRects,
+        };
+      }, scenario);
+      assert.equal(metricsEvidence.rowCount, 1);
+      assert.equal(metricsEvidence.isLastChild, true);
+      assert.equal(metricsEvidence.isBelowAnswer, true);
+      assert.equal(metricsEvidence.rowRight <= metricsEvidence.viewportWidth, true);
+      assert.equal(metricsEvidence.bodyScrollWidth <= metricsEvidence.viewportWidth, true);
+      assert.equal(metricsEvidence.overflow, "hidden");
+      assert.equal(metricsEvidence.metricRects.length, 4);
+      assert.equal(metricsEvidence.metricRects.every(rect => (
+        rect.width > 0 &&
+        rect.height > 0 &&
+        rect.right <= metricsEvidence.viewportWidth &&
+        rect.bottom <= metricsEvidence.rowBottom &&
+        rect.scrollWidth <= rect.clientWidth
+      )), true);
+      assert.equal(
+        metricsEvidence.title,
+        "provider-model-with-a-long-name-for-overflow-evidence",
+      );
+      assert.equal(metricsEvidence.modelTitle, metricsEvidence.title);
+      assert.equal(metricsEvidence.modelIsTruncated, true);
+    }
+    await sidepanelPage.setViewportSize({ width: 1280, height: 800 });
     await sidepanelPage.evaluate(() => {
       const pre = document.createElement("pre");
       const code = document.createElement("code");
