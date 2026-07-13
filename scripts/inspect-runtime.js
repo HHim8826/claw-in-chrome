@@ -57,6 +57,9 @@ function inspectRuntime() {
       maxRecords: 500,
       maxAgeDays: 30,
       localOnly: true,
+      completionEvent: "cp:provider-measurement-complete",
+      eventVersion: 1,
+      answerEnhancer: "sidepanel/answer-provider-metrics.js",
     },
   };
 }

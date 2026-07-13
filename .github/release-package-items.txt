@@ -34,6 +34,7 @@ options/options-debug-logger.js
 options/options.html
 options/options-update-enhancer.js
 options/data-insights-options.js
+options/data-insights-options.css
 pages/pairing.html
 shared/provider-format-adapter.js
 background/service-worker-runtime.js
@@ -44,6 +45,8 @@ shared/detached-window-title.js
 sidepanel/sidepanel-debug-logger.js
 sidepanel/sidepanel-inline-provider.css
 sidepanel/sidepanel-inline-provider.js
+sidepanel/answer-provider-metrics.css
+sidepanel/answer-provider-metrics.js
 sidepanel/sidepanel.html
 shared/telemetry-disable.js
 shared/theme-init.js

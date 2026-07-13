@@ -5,6 +5,9 @@
   const ACTIVE_PROFILE_STORAGE_KEY = contract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
   const HTTP_PROVIDER_STORAGE_KEY = contract.HTTP_PROVIDER_STORAGE_KEY || "customProviderAllowHttp";
   const providerObservability = globalThis.__CP_PROVIDER_OBSERVABILITY__ || null;
+  const providerObservabilityContract = globalThis.__CP_CONTRACT__?.providerObservability || {};
+  const MEASUREMENT_COMPLETE_EVENT = providerObservabilityContract.MEASUREMENT_COMPLETE_EVENT || "cp:provider-measurement-complete";
+  const MEASUREMENT_EVENT_VERSION = Number(providerObservabilityContract.EVENT_VERSION) || 1;
   const DEFAULT_HTTP_PROVIDER_ENABLED = true;
   const HTTP_PROVIDER_DISABLED_MESSAGE = "HTTP 协议未启用。请前往 Options 打开“允许 HTTP 协议”后再使用 http:// 地址。";
   const PATCH_FLAG = "__customProviderFormatAdapterPatched__";
@@ -33,6 +36,22 @@
   const THINK_CLOSE_TAG = "</think>";
   const TOOL_CALL_OPEN_TAG = "<tool_call>";
   const TOOL_CALL_CLOSE_TAG = "</tool_call>";
+
+  function dispatchProviderMeasurement(measurement) {
+    if (
+      !measurement ||
+      typeof globalThis.dispatchEvent !== "function" ||
+      typeof globalThis.CustomEvent !== "function"
+    ) {
+      return;
+    }
+    globalThis.dispatchEvent(new globalThis.CustomEvent(MEASUREMENT_COMPLETE_EVENT, {
+      detail: {
+        version: MEASUREMENT_EVENT_VERSION,
+        measurement,
+      },
+    }));
+  }
   const OPENAI_RESPONSES_ITEM_KEY = "openai_responses_item";
   const ANTHROPIC_FORMAT = "anthropic";
   if (globalThis[PATCH_FLAG]) {
@@ -1981,7 +2000,7 @@
     const completionTokens = Number(upstreamJson?.usage?.completion_tokens || 0);
     return Number.isFinite(completionTokens) && completionTokens > 0;
   }
-  async function retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, attemptInfo) {
+  async function retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, attemptInfo, requestId) {
     const streamBody = {
       ...providerBody,
       stream: true
@@ -2012,6 +2031,7 @@
     const upstreamText = await upstream.text();
     try {
       const fallbackJson = contentType.includes("text/event-stream") ? openAIChatSseToAnthropic(upstreamText, candidateConfig) : openAIChatToAnthropic(safeJsonParse(upstreamText, null), candidateConfig);
+      fallbackJson.id = String(requestId || fallbackJson.id || "");
       debugLog("provider.response_transform_stream_fallback", {
         ...attemptInfo,
         providerUrl,
@@ -2331,7 +2351,8 @@
       return "";
     }).join("");
   }
-  function createAnthropicStreamFromOpenAIChat(stream, config, onComplete) {
+  function createAnthropicStreamFromOpenAIChat(stream, config, onComplete, hooks) {
+    const streamHooks = hooks && typeof hooks === "object" ? hooks : {};
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
@@ -2347,10 +2368,18 @@
     let hasToolUse = false;
     let lastFinishReason = null;
     let lastUsage = null;
+    let hasMarkedFirstToken = false;
     const thinkTagState = createThinkTagState();
     let inlineToolCallCount = 0;
     const toolBlocksByIndex = new Map();
     const openToolBlockIndices = new Set();
+    function markFirstToken() {
+      if (hasMarkedFirstToken) {
+        return;
+      }
+      hasMarkedFirstToken = true;
+      streamHooks.onFirstToken?.();
+    }
     function closeCurrentNonTool(output) {
       if (currentNonToolBlockIndex == null) {
         return;
@@ -2370,7 +2399,7 @@
       output.push(sseChunk("message_start", {
         type: "message_start",
         message: {
-          id: messageId,
+          id: String(streamHooks.requestId || messageId),
           type: "message",
           role: "assistant",
           model: currentModel,
@@ -2548,6 +2577,7 @@
       ensureMessageStart(output, chunk);
       const reasoningDelta = readFirstStringField(delta, chatCompatibility.streamReasoningFields);
       if (reasoningDelta) {
+        markFirstToken();
         const index = ensureNonToolBlock(output, "thinking");
         output.push(sseChunk("content_block_delta", {
           type: "content_block_delta",
@@ -2560,9 +2590,20 @@
       }
       const contentDelta = normalizeChatContentDelta(delta.content);
       if (contentDelta) {
+        markFirstToken();
         emitTaggedTextDelta(output, contentDelta, false);
       }
       if (Array.isArray(delta.tool_calls) && delta.tool_calls.length) {
+        const hasMeaningfulToolDelta = delta.tool_calls.some(function (toolCall) {
+          return Boolean(
+            String(toolCall?.id || "") ||
+            String(toolCall?.function?.name || "") ||
+            String(toolCall?.function?.arguments || "")
+          );
+        });
+        if (hasMeaningfulToolDelta) {
+          markFirstToken();
+        }
         emitTaggedTextDelta(output, "", true);
         closeCurrentNonTool(output);
         for (const toolCall of delta.tool_calls) {
@@ -2749,7 +2790,8 @@
     }
     return "";
   }
-  function createAnthropicStreamFromResponses(stream, onComplete) {
+  function createAnthropicStreamFromResponses(stream, onComplete, hooks) {
+    const streamHooks = hooks && typeof hooks === "object" ? hooks : {};
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
@@ -2769,6 +2811,14 @@
     const indexByKey = new Map();
     const toolIndicesByItemId = new Map();
     let lastToolIndex = null;
+    let hasMarkedFirstToken = false;
+    function markFirstToken() {
+      if (hasMarkedFirstToken) {
+        return;
+      }
+      hasMarkedFirstToken = true;
+      streamHooks.onFirstToken?.();
+    }
     function updateResponseMetadata(responseObject) {
       if (!messageId && responseObject?.id) {
         messageId = String(responseObject.id);
@@ -2785,7 +2835,7 @@
       output.push(sseChunk("message_start", {
         type: "message_start",
         message: {
-          id: messageId,
+          id: String(streamHooks.requestId || messageId),
           type: "message",
           role: "assistant",
           model: currentModel,
@@ -3003,6 +3053,7 @@
         ensureMessageStart(output, responseObject);
         const delta = typeof data.delta === "string" ? data.delta : typeof data.text === "string" ? data.text : "";
         if (delta) {
+          markFirstToken();
           const index = ensureTextBlock(output, data);
           output.push(sseChunk("content_block_delta", {
             type: "content_block_delta",
@@ -3023,6 +3074,7 @@
         ensureMessageStart(output, responseObject);
         const delta = typeof data.delta === "string" ? data.delta : typeof data.text === "string" ? data.text : "";
         if (delta) {
+          markFirstToken();
           const index = ensureThinkingBlock(output, data, data.item);
           output.push(sseChunk("content_block_delta", {
             type: "content_block_delta",
@@ -3042,6 +3094,14 @@
       } else if (resolvedEvent === "response.output_item.added") {
         const itemType = String(data?.item?.type || "");
         if (itemType === "function_call") {
+          if (
+            String(data?.item?.id || "") ||
+            String(data?.item?.call_id || "") ||
+            String(data?.item?.name || "") ||
+            String(data?.item?.arguments || "")
+          ) {
+            markFirstToken();
+          }
           hasToolUse = true;
           ensureMessageStart(output, responseObject);
           ensureToolBlock(output, data, data.item);
@@ -3056,6 +3116,7 @@
         ensureMessageStart(output, responseObject);
         const index = ensureToolBlock(output, data, null);
         if (typeof data.delta === "string" && data.delta) {
+          markFirstToken();
           output.push(sseChunk("content_block_delta", {
             type: "content_block_delta",
             index,
@@ -3432,10 +3493,22 @@
               upstream.body,
               candidateConfig,
               completeStreamMeasurement,
+              {
+                requestId: requestTracker?.id,
+                onFirstToken() {
+                  requestTracker?.markFirstToken?.();
+                },
+              },
             )
             : createAnthropicStreamFromResponses(
               upstream.body,
               completeStreamMeasurement,
+              {
+                requestId: requestTracker?.id,
+                onFirstToken() {
+                  requestTracker?.markFirstToken?.();
+                },
+              },
             );
           return createSseResponse(upstream, transformedStream);
         }
@@ -3471,12 +3544,13 @@
         });
         try {
           const anthropicResponse = candidate.format === OPENAI_CHAT_FORMAT ? openAIChatToAnthropic(upstreamJson, candidateConfig) : openAIResponsesToAnthropic(upstreamJson);
+          anthropicResponse.id = String(requestTracker?.id || anthropicResponse.id || "");
           if (candidate.format === OPENAI_CHAT_FORMAT && shouldRetryOpenAIChatViaStreamFallback(upstreamJson, anthropicResponse, contentType, isStreamRequest)) {
             const fallbackResult = await retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, {
               attempt: index + 1,
               totalAttempts: candidates.length,
               format: candidate.format
-            });
+            }, requestTracker?.id);
             if (fallbackResult) {
               requestTracker?.complete?.({
                 outcome: "success",
@@ -3545,6 +3619,9 @@
         providerName: String(config?.name || ""),
         format: String(config?.format || ""),
         model: requestModel,
+      },
+      {
+        onComplete: dispatchProviderMeasurement,
       },
     ) || null;
     try {

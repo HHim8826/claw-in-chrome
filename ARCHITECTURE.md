@@ -40,7 +40,13 @@ Apply these rules to every change.
 - `src/shared/settings-backup.js` owns the reviewed settings allowlist, backup
   schema, import validation, and secret-preserving restore merge.
 - `src/shared/provider-observability.js` owns sanitized provider measurements,
-  retention, aggregation, and best-effort persistence.
+  first-token timing, random correlation IDs, retention, aggregation, and
+  best-effort persistence. `src/shared/claw-contract.js` owns the versioned
+  page-local measurement-completion event.
+- `src/sidepanel/answer-provider-metrics.js` owns exact-ID attachment and
+  presentation data for the compact metrics row below a provider answer. The
+  side-panel bundle exposes only the matching response ID as a semantic DOM
+  attribute; it does not own formatting or measurement logic.
 - Producers and consumers of a runtime message must use the same contract key.
 - A bundle patch must include a semantic anchor test and an update to
   `docs/recovery-model.md` when the recovered understanding changes.

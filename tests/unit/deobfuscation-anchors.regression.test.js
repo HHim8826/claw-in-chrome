@@ -495,6 +495,10 @@ async function testSidepanelAnchorsExist() {
   assertIncludes(source, "const __cpSidepanelBuildAssistantTimelineGroups = Yw;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelBuildActiveTimelinePhaseWindow = ik;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelRenderActiveToolTimeline = ik;", "sidepanel bundle");
+  assertIncludes(source, "const o = a.messages[a.messages.length - 1];", "sidepanel bundle original tool-group streaming boundary");
+  assertIncludes(source, 'const c = i && o?.role === "assistant" && n;', "sidepanel bundle original tool-group streaming decision");
+  assertIncludes(source, '"data-cp-provider-request-id": A?.id,', "sidepanel bundle tool-group metrics anchor");
+  assertIncludes(source, '"data-cp-provider-request-id": b ? y.id : undefined,', "sidepanel bundle single-answer metrics anchor");
   assertIncludes(source, "const __cpSidepanelRenderMessageGroups = ok;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelRenderConversationScrollLayer = ak;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelTimelineGroupShell = Ul;", "sidepanel bundle");

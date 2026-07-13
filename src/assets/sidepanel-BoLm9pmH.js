@@ -37345,7 +37345,10 @@ const ok = a.memo(function ({
       const i = m === e.length - 1;
       const o = a.messages[a.messages.length - 1];
       const c = i && o?.role === "assistant" && n;
+      const A = [...a.messages].reverse().find(e => e?.role === "assistant");
       return l.jsx("div", {
+        // 语义锚点：自定义供应商请求 ID 只作为回答与本机观测指标的精确关联键。
+        "data-cp-provider-request-id": A?.id,
         children: l.jsx(ik, {
           messages: a.messages,
           allMessages: t,
@@ -37396,6 +37399,8 @@ const ok = a.memo(function ({
     const C = v === g;
     return l.jsx("div", {
       className: k ? "mb-5" : "",
+      // 语义锚点：普通 assistant 回答暴露与 provider measurement 相同的安全随机 ID。
+      "data-cp-provider-request-id": b ? y.id : undefined,
       ref: (() => {
         if (C) {
           return o.lastHumanMessage;

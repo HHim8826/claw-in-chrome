@@ -52,6 +52,9 @@ Apply these controls to every security-sensitive change.
   never include chat history, diagnostics, or telemetry records.
 - Keep provider measurements local and schema-bound. Never record prompts,
   responses, request bodies, headers, credentials, full URLs, or stack traces.
+- Treat the per-answer provider request ID as a short-lived local correlation
+  key. Publish only the sanitized measurement schema through the page-local
+  completion event, and attach it only to an answer with the exact same ID.
 - Validate backup kind and schema before previewing or applying an import. Apply
   only reviewed storage keys and preserve installed credentials when an import
   omits them.

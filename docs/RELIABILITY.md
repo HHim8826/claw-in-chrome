@@ -47,6 +47,10 @@ Preserve these invariants.
   response path doesn't await storage, writes are serialized through an
   extension-origin Web Lock, and the store keeps at most 500 records from the
   most recent 30 days.
+- Per-answer metrics use one random ID across the request tracker, transformed
+  response, rendered answer, event, and storage record. Event-first and
+  DOM-first arrivals converge by exact ID; duplicates render once, unmatched
+  entries expire after five minutes, and non-stream timing remains unavailable.
 
 ## Local verification
 
