@@ -49,9 +49,18 @@
       PROFILES_STORAGE_KEY: "customSystemPromptProfiles",
       ACTIVE_PROFILE_STORAGE_KEY: "customSystemPromptActiveProfileId",
     },
-    workflows: {
-      STORAGE_KEY: "claw_site_workflows_v1",
-    },
+  workflows: {
+    STORAGE_KEY: "claw_site_workflows_v1",
+  },
+  settingsBackup: {
+    KIND: "claw-in-chrome-settings-backup",
+    SCHEMA_VERSION: 1,
+  },
+  providerObservability: {
+    STORAGE_KEY: "providerObservabilityRecords",
+    MAX_RECORDS: 500,
+    MAX_AGE_DAYS: 30,
+  },
     models: {
       CONFIG_STORAGE_KEY: "chrome_ext_models",
     },

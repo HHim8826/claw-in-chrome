@@ -7,8 +7,9 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const BACKUP_KIND = "claw-in-chrome-settings-backup";
-  const SCHEMA_VERSION = 1;
+  const backupContract = globalThis.__CP_CONTRACT__?.settingsBackup || {};
+  const BACKUP_KIND = backupContract.KIND || "claw-in-chrome-settings-backup";
+  const SCHEMA_VERSION = Number(backupContract.SCHEMA_VERSION) || 1;
   const REVIEWED_STORAGE_KEYS = Object.freeze([
     "customProviderConfig",
     "customProviderProfiles",
@@ -21,7 +22,7 @@
     "selectedModelQuickMode",
     "chrome_ext_models",
     "chrome_ext_system_prompt",
-    "chrome_ext_skip_permissions_system_prompt",
+    "chrome_ext_skip_perms_system_prompt",
     "chrome_ext_multiple_tabs_system_prompt",
     "chrome_ext_explicit_permissions_prompt",
     "chrome_ext_tool_usage_prompt",
@@ -62,7 +63,18 @@
   }
 
   function isSecretField(name) {
-    return SECRET_FIELD_NAMES.has(normalizeFieldName(name));
+    const normalized = normalizeFieldName(name);
+    return SECRET_FIELD_NAMES.has(normalized) ||
+      normalized.endsWith("apikey") ||
+      normalized.endsWith("accesstoken") ||
+      normalized.endsWith("refreshtoken") ||
+      normalized.endsWith("authtoken") ||
+      normalized.endsWith("secret") ||
+      normalized.endsWith("password") ||
+      normalized.endsWith("privatekey") ||
+      normalized.endsWith("credential") ||
+      normalized.endsWith("credentials") ||
+      normalized.includes("authorization");
   }
 
   function cloneReviewedValue(value, options, key) {

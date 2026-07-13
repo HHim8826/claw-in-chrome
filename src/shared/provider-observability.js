@@ -7,9 +7,10 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 
-  const STORAGE_KEY = "providerObservabilityRecords";
-  const MAX_RECORDS = 500;
-  const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+  const contract = globalThis.__CP_CONTRACT__?.providerObservability || {};
+  const STORAGE_KEY = contract.STORAGE_KEY || "providerObservabilityRecords";
+  const MAX_RECORDS = Number(contract.MAX_RECORDS) || 500;
+  const MAX_AGE_MS = (Number(contract.MAX_AGE_DAYS) || 30) * 24 * 60 * 60 * 1000;
   const OUTCOMES = new Set([
     "success",
     "http_error",
@@ -17,6 +18,9 @@
     "aborted",
     "invalid_response",
   ]);
+  const WRITE_LOCK_NAME = "claw-provider-observability-v1";
+  let writeQueue = Promise.resolve();
+  const pendingWrites = new Set();
 
   function boundedText(value, limit) {
     return String(value || "").trim().slice(0, limit);
@@ -133,25 +137,46 @@
     };
   }
 
+  function runSerializedWrite(operation) {
+    const execute = function () {
+      const locks = globalThis.navigator?.locks;
+      if (locks && typeof locks.request === "function") {
+        return locks.request(WRITE_LOCK_NAME, operation);
+      }
+      return operation();
+    };
+    const result = writeQueue.then(execute, execute);
+    writeQueue = result.catch(function () {});
+    return result;
+  }
+
   async function recordMeasurement(storageArea, value, options) {
     if (!storageArea || typeof storageArea.get !== "function" || typeof storageArea.set !== "function") {
       return false;
     }
-    try {
-      const settings = options && typeof options === "object" ? options : {};
-      const now = Number.isFinite(Number(settings.now)) ? Number(settings.now) : Date.now();
-      const stored = await storageArea.get(STORAGE_KEY);
-      const existing = Array.isArray(stored?.[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
-      const measurement = createMeasurement(value, {
-        id: value?.id,
-        now,
-      });
-      await storageArea.set({
-        [STORAGE_KEY]: retainMeasurements([measurement, ...existing], { now }),
-      });
-      return true;
-    } catch (_error) {
-      return false;
+    return runSerializedWrite(async function () {
+      try {
+        const settings = options && typeof options === "object" ? options : {};
+        const now = Number.isFinite(Number(settings.now)) ? Number(settings.now) : Date.now();
+        const stored = await storageArea.get(STORAGE_KEY);
+        const existing = Array.isArray(stored?.[STORAGE_KEY]) ? stored[STORAGE_KEY] : [];
+        const measurement = createMeasurement(value, {
+          id: value?.id,
+          now,
+        });
+        await storageArea.set({
+          [STORAGE_KEY]: retainMeasurements([measurement, ...existing], { now }),
+        });
+        return true;
+      } catch (_error) {
+        return false;
+      }
+    });
+  }
+
+  async function whenIdle() {
+    while (pendingWrites.size > 0) {
+      await Promise.allSettled(Array.from(pendingWrites));
     }
   }
 
@@ -167,7 +192,7 @@
           headerAt = Number(now());
         }
       },
-      async complete(result) {
+      complete(result) {
         if (completed) {
           return false;
         }
@@ -180,7 +205,12 @@
           headerLatencyMs: headerAt ? Math.max(0, headerAt - startedAt) : 0,
           totalDurationMs: Math.max(0, finishedAt - startedAt),
         };
-        return recordMeasurement(storageArea, measurement, { now: finishedAt });
+        const write = recordMeasurement(storageArea, measurement, { now: finishedAt });
+        pendingWrites.add(write);
+        write.finally(function () {
+          pendingWrites.delete(write);
+        });
+        return true;
       },
     });
   }
@@ -195,5 +225,6 @@
     aggregateMeasurements,
     recordMeasurement,
     createRequestTracker,
+    whenIdle,
   });
 });

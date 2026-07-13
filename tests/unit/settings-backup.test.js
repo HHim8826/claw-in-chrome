@@ -24,6 +24,7 @@ function testDefaultBackupExportsReviewedSettingsWithoutPrivateData() {
           enabled: true,
         },
       ],
+      chrome_ext_skip_perms_system_prompt: "Use the relaxed permission prompt.",
       claw_site_workflows_v1: [
         {
           name: "weekly-report",
@@ -58,6 +59,10 @@ function testDefaultBackupExportsReviewedSettingsWithoutPrivateData() {
   ]);
   assert.equal(document.settings.customProviderActiveProfileId, "provider-main");
   assert.equal(document.settings.preferred_locale, "zh-TW");
+  assert.equal(
+    document.settings.chrome_ext_skip_perms_system_prompt,
+    "Use the relaxed permission prompt.",
+  );
   assert.deepEqual(document.settings.permissionStorage, {
     "https://example.test": "ask",
   });
@@ -81,6 +86,26 @@ function testInspectBackupRejectsUnsupportedSchemaWithoutChanges() {
   assert.equal(result.ok, false);
   assert.equal(result.errorCode, "unsupported_schema");
   assert.deepEqual(result.settings, {});
+}
+
+function testInspectBackupRejectsWrongKindAndUnknownOnlyPayload() {
+  const wrongKind = backup.inspectBackup({
+    kind: "other-backup",
+    schemaVersion: 1,
+    settings: { preferred_locale: "zh-TW" },
+  });
+  const unknownOnly = backup.inspectBackup({
+    kind: "claw-in-chrome-settings-backup",
+    schemaVersion: 1,
+    settings: { unknownSetting: "not reviewed" },
+  });
+
+  assert.equal(wrongKind.ok, false);
+  assert.equal(wrongKind.errorCode, "wrong_kind");
+  assert.deepEqual(wrongKind.settings, {});
+  assert.equal(unknownOnly.ok, false);
+  assert.equal(unknownOnly.errorCode, "empty_settings");
+  assert.deepEqual(unknownOnly.settings, {});
 }
 
 function testRestoreMergePreservesSecretsOmittedFromBackup() {
@@ -128,11 +153,35 @@ function testExplicitSecretExportIncludesCredentialsAndMarksDocument() {
   assert.equal(document.settings.anthropicApiKey, "legacy-exported");
 }
 
+function testDefaultBackupExcludesNestedCredentialNameVariants() {
+  const document = backup.createBackup({
+    customProviderConfig: {
+      baseUrl: "https://gateway.example.test",
+      clientSecret: "client-secret-private",
+      privateKey: "private-key-private",
+      headers: {
+        authorization: "Bearer private",
+        xAuthToken: "header-token-private",
+        xTenant: "tenant-safe",
+      },
+    },
+  });
+  const serialized = JSON.stringify(document);
+
+  assert.equal(serialized.includes("client-secret-private"), false);
+  assert.equal(serialized.includes("private-key-private"), false);
+  assert.equal(serialized.includes("Bearer private"), false);
+  assert.equal(serialized.includes("header-token-private"), false);
+  assert.equal(serialized.includes("tenant-safe"), true);
+}
+
 function main() {
   testDefaultBackupExportsReviewedSettingsWithoutPrivateData();
   testInspectBackupRejectsUnsupportedSchemaWithoutChanges();
+  testInspectBackupRejectsWrongKindAndUnknownOnlyPayload();
   testRestoreMergePreservesSecretsOmittedFromBackup();
   testExplicitSecretExportIncludesCredentialsAndMarksDocument();
+  testDefaultBackupExcludesNestedCredentialNameVariants();
   console.log("settings backup tests passed");
 }
 

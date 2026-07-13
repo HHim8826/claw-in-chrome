@@ -36,16 +36,16 @@ and telemetry clearing.
 
 The feature requires the following harness updates:
 
-- [ ] Add stable backup and telemetry keys to `claw-contract.js`.
-- [ ] Add pure unit-testable modules for backup and telemetry behavior.
-- [ ] Add an Options DOM harness for export, preview, apply, filter, and clear.
-- [ ] Add provider-adapter regression tests for success and failure recording.
-- [ ] Add content-exclusion tests for secrets, prompts, responses, and URLs.
-- [ ] Add retention fixtures for age and record-count limits.
-- [ ] Add the new runtime files to HTML, architecture checks, and release checks.
-- [ ] Expose backup schema and telemetry limits in `inspect:runtime`.
-- [ ] Update architecture, reliability, security, and quality documentation.
-- [ ] Run focused tests, `validate:fast`, `validate:full`, and runtime inspection.
+- [x] Add stable backup and telemetry keys to `claw-contract.js`.
+- [x] Add pure unit-testable modules for backup and telemetry behavior.
+- [x] Add an Options DOM harness for export, preview, apply, filter, and clear.
+- [x] Add provider-adapter regression tests for success and failure recording.
+- [x] Add content-exclusion tests for secrets, prompts, responses, and URLs.
+- [x] Add retention fixtures for age and record-count limits.
+- [x] Add the new runtime files to HTML, architecture checks, and release checks.
+- [x] Expose backup schema and telemetry limits in `inspect:runtime`.
+- [x] Update architecture, reliability, security, and quality documentation.
+- [x] Run focused tests, `validate:fast`, `validate:full`, and runtime inspection.
 
 ## TDD tracer bullet
 
@@ -101,17 +101,17 @@ run aggregate validation, review the complete diff, and move this plan to
 
 The feature is done only when every criterion below is satisfied:
 
-- [ ] All acceptance criteria in the product specification have focused tests.
-- [ ] Default exports contain no credential or private runtime data.
-- [ ] Invalid imports prove storage remains unchanged.
-- [ ] Provider requests behave identically when telemetry storage fails.
-- [ ] Telemetry records contain no prompt, response, credential, or full URL.
-- [ ] Options controls pass DOM-level behavior tests in supported custom locales.
-- [ ] `npm run validate:fast` passes.
-- [ ] `npm run validate:full` passes with a loadable unpacked extension.
-- [ ] `npm run inspect:runtime` reports the schema and retention limits.
-- [ ] The architecture and durable security and reliability docs match code.
-- [ ] Review finds no generated bundle edit or manifest permission drift.
+- [x] All acceptance criteria in the product specification have focused tests.
+- [x] Default exports contain no credential or private runtime data.
+- [x] Invalid imports prove storage remains unchanged.
+- [x] Provider requests behave identically when telemetry storage fails.
+- [x] Telemetry records contain no prompt, response, credential, or full URL.
+- [x] Options controls pass DOM-level behavior tests in supported custom locales.
+- [x] `npm run validate:fast` passes.
+- [x] `npm run validate:full` passes with a loadable unpacked extension.
+- [x] `npm run inspect:runtime` reports the schema and retention limits.
+- [x] The architecture and durable security and reliability docs match code.
+- [x] Review finds no generated bundle edit or manifest permission drift.
 - [ ] Task-owned changes are committed on the feature branch and pushed when
       the branch is shareable.
 
@@ -138,3 +138,22 @@ and unresolved risk here while executing the plan.
 - Slice 3 core GREEN: focused tests prove strict record fields, 30-day and
   500-record bounds, provider filtering, token aggregation, best-effort
   storage, and one-shot header and total latency tracking.
+- Slice 3 adapter GREEN: success, HTTP error, network error, invalid JSON, and
+  streaming usage regression tests pass without exposing provider content.
+- Slice 4 RED: the Options test failed because `data-insights-options.js` didn't
+  exist. GREEN proves visible backup, import, aggregate, and clear behavior.
+- Harness: focused checks pass for syntax, docs, architecture, manifest,
+  Mermaid vendor integrity, release packaging, and runtime inspection.
+- Independent review: one read-only reviewer reported five findings. The
+  implementation now keeps telemetry off the response critical path,
+  serializes concurrent writes with an extension-origin Web Lock, displays
+  separate token and error groups, classifies stream aborts, and preserves an
+  actionable import retry state. Focused tests cover every review fix.
+- Final validation: `npm run validate:full` passed after review fixes. The
+  headed extension E2E found the **Data and insights** panel and reported no
+  Options or Visualizer console or page errors.
+- Git finalization: the first `git add` and `git commit` request was rejected by
+  desktop permission review because its review model was at capacity. Per the
+  rejection instruction, no workaround or repeat attempt was made without new
+  explicit user approval. The feature remains on the active plan until that
+  checkpoint and push are authorized.

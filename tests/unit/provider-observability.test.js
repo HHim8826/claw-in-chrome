@@ -161,12 +161,14 @@ async function testRequestTrackerRecordsHeaderAndTotalLatencyOnce() {
     },
   });
   tracker.markHeaders();
-  await tracker.complete({
+  const completion = tracker.complete({
     outcome: "success",
     status: 200,
     usage: { input_tokens: 7, output_tokens: 3 },
   });
-  await tracker.complete({ outcome: "network_error" });
+  assert.equal(completion, true, "tracker completion must not await storage");
+  assert.equal(tracker.complete({ outcome: "network_error" }), false);
+  await observability.whenIdle();
 
   assert.equal(state.providerObservabilityRecords.length, 1);
   assert.equal(state.providerObservabilityRecords[0].headerLatencyMs, 120);
@@ -174,11 +176,46 @@ async function testRequestTrackerRecordsHeaderAndTotalLatencyOnce() {
   assert.equal(state.providerObservabilityRecords[0].usage.inputTokens, 7);
 }
 
+async function testConcurrentStorageWritesRetainEveryMeasurement() {
+  const state = { providerObservabilityRecords: [] };
+  const storage = {
+    async get() {
+      await Promise.resolve();
+      return {
+        providerObservabilityRecords: state.providerObservabilityRecords.slice(),
+      };
+    },
+    async set(changes) {
+      await Promise.resolve();
+      Object.assign(state, changes);
+    },
+  };
+
+  await Promise.all([
+    observability.recordMeasurement(storage, {
+      id: "concurrent-1",
+      startedAt: 1_752_364_800_000,
+      outcome: "success",
+    }, { now: 1_752_364_800_000 }),
+    observability.recordMeasurement(storage, {
+      id: "concurrent-2",
+      startedAt: 1_752_364_800_001,
+      outcome: "success",
+    }, { now: 1_752_364_800_001 }),
+  ]);
+
+  assert.deepEqual(
+    state.providerObservabilityRecords.map(record => record.id).sort(),
+    ["concurrent-1", "concurrent-2"],
+  );
+}
+
 async function main() {
   testMeasurementKeepsMetricsAndDropsPrivateContent();
   testRetentionAndAggregationStayBoundedAndFilterByProvider();
   await testStorageRecordingIsBestEffortAndBounded();
   await testRequestTrackerRecordsHeaderAndTotalLatencyOnce();
+  await testConcurrentStorageWritesRetainEveryMeasurement();
   console.log("provider observability tests passed");
 }
 

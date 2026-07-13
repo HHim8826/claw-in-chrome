@@ -13,9 +13,15 @@ The target is four or higher in every category.
 | Automated tests | 4/5 | Unit, integration, and extension E2E suites | Add coverage reporting for readable modules |
 | Architecture safety | 4/5 | Contract and loader checks | Extract more side-panel behavior from the bundle |
 | CI and release | 3/5 | Fast CI, E2E CI, package validation, and immutable version policy are defined | Confirm the first green immutable release run, then add signed provenance |
-| Runtime diagnostics | 3/5 | Storage-backed debug loggers and inspection command | Export diagnostics directly from E2E failures |
+| Runtime diagnostics | 4/5 | Sanitized debug exports, provider metrics dashboard, and inspection command | Export diagnostics directly from E2E failures |
 | Security | 3/5 | Permission baseline plus sanitized storage and console diagnostics | Add secret scanning and dependency review |
 | Documentation | 4/5 | Required-doc and local-link checks | Add automated command example execution |
+
+The provider insights dashboard adds bounded local measurements for request
+status, latency, errors, and normalized token usage. Settings backup adds a
+versioned, allowlisted portability contract with default secret exclusion.
+Encrypted credential-bearing backups remain a future security design rather
+than part of the plain JSON v1 format.
 
 ## Scoring rule
 

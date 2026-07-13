@@ -4,6 +4,7 @@
   const PROFILES_STORAGE_KEY = contract.PROFILES_STORAGE_KEY || "customProviderProfiles";
   const ACTIVE_PROFILE_STORAGE_KEY = contract.ACTIVE_PROFILE_STORAGE_KEY || "customProviderActiveProfileId";
   const HTTP_PROVIDER_STORAGE_KEY = contract.HTTP_PROVIDER_STORAGE_KEY || "customProviderAllowHttp";
+  const providerObservability = globalThis.__CP_PROVIDER_OBSERVABILITY__ || null;
   const DEFAULT_HTTP_PROVIDER_ENABLED = true;
   const HTTP_PROVIDER_DISABLED_MESSAGE = "HTTP 协议未启用。请前往 Options 打开“允许 HTTP 协议”后再使用 http:// 地址。";
   const PATCH_FLAG = "__customProviderFormatAdapterPatched__";
@@ -160,6 +161,7 @@
   function normalizeConfig(raw) {
     const source = raw && typeof raw === "object" ? raw : {};
     return {
+      id: String(source.id || source.profileId || "").trim(),
       name: String(source.name || "").trim(),
       baseUrl: String(source.baseUrl || "").trim().replace(/\/+$/, ""),
       apiKey: String(source.apiKey || "").trim(),
@@ -2326,7 +2328,7 @@
       return "";
     }).join("");
   }
-  function createAnthropicStreamFromOpenAIChat(stream, config) {
+  function createAnthropicStreamFromOpenAIChat(stream, config, onComplete) {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
@@ -2681,8 +2683,15 @@
           for (const chunkText of output) {
             controller.enqueue(encoder.encode(chunkText));
           }
+          onComplete?.(getSafeAnthropicUsage(
+            lastUsage ? buildAnthropicUsageFromChat(lastUsage) : null,
+          ));
           controller.close();
         } catch (error) {
+          const streamErrorCategory = error?.name === "AbortError" ||
+            /aborted/i.test(String(error?.message || ""))
+            ? "aborted"
+            : "invalid_response";
           controller.enqueue(encoder.encode(sseChunk("error", {
             type: "error",
             error: {
@@ -2690,6 +2699,7 @@
               message: error && typeof error.message === "string" ? error.message : "流式转换失败。"
             }
           })));
+          onComplete?.({}, streamErrorCategory);
           controller.close();
         }
       }
@@ -2736,7 +2746,7 @@
     }
     return "";
   }
-  function createAnthropicStreamFromResponses(stream) {
+  function createAnthropicStreamFromResponses(stream, onComplete) {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
@@ -3123,8 +3133,17 @@
           for (const chunkText of output) {
             controller.enqueue(encoder.encode(chunkText));
           }
+          onComplete?.(getSafeAnthropicUsage(
+            lastResponseObject?.usage
+              ? buildAnthropicUsageFromResponses(lastResponseObject.usage)
+              : null,
+          ));
           controller.close();
         } catch (error) {
+          const streamErrorCategory = error?.name === "AbortError" ||
+            /aborted/i.test(String(error?.message || ""))
+            ? "aborted"
+            : "invalid_response";
           controller.enqueue(encoder.encode(sseChunk("error", {
             type: "error",
             error: {
@@ -3132,6 +3151,7 @@
               message: error && typeof error.message === "string" ? error.message : "Responses 流式转换失败。"
             }
           })));
+          onComplete?.({}, streamErrorCategory);
           controller.close();
         }
       }
@@ -3255,7 +3275,23 @@
     const parsed = await parseProviderError(response, fallbackMessage);
     return createAnthropicErrorResponse(parsed.status, parsed.message);
   }
-  async function forwardProviderRequest(request, config) {
+  function classifyProviderHttpError(status) {
+    const code = Number(status) || 0;
+    if (code === 429) {
+      return "rate_limit";
+    }
+    if (code === 401) {
+      return "authentication";
+    }
+    if (code === 403) {
+      return "permission";
+    }
+    if (code >= 500) {
+      return "provider_unavailable";
+    }
+    return "http_status";
+  }
+  async function forwardProviderRequest(request, config, requestTracker) {
     await assertHttpProviderAllowed(config);
     const bodyText = await request.clone().text();
     const parsedBody = safeJsonParse(bodyText, null);
@@ -3310,6 +3346,7 @@
           body: JSON.stringify(providerBody),
           signal: request.signal
         });
+        requestTracker?.markHeaders?.();
         if (!upstream.ok) {
           const providerError = await parseProviderError(upstream, "自定义模型供应商返回了错误。");
           lastProviderError = providerError;
@@ -3350,6 +3387,12 @@
             shouldTryNextCandidate = true;
             break;
           }
+          requestTracker?.complete?.({
+            outcome: "http_error",
+            status: providerError.status,
+            errorCategory: classifyProviderHttpError(providerError.status),
+            retryCount: index + retryIndex,
+          });
           return createAnthropicErrorResponse(providerError.status, providerError.message);
         }
         const contentType = upstream.headers.get("content-type") || "";
@@ -3368,7 +3411,29 @@
             format: candidate.format,
             providerUrl
           });
-          const transformedStream = candidate.format === OPENAI_CHAT_FORMAT ? createAnthropicStreamFromOpenAIChat(upstream.body, candidateConfig) : createAnthropicStreamFromResponses(upstream.body);
+          const completeStreamMeasurement = function (usage, errorCategory) {
+            requestTracker?.complete?.({
+              outcome: errorCategory === "aborted"
+                ? "aborted"
+                : errorCategory
+                  ? "invalid_response"
+                  : "success",
+              status: upstream.status,
+              errorCategory: errorCategory || "",
+              retryCount: index + retryIndex,
+              usage: usage || {},
+            });
+          };
+          const transformedStream = candidate.format === OPENAI_CHAT_FORMAT
+            ? createAnthropicStreamFromOpenAIChat(
+              upstream.body,
+              candidateConfig,
+              completeStreamMeasurement,
+            )
+            : createAnthropicStreamFromResponses(
+              upstream.body,
+              completeStreamMeasurement,
+            );
           return createSseResponse(upstream, transformedStream);
         }
         const upstreamText = await upstream.text();
@@ -3386,6 +3451,12 @@
             shouldTryNextCandidate = true;
             break;
           }
+          requestTracker?.complete?.({
+            outcome: "invalid_response",
+            status: 502,
+            errorCategory: "invalid_json",
+            retryCount: index + retryIndex,
+          });
           return createAnthropicErrorResponse(502, "自定义模型供应商返回了无法解析的 JSON 响应。");
         }
         debugLog("provider.response_transform", {
@@ -3407,6 +3478,12 @@
               return fallbackResponse;
             }
           }
+          requestTracker?.complete?.({
+            outcome: "success",
+            status: upstream.status,
+            retryCount: index + retryIndex,
+            usage: anthropicResponse?.usage || upstreamJson?.usage || {},
+          });
           return new Response(JSON.stringify(anthropicResponse), {
             status: upstream.status,
             statusText: upstream.statusText,
@@ -3447,12 +3524,30 @@
     if (!shouldInterceptRequest(config, request.url, request.method)) {
       return nativeFetch(input, init);
     }
+    let requestModel = String(config?.defaultModel || "");
     try {
-      return await forwardProviderRequest(request, config);
+      const requestBody = safeJsonParse(await request.clone().text(), null);
+      requestModel = String(requestBody?.model || requestModel);
+    } catch (_error) {}
+    const requestTracker = providerObservability?.createRequestTracker?.(
+      globalThis.chrome?.storage?.local,
+      {
+        profileId: String(config?.id || ""),
+        providerName: String(config?.name || ""),
+        format: String(config?.format || ""),
+        model: requestModel,
+      },
+    ) || null;
+    try {
+      return await forwardProviderRequest(request, config, requestTracker);
     } catch (error) {
       const isAbortError = error?.name === "AbortError" || /aborted/i.test(String(error?.message || ""));
       const shouldTreatAsAbort = isAbortError || isLikelyHiddenPageFetchAbort(error, request);
       if (isAbortError) {
+        requestTracker?.complete?.({
+          outcome: "aborted",
+          errorCategory: "aborted",
+        });
         debugLog("provider.request_aborted", {
           format: config.format,
           baseUrl: config.baseUrl,
@@ -3470,6 +3565,10 @@
           visibilityState: typeof document !== "undefined" ? document.visibilityState : "",
           lifecycleEnding: pageLifecycleEnding === true
         }, "info");
+        requestTracker?.complete?.({
+          outcome: "aborted",
+          errorCategory: "aborted",
+        });
         throw abortError;
       }
       debugLog("provider.request_exception", {
@@ -3478,6 +3577,10 @@
         message: error && typeof error.message === "string" ? error.message : String(error || ""),
         stack: error?.stack || ""
       }, "error");
+      requestTracker?.complete?.({
+        outcome: "network_error",
+        errorCategory: "network",
+      });
       return createAnthropicErrorResponse(500, error && typeof error.message === "string" ? error.message : "自定义供应商协议转换失败。");
     }
   };

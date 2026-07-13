@@ -47,6 +47,17 @@ function inspectRuntime() {
       options: "globalThis.__CP_OPTIONS_DEBUG__",
       e2eArtifactDirectory: process.env.CLAW_E2E_ARTIFACT_DIR || "OS temporary directory",
     },
+    settingsBackup: {
+      kind: "claw-in-chrome-settings-backup",
+      schemaVersion: 1,
+      secretsIncludedByDefault: false,
+    },
+    providerObservability: {
+      storageKey: "providerObservabilityRecords",
+      maxRecords: 500,
+      maxAgeDays: 30,
+      localOnly: true,
+    },
   };
 }
 

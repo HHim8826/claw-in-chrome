@@ -9,6 +9,8 @@ shared/managed-policy.js
 shared/mermaid-renderer.js
 shared/custom-provider-models.js
 shared/custom-provider-settings.js
+shared/settings-backup.js
+shared/provider-observability.js
 visualizer/gif.js
 visualizer/gif.worker.js
 visualizer/gif_viewer.html
@@ -31,6 +33,7 @@ options/options-visualizer-launcher.js
 options/options-debug-logger.js
 options/options.html
 options/options-update-enhancer.js
+options/data-insights-options.js
 pages/pairing.html
 shared/provider-format-adapter.js
 background/service-worker-runtime.js

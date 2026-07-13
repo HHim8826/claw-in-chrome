@@ -9,6 +9,7 @@ const expectedLoaderImports = [
   "../shared/native-host-binding.js",
   "../shared/mcp-permission-popup-protocol.js",
   "../shared/custom-provider-models.js",
+  "../shared/provider-observability.js",
   "../shared/provider-format-adapter.js",
   "../shared/telemetry-disable.js",
   "../assets/service-worker.ts-H0DVM1LS.js",

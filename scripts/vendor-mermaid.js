@@ -20,22 +20,33 @@ if (packageJson.version !== expectedVersion) {
 
 const outputRoot = path.join(repoRoot, "src", "assets", "vendor");
 const copies = [
-  [
-    path.join(packageRoot, "dist", "mermaid.min.js"),
-    path.join(outputRoot, `mermaid-${expectedVersion}.min.js`),
-  ],
-  [
-    path.join(packageRoot, "LICENSE"),
-    path.join(outputRoot, "mermaid-LICENSE.txt"),
-  ],
+  {
+    sourcePath: path.join(packageRoot, "dist", "mermaid.min.js"),
+    outputPath: path.join(outputRoot, `mermaid-${expectedVersion}.min.js`),
+    text: false,
+  },
+  {
+    sourcePath: path.join(packageRoot, "LICENSE"),
+    outputPath: path.join(outputRoot, "mermaid-LICENSE.txt"),
+    text: true,
+  },
 ];
 
+function filesMatch(sourcePath, outputPath, text) {
+  if (!fs.existsSync(outputPath)) {
+    return false;
+  }
+  if (!text) {
+    return fs.readFileSync(sourcePath).equals(fs.readFileSync(outputPath));
+  }
+  const normalize = (value) => String(value).replace(/\r\n/g, "\n");
+  return normalize(fs.readFileSync(sourcePath, "utf8")) ===
+    normalize(fs.readFileSync(outputPath, "utf8"));
+}
+
 if (checkOnly) {
-  for (const [sourcePath, outputPath] of copies) {
-    if (
-      !fs.existsSync(outputPath) ||
-      !fs.readFileSync(sourcePath).equals(fs.readFileSync(outputPath))
-    ) {
+  for (const { sourcePath, outputPath, text } of copies) {
+    if (!filesMatch(sourcePath, outputPath, text)) {
       throw new Error(
         `Vendored Mermaid file is stale: ${path.relative(repoRoot, outputPath)}`,
       );
@@ -44,7 +55,7 @@ if (checkOnly) {
   console.log(`Vendored Mermaid ${expectedVersion} is current.`);
 } else {
   fs.mkdirSync(outputRoot, { recursive: true });
-  for (const [sourcePath, outputPath] of copies) {
+  for (const { sourcePath, outputPath } of copies) {
     fs.copyFileSync(sourcePath, outputPath);
   }
   console.log(`Vendored Mermaid ${expectedVersion}.`);

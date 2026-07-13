@@ -5,8 +5,10 @@ const vm = require("node:vm");
 
 const contractPath = path.join(__dirname, "..", "..", "src", "shared", "claw-contract.js");
 const adapterPath = path.join(__dirname, "..", "..", "src", "shared", "provider-format-adapter.js");
+const observabilityPath = path.join(__dirname, "..", "..", "src", "shared", "provider-observability.js");
 const contractSource = fs.readFileSync(contractPath, "utf8");
 const adapterSource = fs.readFileSync(adapterPath, "utf8");
+const observabilitySource = fs.readFileSync(observabilityPath, "utf8");
 
 async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
   const config = {
@@ -18,6 +20,9 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
     ...(options.config || {})
   };
   const upstreamCalls = [];
+  const storageState = {
+    providerObservabilityRecords: []
+  };
   const nativeFetch = async (input, init) => {
     upstreamCalls.push({
       url: String(input),
@@ -52,6 +57,14 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
         local: {
           async get(key) {
             if (typeof key === "string") {
+              if (key === "providerObservabilityRecords") {
+                if (typeof options.observabilityGet === "function") {
+                  return options.observabilityGet();
+                }
+                return {
+                  providerObservabilityRecords: storageState.providerObservabilityRecords
+                };
+              }
               return {
                 [key]: config
               };
@@ -59,6 +72,9 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
             return {
               customProviderConfig: config
             };
+          },
+          async set(changes) {
+            Object.assign(storageState, changes);
           }
         },
         onChanged: {
@@ -70,6 +86,9 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
   sandbox.globalThis = sandbox;
   vm.runInNewContext(contractSource, sandbox, {
     filename: "claw-contract.js"
+  });
+  vm.runInNewContext(observabilitySource, sandbox, {
+    filename: "provider-observability.js"
   });
   vm.runInNewContext(adapterSource, sandbox, {
     filename: "provider-format-adapter.js"
@@ -97,19 +116,41 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
     body: JSON.stringify(requestBody)
     }
   );
-  const response = await sandbox.fetch(request);
+  let response;
+  try {
+    response = await sandbox.fetch(request);
+  } catch (error) {
+    if (options.captureError) {
+      return {
+        error,
+        upstreamCalls,
+        measurements: storageState.providerObservabilityRecords
+      };
+    }
+    throw error;
+  }
   if (options.responseType === "text") {
+    const text = await response.text();
+    if (!options.skipObservabilityIdle) {
+      await sandbox.__CP_PROVIDER_OBSERVABILITY__.whenIdle();
+    }
     return {
       status: response.status,
-      text: await response.text(),
+      text,
       headers: Object.fromEntries(response.headers.entries()),
-      upstreamCalls
+      upstreamCalls,
+      measurements: storageState.providerObservabilityRecords
     };
+  }
+  const json = await response.json();
+  if (!options.skipObservabilityIdle) {
+    await sandbox.__CP_PROVIDER_OBSERVABILITY__.whenIdle();
   }
   return {
     status: response.status,
-    json: await response.json(),
-    upstreamCalls
+    json,
+    upstreamCalls,
+    measurements: storageState.providerObservabilityRecords
   };
 }
 
@@ -152,6 +193,166 @@ async function testOutputTextPartsSurviveOpenAIChatTransform() {
       text: "FOUND: 1\nSHOWING: 1\n---\nref_1 | textbox | Search | textbox | text match"
     }
   ]);
+}
+
+async function testSuccessfulProviderRequestRecordsSanitizedMeasurement() {
+  const result = await runAdapterWithPayload({
+    id: "chatcmpl-observability",
+    model: "gpt-5.4",
+    choices: [{
+      index: 0,
+      finish_reason: "stop",
+      message: { role: "assistant", content: "Measured response" }
+    }],
+    usage: {
+      prompt_tokens: 12,
+      completion_tokens: 4
+    }
+  }, {
+    config: {
+      id: "provider-main",
+      name: "Main provider",
+      apiKey: "sk-private"
+    }
+  });
+
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].profileId, "provider-main");
+  assert.equal(result.measurements[0].outcome, "success");
+  assert.equal(result.measurements[0].usage.inputTokens, 12);
+  assert.equal(result.measurements[0].usage.outputTokens, 4);
+  assert.equal(JSON.stringify(result.measurements).includes("sk-private"), false);
+  assert.equal(JSON.stringify(result.measurements).includes("Measured response"), false);
+}
+
+async function testProviderHttpErrorRecordsCategoryWithoutResponseBody() {
+  const result = await runAdapterWithUpstreamHandler(async () => new Response(
+    JSON.stringify({ error: { message: "private rate-limit response" } }),
+    {
+      status: 429,
+      headers: { "content-type": "application/json" }
+    }
+  ));
+
+  assert.equal(result.status, 429);
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].outcome, "http_error");
+  assert.equal(result.measurements[0].errorCategory, "rate_limit");
+  assert.equal(JSON.stringify(result.measurements).includes("private rate-limit response"), false);
+}
+
+async function testProviderNetworkErrorRecordsWithoutChangingErrorResponse() {
+  const networkError = new Error("private gateway address failed");
+  const result = await runAdapterWithUpstreamHandler(async () => {
+    throw networkError;
+  });
+
+  assert.equal(result.status, 500);
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].outcome, "network_error");
+  assert.equal(result.measurements[0].errorCategory, "network");
+  assert.equal(JSON.stringify(result.measurements).includes("private gateway address"), false);
+}
+
+async function testStreamingProviderUsageCompletesMeasurement() {
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.enqueue(encoder.encode(
+        'data: {"id":"chatcmpl-stream-metric","model":"gpt-5.4","choices":[{"index":0,"delta":{"role":"assistant","content":"Measured"},"finish_reason":null}]}\n\n'
+      ));
+      controller.enqueue(encoder.encode(
+        'data: {"id":"chatcmpl-stream-metric","model":"gpt-5.4","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":9,"completion_tokens":2}}\n\n'
+      ));
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    }
+  });
+  const result = await runAdapterWithUpstreamHandler(async () => new Response(stream, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" }
+  }), {
+    requestBody: {
+      model: "gpt-5.4",
+      max_tokens: 128,
+      stream: true,
+      messages: [{ role: "user", content: "Measure stream" }]
+    },
+    responseType: "text"
+  });
+
+  assert.match(result.text, /Measured/);
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].usage.inputTokens, 9);
+  assert.equal(result.measurements[0].usage.outputTokens, 2);
+}
+
+async function testInvalidProviderResponseRecordsInvalidResponseOutcome() {
+  const result = await runAdapterWithUpstreamHandler(async () => new Response(
+    "not-json-private-response",
+    {
+      status: 200,
+      headers: { "content-type": "text/plain" }
+    }
+  ));
+
+  assert.equal(result.status, 502);
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].outcome, "invalid_response");
+  assert.equal(result.measurements[0].errorCategory, "invalid_json");
+  assert.equal(JSON.stringify(result.measurements).includes("not-json-private-response"), false);
+}
+
+async function testStreamingAbortRecordsAbortedOutcome() {
+  const stream = new ReadableStream({
+    start(controller) {
+      controller.error(new DOMException("The operation was aborted.", "AbortError"));
+    }
+  });
+  const result = await runAdapterWithUpstreamHandler(async () => new Response(stream, {
+    status: 200,
+    headers: { "content-type": "text/event-stream" }
+  }), {
+    requestBody: {
+      model: "gpt-5.4",
+      max_tokens: 128,
+      stream: true,
+      messages: [{ role: "user", content: "Abort stream" }]
+    },
+    responseType: "text"
+  });
+
+  assert.equal(result.measurements.length, 1);
+  assert.equal(result.measurements[0].outcome, "aborted");
+  assert.equal(result.measurements[0].errorCategory, "aborted");
+}
+
+async function testSlowTelemetryStorageDoesNotDelayProviderResponse() {
+  const providerResult = runAdapterWithPayload({
+    id: "chatcmpl-fast-response",
+    model: "gpt-5.4",
+    choices: [{
+      index: 0,
+      finish_reason: "stop",
+      message: { role: "assistant", content: "Immediate response" }
+    }]
+  }, {
+    observabilityGet() {
+      return new Promise(function () {});
+    },
+    skipObservabilityIdle: true
+  });
+  const result = await Promise.race([
+    providerResult,
+    new Promise(function (_resolve, reject) {
+      setTimeout(function () {
+        reject(new Error("provider response waited for telemetry storage"));
+      }, 100);
+    })
+  ]);
+
+  assert.equal(result.status, 200);
+  assert.equal(result.json.content[0].text, "Immediate response");
 }
 
 async function testStringContentStillWorks() {
@@ -1705,6 +1906,12 @@ async function testDeepSeekDirectStreamReasoningContentIsConvertedToThinkingDelt
 }
 
 async function main() {
+  await testSuccessfulProviderRequestRecordsSanitizedMeasurement();
+  await testProviderHttpErrorRecordsCategoryWithoutResponseBody();
+  await testProviderNetworkErrorRecordsWithoutChangingErrorResponse();
+  await testStreamingProviderUsageCompletesMeasurement();
+  await testInvalidProviderResponseRecordsInvalidResponseOutcome();
+  await testStreamingAbortRecordsAbortedOutcome();
   await testOutputTextPartsSurviveOpenAIChatTransform();
   await testStringContentStillWorks();
   await testMessageLevelResponseTextFallbackWorks();
@@ -1737,6 +1944,7 @@ async function main() {
   await testDeepSeekReasoningStaysAttachedBeforeToolResult();
   await testDeepSeekStreamReasoningContentIsConvertedToThinking();
   await testDeepSeekDirectStreamReasoningContentIsConvertedToThinkingDelta();
+  await testSlowTelemetryStorageDoesNotDelayProviderResponse();
   console.log("provider-format-adapter find regression tests passed");
 }
 
