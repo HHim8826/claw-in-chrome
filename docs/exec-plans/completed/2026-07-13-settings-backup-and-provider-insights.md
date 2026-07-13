@@ -112,7 +112,7 @@ The feature is done only when every criterion below is satisfied:
 - [x] `npm run inspect:runtime` reports the schema and retention limits.
 - [x] The architecture and durable security and reliability docs match code.
 - [x] Review finds no generated bundle edit or manifest permission drift.
-- [ ] Task-owned changes are committed on the feature branch and pushed when
+- [x] Task-owned changes are committed on the feature branch and pushed when
       the branch is shareable.
 
 ## Evidence log
@@ -152,8 +152,7 @@ and unresolved risk here while executing the plan.
 - Final validation: `npm run validate:full` passed after review fixes. The
   headed extension E2E found the **Data and insights** panel and reported no
   Options or Visualizer console or page errors.
-- Git finalization: the first `git add` and `git commit` request was rejected by
-  desktop permission review because its review model was at capacity. Per the
-  rejection instruction, no workaround or repeat attempt was made without new
-  explicit user approval. The feature remains on the active plan until that
-  checkpoint and push are authorized.
+- Git finalization: after explicit user approval, task-owned changes were
+  committed as `7326b8e` (`Add settings portability and provider insights`).
+  The unrelated `.gitignore` workspace change remained unstaged. This plan is
+  completed on the feature branch before its final push to `origin`.
