@@ -45,8 +45,10 @@ Apply these rules to every change.
   page-local measurement-completion event.
 - `src/sidepanel/answer-provider-metrics.js` owns exact-ID attachment and
   presentation data for the compact metrics row below a provider answer. The
-  side-panel bundle exposes only the matching response ID as a semantic DOM
-  attribute; it does not own formatting or measurement logic.
+  side-panel bundle exposes the matching response ID only on a dedicated
+  React-owned footer anchor after visible answer content; it does not own
+  formatting or measurement logic. Session serialization preserves only the
+  bounded assistant message ID needed to restore this exact join.
 - Producers and consumers of a runtime message must use the same contract key.
 - A bundle patch must include a semantic anchor test and an update to
   `docs/recovery-model.md` when the recovered understanding changes.

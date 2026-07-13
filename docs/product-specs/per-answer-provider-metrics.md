@@ -89,9 +89,14 @@ window isn't positive.
 
 Every request tracker owns a random measurement ID. The adapter replaces the
 transformed response message ID with this correlation ID. The readable bundle
-anchor exposes the same value as `data-cp-provider-request-id` on the rendered
-answer group. The persisted measurement uses the same ID, so concurrent
-requests and reversed DOM/storage arrival order remain deterministic.
+anchor exposes the same value as `data-cp-provider-request-id` on a dedicated
+React-owned footer after visible answer content. A tool group exposes the
+footer only after it completes with visible final text and no newer visible
+assistant answer exists before the next real user prompt. Session serialization
+preserves this bounded assistant ID. The footer uses the ID of the assistant
+message that owns the final visible text, not a later tool-only message. The
+persisted measurement uses the same ID, so concurrent requests, restored
+sessions, and reversed DOM/storage arrival order remain deterministic.
 
 `claw-contract.js` owns the page-local event contract:
 
@@ -134,7 +139,9 @@ The feature is accepted when all of these behaviors are proven:
 4. Streaming OpenAI Chat and Responses paths mark the first meaningful delta;
    non-streaming paths keep first-token timing unavailable.
 5. A newly completed answer receives one compact metrics row with model,
-   first-token latency, Token/s, total Tokens, and total duration.
+   first-token latency, Token/s, total Tokens, and total duration below its
+   visible content. Intermediate and superseded tool groups don't receive a
+   row, and each separator stays attached to its metric at narrow widths.
 6. Correlation tests prove metric-first, DOM-first, concurrent, duplicate,
    cross-context-storage, expiry, and legacy-unmatched behavior.
 7. English, Simplified Chinese, and Traditional Chinese labels are covered by
@@ -156,13 +163,16 @@ and packaged Options and side-panel stylesheets own presentation.
 
 The generated message renderer needs one minimal semantic anchor because no
 readable layer can otherwise expose the response ID in DOM. The patch adds only
-`data-cp-provider-request-id` to answer-group wrappers, includes an anchor
-regression test, and is recorded in `docs/recovery-model.md`.
+an explicit footer anchor with `data-cp-provider-request-id` after visible
+answer content, includes an anchor regression test, and is recorded in
+`docs/recovery-model.md`. The readable adapter mutates only this anchor, not a
+React-owned answer wrapper.
 
 Focused unit tests cover measurement math, adapter timing, and DOM behavior.
-The headed extension E2E test provides computed-style and live attachment
-evidence. Release and architecture inventories must include every new runtime
-file.
+The headed extension E2E test restores real direct-answer and tool-group session
+fixtures, then provides renderer-order, uniqueness, computed-style, and live
+attachment evidence. Release and architecture inventories must include every
+new runtime file.
 
 ## Risks and rollback
 
