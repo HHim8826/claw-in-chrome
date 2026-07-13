@@ -312,7 +312,11 @@ async function testExtensionPagesLoad() {
     const optionsInsightsDesktop = await optionsPage.evaluate(() => {
       const panel = document.querySelector("#cp-data-insights-root");
       const grid = panel.querySelector(".cp-data-insights-grid");
+      const metric = panel.querySelector(".cp-data-insights-metric");
+      const metricValue = panel.querySelector(".cp-data-insights-metric-value");
       const style = getComputedStyle(panel);
+      const metricStyle = getComputedStyle(metric);
+      const metricValueStyle = getComputedStyle(metricValue);
       return {
         parentId: panel.parentElement?.id || "",
         backgroundColor: style.backgroundColor,
@@ -320,12 +324,23 @@ async function testExtensionPagesLoad() {
         panelWidth: panel.getBoundingClientRect().width,
         viewportWidth: document.documentElement.clientWidth,
         gridDisplay: getComputedStyle(grid).display,
+        metricBorderColor: metricStyle.borderColor,
+        metricBorderRadius: Number.parseFloat(metricStyle.borderRadius),
+        metricValueFontSize: metricValueStyle.fontSize,
+        metricValueFontWeight: Number(metricValueStyle.fontWeight),
       };
     });
     assert.equal(optionsInsightsDesktop.parentId, "cp-options-debug-anchor");
     assert.notEqual(optionsInsightsDesktop.backgroundColor, "rgba(0, 0, 0, 0)");
     assert.notEqual(optionsInsightsDesktop.borderStyle, "none");
     assert.equal(optionsInsightsDesktop.gridDisplay, "grid");
+    assert.equal(optionsInsightsDesktop.metricBorderRadius >= 14, true);
+    assert.equal(optionsInsightsDesktop.metricValueFontSize, "14px");
+    assert.equal(optionsInsightsDesktop.metricValueFontWeight <= 500, true);
+    const metricBorderAlpha = Number.parseFloat(
+      optionsInsightsDesktop.metricBorderColor.match(/,\s*([\d.]+)\)$/)?.[1] ?? "1",
+    );
+    assert.equal(metricBorderAlpha >= 0.1 && metricBorderAlpha < 0.4, true);
     assert.equal(
       optionsInsightsDesktop.panelWidth <= optionsInsightsDesktop.viewportWidth,
       true,
@@ -422,16 +437,24 @@ async function testExtensionPagesLoad() {
 
 
 
+    const sidepanelTargetTabId = await visualizerPage.evaluate(async () => {
+      return (await chrome.tabs.getCurrent())?.id ?? null;
+    });
+    assert.equal(Number.isFinite(sidepanelTargetTabId), true);
     const sidepanelPage = await contextInfo.context.newPage();
     const sidepanelResult = await capturePageErrors(sidepanelPage, async () => {
-      await sidepanelPage.goto(`chrome-extension://${extensionId}/sidepanel/sidepanel.html`, {
+      await sidepanelPage.goto(
+        `chrome-extension://${extensionId}/sidepanel/sidepanel.html?tabId=${sidepanelTargetTabId}`,
+        {
         waitUntil: "domcontentloaded"
-      });
+        },
+      );
       await sidepanelPage.waitForFunction(() => {
         return Boolean(document.querySelector("#root")) &&
           Boolean(globalThis.__CP_GITHUB_UPDATE_SHARED__) &&
           Boolean(globalThis.CustomProviderModels) &&
-          Boolean(globalThis.__CP_ANSWER_PROVIDER_METRICS__);
+          Boolean(globalThis.__CP_ANSWER_PROVIDER_METRICS__) &&
+          Boolean(globalThis.__CP_SIDEPANEL_DEBUG__);
       }, null, {
         timeout: 15000
       });
@@ -446,16 +469,285 @@ async function testExtensionPagesLoad() {
     assert.equal(sidepanelManifest.runtimeId, extensionId);
     assert.equal(sidepanelManifest.name, manifest.name);
     assert.equal(sidepanelManifest.version, manifest.version);
+    const sidepanelScope = await sidepanelPage.evaluate(async () => {
+      const debug = globalThis.__CP_SIDEPANEL_DEBUG__;
+      for (let attempt = 0; attempt < 150; attempt += 1) {
+        const entries = await debug.read();
+        const scopeEntry = [...entries].reverse().find(entry => (
+          entry.sessionId === debug.sessionId &&
+          entry.type === "session.scope_resolved" &&
+          entry.payload?.scopeId
+        ));
+        if (scopeEntry) {
+          return scopeEntry.payload;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      return null;
+    });
+    assert.equal(Boolean(sidepanelScope?.scopeId), true);
+    await sidepanelPage.goto("about:blank", { waitUntil: "domcontentloaded" });
+    await optionsPage.evaluate(async ({ scope, targetTabId }) => {
+      const now = Date.now();
+      const sessionId = "e2e-provider-metrics-session";
+      const messages = [{
+        role: "user",
+        content: [{ type: "text", text: "Render a tool-assisted answer" }],
+      }, {
+        id: "e2e-tool-progress",
+        role: "assistant",
+        content: [{
+          type: "tool_use",
+          id: "e2e-tool-use",
+          name: "read_page",
+          input: { depth: 1 },
+        }],
+      }, {
+        role: "user",
+        content: [{
+          type: "tool_result",
+          tool_use_id: "e2e-tool-use",
+          content: [{ type: "text", text: "Tool result" }],
+        }],
+      }, {
+        id: "e2e-tool-provider-request",
+        role: "assistant",
+        content: [{
+          type: "tool_use",
+          id: "e2e-turn-answer-start",
+          name: "turn_answer_start",
+          input: {},
+        }, {
+          type: "text",
+          text: "E2E tool provider answer",
+        }],
+      }];
+      const meta = {
+        id: sessionId,
+        scopeId: scope.scopeId,
+        title: "Provider metrics renderer fixture",
+        updatedAt: now,
+        createdAt: now - 1000,
+        selectedModel: "provider-model",
+        currentUrl: "https://example.com/provider-metrics",
+        messageCount: messages.length,
+      };
+      const snapshot = { scopeId: scope.scopeId, meta, messages };
+      const measurement = id => ({
+        id,
+        startedAt: now,
+        model: "provider-model",
+        outcome: "success",
+        firstTokenLatencyMs: 842,
+        totalDurationMs: 2700,
+        usage: { inputTokens: 100, outputTokens: 40 },
+      });
+      const providerProfile = {
+        id: "e2e-provider",
+        name: "E2E provider",
+        format: "openai_chat",
+        baseUrl: "https://provider.example/v1",
+        apiKey: "e2e-key",
+        defaultModel: "provider-model",
+        fastModel: "provider-model",
+        reasoningEffort: "medium",
+        maxOutputTokens: 4096,
+        contextWindow: 128000,
+        fetchedModels: [],
+      };
+      await chrome.storage.local.set({
+        [`claw.chat.scopes.${scope.scopeId}.index`]: [meta],
+        [`claw.chat.scopes.${scope.scopeId}.byId.${sessionId}`]: snapshot,
+        [`claw.chat.scopes.${scope.scopeId}.activeSession`]: {
+          scopeId: scope.scopeId,
+          sessionId,
+          viewedAt: now,
+          mainTabId: Number(scope.mainTabId ?? targetTabId),
+          chromeGroupId: Number.isFinite(Number(scope.chromeGroupId))
+            ? Number(scope.chromeGroupId)
+            : null,
+        },
+        providerObservabilityRecords: [measurement("e2e-tool-provider-request")],
+        customProviderProfiles: [providerProfile],
+        customProviderActiveProfileId: providerProfile.id,
+        customProviderConfig: {
+          name: providerProfile.name,
+          format: providerProfile.format,
+          baseUrl: providerProfile.baseUrl,
+          apiKey: providerProfile.apiKey,
+          defaultModel: providerProfile.defaultModel,
+          fastModel: providerProfile.fastModel,
+          reasoningEffort: providerProfile.reasoningEffort,
+          maxOutputTokens: providerProfile.maxOutputTokens,
+          contextWindow: providerProfile.contextWindow,
+          fetchedModels: providerProfile.fetchedModels,
+        },
+        selectedModel: providerProfile.defaultModel,
+        browserControlPermissionAccepted: true,
+      });
+    }, { scope: sidepanelScope, targetTabId: sidepanelTargetTabId });
+    await sidepanelPage.goto(
+      `chrome-extension://${extensionId}/sidepanel/sidepanel.html?tabId=${sidepanelTargetTabId}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    try {
+      await sidepanelPage.waitForFunction(() => (
+        document.body.textContent.includes("E2E tool provider answer")
+      ), null, { timeout: 15000 });
+    } catch (error) {
+      console.log("SIDEPANEL HYDRATE DEBUG:", await sidepanelPage.evaluate(async () => ({
+        body: document.body.textContent,
+        logs: (await globalThis.__CP_SIDEPANEL_DEBUG__.read()).slice(-20),
+        storageKeys: Object.keys(await chrome.storage.local.get()).filter(key => (
+          key.startsWith("claw.chat.scopes.") || key === "providerObservabilityRecords"
+        )),
+      })));
+      throw error;
+    }
+    try {
+      await sidepanelPage.waitForSelector(
+        '[data-cp-provider-request-id="e2e-tool-provider-request"] [data-cp-provider-metrics-row="true"]',
+        { timeout: 15000 },
+      );
+    } catch (error) {
+      console.log("TOOL METRICS DOM DEBUG:", await sidepanelPage.evaluate(() => ({
+        anchors: Array.from(document.querySelectorAll("[data-cp-provider-metrics-anchor]"))
+          .map(element => element.outerHTML),
+        rows: Array.from(document.querySelectorAll("[data-cp-provider-metrics-row]"))
+          .map(element => element.outerHTML),
+      })));
+      throw error;
+    }
+    const rendererAnchorEvidence = await sidepanelPage.evaluate(() => {
+      function evidenceFor(answerText, requestId) {
+        const textElement = Array.from(document.querySelectorAll("body *")).find(element => (
+          element.children.length === 0 && element.textContent?.trim() === answerText
+        ));
+        const anchors = Array.from(document.querySelectorAll(
+          `[data-cp-provider-request-id="${requestId}"]`,
+        ));
+        const anchor = anchors[0];
+        return {
+          anchorCount: anchors.length,
+          rowCount: anchor?.querySelectorAll("[data-cp-provider-metrics-row='true']").length ?? 0,
+          anchorFollowsText: Boolean(
+            textElement &&
+            anchor &&
+            textElement.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING
+          ),
+        };
+      }
+      return {
+        tool: evidenceFor("E2E tool provider answer", "e2e-tool-provider-request"),
+        intermediateAnchorCount: document.querySelectorAll(
+          '[data-cp-provider-request-id="e2e-tool-progress"]',
+        ).length,
+      };
+    });
+    assert.deepEqual(rendererAnchorEvidence.tool, {
+      anchorCount: 1,
+      rowCount: 1,
+      anchorFollowsText: true,
+    });
+    assert.equal(rendererAnchorEvidence.intermediateAnchorCount, 0);
+    await sidepanelPage.goto("about:blank", { waitUntil: "domcontentloaded" });
+    await optionsPage.evaluate(async ({ scope, targetTabId }) => {
+      const now = Date.now();
+      const sessionId = "e2e-provider-metrics-session";
+      const messages = [{
+        role: "user",
+        content: [{ type: "text", text: "Render a direct answer" }],
+      }, {
+        id: "e2e-single-provider-request",
+        role: "assistant",
+        content: [{ type: "text", text: "E2E single provider answer" }],
+      }];
+      const stored = await chrome.storage.local.get([
+        `claw.chat.scopes.${scope.scopeId}.index`,
+        `claw.chat.scopes.${scope.scopeId}.byId.${sessionId}`,
+      ]);
+      const previousSnapshot = stored[`claw.chat.scopes.${scope.scopeId}.byId.${sessionId}`];
+      const meta = {
+        ...previousSnapshot.meta,
+        updatedAt: now,
+        messageCount: messages.length,
+      };
+      await chrome.storage.local.set({
+        [`claw.chat.scopes.${scope.scopeId}.index`]: [meta],
+        [`claw.chat.scopes.${scope.scopeId}.byId.${sessionId}`]: {
+          ...previousSnapshot,
+          meta,
+          messages,
+        },
+        [`claw.chat.scopes.${scope.scopeId}.activeSession`]: {
+          scopeId: scope.scopeId,
+          sessionId,
+          viewedAt: now,
+          mainTabId: Number(scope.mainTabId ?? targetTabId),
+          chromeGroupId: Number.isFinite(Number(scope.chromeGroupId))
+            ? Number(scope.chromeGroupId)
+            : null,
+        },
+        providerObservabilityRecords: [{
+          id: "e2e-single-provider-request",
+          startedAt: now,
+          model: "provider-model",
+          outcome: "success",
+          firstTokenLatencyMs: 842,
+          totalDurationMs: 2700,
+          usage: { inputTokens: 100, outputTokens: 40 },
+        }],
+      });
+    }, { scope: sidepanelScope, targetTabId: sidepanelTargetTabId });
+    await sidepanelPage.goto(
+      `chrome-extension://${extensionId}/sidepanel/sidepanel.html?tabId=${sidepanelTargetTabId}`,
+      { waitUntil: "domcontentloaded" },
+    );
+    await sidepanelPage.waitForFunction(() => (
+      document.body.textContent.includes("E2E single provider answer")
+    ), null, { timeout: 15000 });
+    await sidepanelPage.waitForSelector(
+      '[data-cp-provider-request-id="e2e-single-provider-request"] [data-cp-provider-metrics-row="true"]',
+      { timeout: 15000 },
+    );
+    const singleRendererEvidence = await sidepanelPage.evaluate(() => {
+      const answerText = "E2E single provider answer";
+      const textElement = Array.from(document.querySelectorAll("body *")).find(element => (
+        element.children.length === 0 && element.textContent?.trim() === answerText
+      ));
+      const anchors = Array.from(document.querySelectorAll(
+        '[data-cp-provider-request-id="e2e-single-provider-request"]',
+      ));
+      const anchor = anchors[0];
+      return {
+        anchorCount: anchors.length,
+        rowCount: anchor?.querySelectorAll("[data-cp-provider-metrics-row='true']").length ?? 0,
+        anchorFollowsText: Boolean(
+          textElement &&
+          anchor &&
+          textElement.compareDocumentPosition(anchor) & Node.DOCUMENT_POSITION_FOLLOWING
+        ),
+      };
+    });
+    assert.deepEqual(singleRendererEvidence, {
+      anchorCount: 1,
+      rowCount: 1,
+      anchorFollowsText: true,
+    });
     await sidepanelPage.setViewportSize({ width: 320, height: 800 });
     await sidepanelPage.evaluate(() => {
       const answer = document.createElement("section");
       answer.id = "cp-e2e-provider-answer";
-      answer.setAttribute("data-cp-provider-request-id", "cp-e2e-request");
       answer.style.width = "100%";
       const content = document.createElement("p");
       content.id = "cp-e2e-provider-answer-content";
       content.textContent = "Synthetic provider answer";
       answer.appendChild(content);
+      const anchor = document.createElement("div");
+      anchor.className = "cp-answer-provider-metrics-anchor";
+      anchor.setAttribute("data-cp-provider-metrics-anchor", "true");
+      anchor.setAttribute("data-cp-provider-request-id", "cp-e2e-request");
+      answer.appendChild(anchor);
       document.body.appendChild(answer);
       dispatchEvent(new CustomEvent("cp:provider-measurement-complete", {
         detail: {
@@ -473,7 +765,7 @@ async function testExtensionPagesLoad() {
       }));
     });
     await sidepanelPage.waitForSelector(
-      "#cp-e2e-provider-answer > [data-cp-provider-metrics-row='true']",
+      "#cp-e2e-provider-answer > [data-cp-provider-metrics-anchor='true'] > [data-cp-provider-metrics-row='true']",
       { timeout: 15000 },
     );
     for (const scenario of [
@@ -486,8 +778,10 @@ async function testExtensionPagesLoad() {
         document.documentElement.dataset.mode = nextScenario.mode;
         const answer = document.querySelector("#cp-e2e-provider-answer");
         const content = document.querySelector("#cp-e2e-provider-answer-content");
+        const anchor = answer.querySelector("[data-cp-provider-metrics-anchor='true']");
         const row = answer.querySelector("[data-cp-provider-metrics-row='true']");
         const rowRect = row.getBoundingClientRect();
+        const rowStyle = getComputedStyle(row);
         const model = row.querySelector("[data-cp-provider-model='true']");
         const metricRects = Array.from(
           row.querySelectorAll(".cp-answer-provider-metrics-value"),
@@ -502,29 +796,56 @@ async function testExtensionPagesLoad() {
             clientWidth: element.clientWidth,
           };
         });
+        const metricItems = Array.from(
+          row.querySelectorAll(".cp-answer-provider-metrics-item"),
+        ).map((element) => {
+          const separatorRect = element.firstElementChild.getBoundingClientRect();
+          const valueRect = element.lastElementChild.getBoundingClientRect();
+          return {
+            right: element.getBoundingClientRect().right,
+            separatorTop: separatorRect.top,
+            valueTop: valueRect.top,
+          };
+        });
         return {
           ...nextScenario,
           rowCount: answer.querySelectorAll("[data-cp-provider-metrics-row='true']").length,
-          isLastChild: answer.lastElementChild === row,
+          anchorIsLastChild: answer.lastElementChild === anchor,
+          rowIsInsideAnchor: row.parentElement === anchor,
           isBelowAnswer: rowRect.top >= content.getBoundingClientRect().bottom,
           rowBottom: rowRect.bottom,
           rowRight: rowRect.right,
           viewportWidth: document.documentElement.clientWidth,
           bodyScrollWidth: document.body.scrollWidth,
-          overflow: getComputedStyle(row).overflow,
+          overflow: rowStyle.overflow,
+          fontMatchesUi: rowStyle.fontFamily === getComputedStyle(document.body).fontFamily,
+          marginTop: Number.parseFloat(rowStyle.marginTop),
+          paddingTop: Number.parseFloat(rowStyle.paddingTop),
+          borderTopStyle: rowStyle.borderTopStyle,
           title: row.title,
           modelTitle: model.title,
           modelIsTruncated: model.scrollWidth > model.clientWidth,
           metricRects,
+          metricItems,
         };
       }, scenario);
       assert.equal(metricsEvidence.rowCount, 1);
-      assert.equal(metricsEvidence.isLastChild, true);
+      assert.equal(metricsEvidence.anchorIsLastChild, true);
+      assert.equal(metricsEvidence.rowIsInsideAnchor, true);
       assert.equal(metricsEvidence.isBelowAnswer, true);
       assert.equal(metricsEvidence.rowRight <= metricsEvidence.viewportWidth, true);
       assert.equal(metricsEvidence.bodyScrollWidth <= metricsEvidence.viewportWidth, true);
       assert.equal(metricsEvidence.overflow, "hidden");
+      assert.equal(metricsEvidence.fontMatchesUi, true);
+      assert.equal(metricsEvidence.marginTop >= 8, true);
+      assert.equal(metricsEvidence.paddingTop >= 8, true);
+      assert.notEqual(metricsEvidence.borderTopStyle, "none");
       assert.equal(metricsEvidence.metricRects.length, 4);
+      assert.equal(metricsEvidence.metricItems.length, 4);
+      assert.equal(metricsEvidence.metricItems.every(item => (
+        item.right <= metricsEvidence.viewportWidth &&
+        Math.abs(item.separatorTop - item.valueTop) < 1
+      )), true);
       assert.equal(metricsEvidence.metricRects.every(rect => (
         rect.width > 0 &&
         rect.height > 0 &&

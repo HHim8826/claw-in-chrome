@@ -80,13 +80,21 @@ Direct bundle patches require stronger evidence than readable module changes.
 4. Run `npm run validate:full`.
 5. Update this document when a new stable seam or ownership boundary emerges.
 
-The side-panel message renderer has one narrow provider-metrics patch. Normal
-assistant wrappers and tool-group wrappers expose the final assistant message
-ID as `data-cp-provider-request-id`. The value is a random correlation key
-created by `provider-observability.js`; the generated bundle does not receive
-token math, storage access, localization, or presentation logic. The
-`deobfuscation-anchors.regression.test.js` assertions protect both render
-paths.
+The side-panel message renderer has one narrow provider-metrics patch. A normal
+assistant answer exposes a React-owned footer anchor only after visible answer
+content. A tool group exposes the same anchor only after it completes with
+visible final text and no newer visible assistant answer exists before the next
+real user prompt. The anchor carries the ID of the assistant message that owns
+the final visible text as `data-cp-provider-request-id`; a later tool-only
+assistant message can't replace it. Outer React wrappers remain unmodified.
+Session serialization preserves this bounded assistant ID so restored sessions
+retain the exact join. This ownership prevents React reconciliation from moving
+an externally inserted row above the answer. It also prevents intermediate or
+superseded tool groups from rendering duplicate rows. The value is a random
+correlation key created by
+`provider-observability.js`; the generated bundle does not receive token math,
+storage access, localization, or presentation logic. The
+`deobfuscation-anchors.regression.test.js` assertions protect both render paths.
 
 ## Critical workflows
 

@@ -37004,6 +37004,7 @@ const sk = a.memo(function ({
       return e;
     });
     const a = s && !r;
+    const I = n.some(e => e.type === "text" && e.text?.trim());
     return l.jsx("div", {
       className: Le("flex items-start", "group"),
       children: l.jsxs("div", {
@@ -37051,6 +37052,11 @@ const sk = a.memo(function ({
             })
             })]
           })
+        }), I && e.id && l.jsx("div", {
+          // 语义锚点：普通 assistant footer 指标锚点只在可见文字后渲染。
+          className: "cp-answer-provider-metrics-anchor",
+          "data-cp-provider-metrics-anchor": "true",
+          "data-cp-provider-request-id": e.id
         })]
       })
     });
@@ -37089,6 +37095,25 @@ const rk = ({
 };
 const __cpSidepanelBuildAssistantTimelineGroups = Yw;
 // 语义锚点：Yw(...) 只处理单条 assistant 消息内部的 block 组装；tool_group 路径不会经过这里，而是走 ok -> ik。
+function __cpHasLaterVisibleAssistantBeforeNextUser(e, t) {
+  const n = Array.isArray(e) ? e.slice(Number(t) + 1) : [];
+  const r = n.findIndex(e => s1(e));
+  const i = r >= 0 ? n.slice(0, r) : n;
+  return i.some(e => {
+    if (e?.role !== "assistant") {
+      return false;
+    }
+    if (typeof e.content === "string") {
+      return !!e.content.trim();
+    }
+    return Array.isArray(e.content) && e.content.some(e => e?.type === "text" && e.text?.trim());
+  });
+}
+function __cpResolveFinalTextAssistantId(e, t) {
+  const n = Array.isArray(e) ? [...e].reverse().find(e => e?.type === "text" && e.block?.text?.trim()) : null;
+  const r = n && Array.isArray(t) ? t[n.messageIndex] : null;
+  return r?.role === "assistant" ? String(r.id || "").trim().slice(0, 120) : "";
+}
 const ik = a.memo(function ({
   messages: e,
   allMessages: n,
@@ -37265,21 +37290,29 @@ const ik = a.memo(function ({
     defaultMessage: "Working",
     id: "gAR0atqpRn"
   });
-  return l.jsx(Kx, {
-    blocks: f,
-    isStreaming: u,
-    statusText: j,
-    turnIsOver: M,
-    renderBlock: b,
-    // 语义锚点：ik(...) 当前不会额外传 actionedToolIds / isToolAwaitingInput。
-    // 所以最后一组时间线里的“等待输入”主要靠 tool_use 自带 approval/mcp_auth_required/AskUserQuestion 字段兜底识别。
-    // 语义锚点：ik(...) 固定把 Kx 切到 fadeOnStatus；状态文案变化会把最后一组时间线切成新的可见阶段。
-    // 语义锚点：当前活跃执行时间线固定走 fadeOnStatus，不使用 collapse，也不传 actionedToolIds/isToolAwaitingInput/streamingMinHeight。
-    toolTransition: "fadeOnStatus",
-    blocksAfterTimeline: g,
-    renderBlockAfterTimeline: w,
-    onStatusDisplayVisibilityChange: S,
-    statusPillClassName: "pb-1"
+  const A = __cpResolveFinalTextAssistantId(g, n);
+  return l.jsxs(l.Fragment, {
+    children: [l.jsx(Kx, {
+      blocks: f,
+      isStreaming: u,
+      statusText: j,
+      turnIsOver: M,
+      renderBlock: b,
+      // 语义锚点：ik(...) 当前不会额外传 actionedToolIds / isToolAwaitingInput。
+      // 所以最后一组时间线里的“等待输入”主要靠 tool_use 自带 approval/mcp_auth_required/AskUserQuestion 字段兜底识别。
+      // 语义锚点：ik(...) 固定把 Kx 切到 fadeOnStatus；状态文案变化会把最后一组时间线切成新的可见阶段。
+      // 语义锚点：当前活跃执行时间线固定走 fadeOnStatus，不使用 collapse，也不传 actionedToolIds/isToolAwaitingInput/streamingMinHeight。
+      toolTransition: "fadeOnStatus",
+      blocksAfterTimeline: g,
+      renderBlockAfterTimeline: w,
+      onStatusDisplayVisibilityChange: S,
+      statusPillClassName: "pb-1"
+    }), C && M && !__cpHasLaterVisibleAssistantBeforeNextUser(n, i) && A && l.jsx("div", {
+      // 语义锚点：tool_group footer 指标锚点只在完成且含 final text 時渲染。
+      className: "cp-answer-provider-metrics-anchor",
+      "data-cp-provider-metrics-anchor": "true",
+      "data-cp-provider-request-id": A
+    })]
   });
 });
 const __cpSidepanelRenderBrowserToolTimelineCard = $b;
@@ -37345,10 +37378,7 @@ const ok = a.memo(function ({
       const i = m === e.length - 1;
       const o = a.messages[a.messages.length - 1];
       const c = i && o?.role === "assistant" && n;
-      const A = [...a.messages].reverse().find(e => e?.role === "assistant");
       return l.jsx("div", {
-        // 语义锚点：自定义供应商请求 ID 只作为回答与本机观测指标的精确关联键。
-        "data-cp-provider-request-id": A?.id,
         children: l.jsx(ik, {
           messages: a.messages,
           allMessages: t,
@@ -37399,8 +37429,6 @@ const ok = a.memo(function ({
     const C = v === g;
     return l.jsx("div", {
       className: k ? "mb-5" : "",
-      // 语义锚点：普通 assistant 回答暴露与 provider measurement 相同的安全随机 ID。
-      "data-cp-provider-request-id": b ? y.id : undefined,
       ref: (() => {
         if (C) {
           return o.lastHumanMessage;
@@ -92462,6 +92490,12 @@ function __cpSerializeSessionMessage(e) {
     role: t,
     content: n
   };
+  if (t === "assistant") {
+    const t = String(e.id || "").trim().slice(0, 120);
+    if (t) {
+      s.id = t;
+    }
+  }
   if (e._synthetic === true) {
     s._synthetic = true;
   }

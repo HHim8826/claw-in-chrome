@@ -8,6 +8,7 @@
   const EVENT_NAME = contract.MEASUREMENT_COMPLETE_EVENT || "cp:provider-measurement-complete";
   const EVENT_VERSION = Number(contract.EVENT_VERSION) || 1;
   const REQUEST_ID_ATTRIBUTE = "data-cp-provider-request-id";
+  const ANCHOR_ATTRIBUTE = "data-cp-provider-metrics-anchor";
   const PENDING_MAX_AGE_MS = 5 * 60 * 1000;
   const pending = new Map();
   const expiredIds = new Set();
@@ -104,7 +105,7 @@
   }
 
   function findAnswers(requestId) {
-    return Array.from(document.querySelectorAll(`[${REQUEST_ID_ATTRIBUTE}]`)).filter(function (element) {
+    return Array.from(document.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)).filter(function (element) {
       return element.getAttribute(REQUEST_ID_ATTRIBUTE) === requestId;
     });
   }
@@ -139,12 +140,6 @@
   function renderRow(row, formatted) {
     const children = [];
     formatted.parts.forEach(function (part, index) {
-      if (index > 0) {
-        const separator = document.createElement("span");
-        separator.className = "cp-answer-provider-metrics-separator";
-        separator.textContent = " · ";
-        children.push(separator);
-      }
       const item = document.createElement("span");
       item.className = index === 0
         ? "cp-answer-provider-metrics-model"
@@ -153,8 +148,17 @@
       if (index === 0) {
         item.setAttribute("data-cp-provider-model", "true");
         item.title = formatted.model;
+        children.push(item);
+        return;
       }
-      children.push(item);
+      const metricItem = document.createElement("span");
+      metricItem.className = "cp-answer-provider-metrics-item";
+      const separator = document.createElement("span");
+      separator.className = "cp-answer-provider-metrics-separator";
+      separator.textContent = " · ";
+      metricItem.appendChild(separator);
+      metricItem.appendChild(item);
+      children.push(metricItem);
     });
     row.title = formatted.model;
     row.replaceChildren(...children);

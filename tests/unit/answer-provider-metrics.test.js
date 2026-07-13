@@ -56,10 +56,19 @@ function createHarness(options = {}) {
   runScriptInSandbox(observabilityPath, sandbox);
   runScriptInSandbox(metricsPath, sandbox);
 
-  function addAnswer(id) {
+  function addAnswer(id, options = {}) {
     const answer = document.createElement("section");
-    if (id) {
+    const content = document.createElement("div");
+    content.setAttribute("data-cp-answer-body", "true");
+    content.textContent = "Assistant answer";
+    answer.appendChild(content);
+    if (id && options.legacyWrapper) {
       answer.setAttribute("data-cp-provider-request-id", id);
+    } else if (id) {
+      const anchor = document.createElement("div");
+      anchor.setAttribute("data-cp-provider-metrics-anchor", "true");
+      anchor.setAttribute("data-cp-provider-request-id", id);
+      answer.appendChild(anchor);
     }
     document.body.appendChild(answer);
     return answer;
@@ -72,7 +81,7 @@ function createHarness(options = {}) {
   }
 
   function rows(answer) {
-    return answer.children.filter(child => child.dataset.cpProviderMetricsRow === "true");
+    return answer.querySelectorAll("[data-cp-provider-metrics-row]");
   }
 
   return {
@@ -102,7 +111,24 @@ async function testBothArrivalOrdersAndDuplicatesUseExactId() {
   assert.equal(domFirst.rows(answerB).length, 0);
   domFirst.dispatchMetric(measurement("request-b"));
   assert.equal(domFirst.rows(answerB).length, 1);
-  assert.equal(answerB.lastChild, domFirst.rows(answerB)[0], "metrics must sit below the answer");
+  const answerAnchor = answerB.querySelector("[data-cp-provider-metrics-anchor]");
+  assert.equal(answerB.lastChild, answerAnchor, "metrics anchor must follow the answer body");
+  assert.equal(answerAnchor.lastChild, domFirst.rows(answerB)[0], "metrics must mount inside the footer anchor");
+}
+
+async function testLegacyReactWrapperIsNotMutated() {
+  const harness = createHarness();
+  const legacyWrapper = harness.addAnswer("request-legacy-wrapper", {
+    legacyWrapper: true,
+  });
+
+  harness.dispatchMetric(measurement("request-legacy-wrapper"));
+
+  assert.equal(
+    harness.rows(legacyWrapper).length,
+    0,
+    "metrics must wait for the dedicated footer anchor instead of mutating a React wrapper",
+  );
 }
 
 async function testConcurrencyVersionExpiryAndLegacyProtection() {
@@ -152,6 +178,14 @@ async function testFormattingLocalizationAndUnavailableStreamingMetrics() {
   assert.equal(row.title, "model-main");
   assert.equal(row.children[0].dataset.cpProviderModel, "true");
   assert.equal(row.children[0].title, "model-main");
+  const metricItems = row.children.slice(1);
+  assert.equal(metricItems.length, 4);
+  for (const metricItem of metricItems) {
+    assert.equal(metricItem.className, "cp-answer-provider-metrics-item");
+    assert.equal(metricItem.children.length, 2);
+    assert.equal(metricItem.children[0].className, "cp-answer-provider-metrics-separator");
+    assert.equal(metricItem.children[1].className, "cp-answer-provider-metrics-value");
+  }
 
   const traditional = createHarness({ locale: "zh-TW" });
   const zhTwAnswer = traditional.addAnswer("request-zh-tw");
@@ -204,6 +238,7 @@ async function testStoredLocaleOverridesStaticHtmlLanguage() {
 
 async function main() {
   await testBothArrivalOrdersAndDuplicatesUseExactId();
+  await testLegacyReactWrapperIsNotMutated();
   await testConcurrencyVersionExpiryAndLegacyProtection();
   await testFormattingLocalizationAndUnavailableStreamingMetrics();
   await testStoredMeasurementAttachesAcrossPageContexts();

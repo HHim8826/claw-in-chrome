@@ -255,6 +255,35 @@ ${source.slice(start, end)}
   );
 }
 
+async function testSessionMessagePreservesAssistantCorrelationId() {
+  const source = read(sidepanelPath);
+  const start = source.indexOf("function __cpTrimSessionText");
+  const end = source.indexOf("function __cpSessionHasMeaningfulMessages", start);
+  assert.notEqual(start, -1, "sidepanel should include session serialization helpers");
+  assert.notEqual(end, -1, "session serialization slice should have a stable end anchor");
+
+  const helpers = vm.runInNewContext(
+    `const __CP_CHAT_SESSION_TEXT_LIMIT = 20000;
+const __CP_CHAT_SESSION_JSON_TEXT_LIMIT = 20000;
+const __CP_CHAT_SESSION_PREVIEW_LIMIT = 200;
+${source.slice(start, end)}
+({ __cpSerializeSessionMessage });`,
+    {},
+  );
+  const assistant = helpers.__cpSerializeSessionMessage({
+    id: "  provider-correlation-id  ",
+    role: "assistant",
+    content: [{ type: "text", text: "answer" }],
+  });
+  const user = helpers.__cpSerializeSessionMessage({
+    id: "user-message-id",
+    role: "user",
+    content: [{ type: "text", text: "prompt" }],
+  });
+  assert.equal(assistant.id, "provider-correlation-id");
+  assert.equal(Object.hasOwn(user, "id"), false);
+}
+
 async function testSidepanelStripsCustomToolTypeForCustomAnthropicProviders() {
   const source = read(sidepanelPath);
   const start = source.indexOf("function __cpNormalizeProviderFormat");
@@ -497,8 +526,81 @@ async function testSidepanelAnchorsExist() {
   assertIncludes(source, "const __cpSidepanelRenderActiveToolTimeline = ik;", "sidepanel bundle");
   assertIncludes(source, "const o = a.messages[a.messages.length - 1];", "sidepanel bundle original tool-group streaming boundary");
   assertIncludes(source, 'const c = i && o?.role === "assistant" && n;', "sidepanel bundle original tool-group streaming decision");
-  assertIncludes(source, '"data-cp-provider-request-id": A?.id,', "sidepanel bundle tool-group metrics anchor");
-  assertIncludes(source, '"data-cp-provider-request-id": b ? y.id : undefined,', "sidepanel bundle single-answer metrics anchor");
+  assert.equal(
+    source.includes('"data-cp-provider-request-id": A?.id,'),
+    false,
+    "tool-group wrapper must not be mutated by the metrics enhancer",
+  );
+  assert.equal(
+    source.includes('"data-cp-provider-request-id": b ? y.id : undefined,'),
+    false,
+    "single-message wrapper must not be mutated by the metrics enhancer",
+  );
+  assertIncludes(source, "语义锚点：普通 assistant footer 指标锚点只在可见文字后渲染。", "sidepanel bundle single-answer footer anchor");
+  assertIncludes(source, "I && e.id && l.jsx(\"div\", {", "sidepanel bundle single-answer visible-text gate");
+  assertIncludes(source, "语义锚点：tool_group footer 指标锚点只在完成且含 final text 時渲染。", "sidepanel bundle tool-group footer anchor");
+  const laterAnswerHelperStart = source.indexOf(
+    "function __cpHasLaterVisibleAssistantBeforeNextUser",
+  );
+  const toolGroupRendererStart = source.indexOf("const ik =", laterAnswerHelperStart);
+  assert.notEqual(laterAnswerHelperStart, -1, "sidepanel bundle should expose the later-answer gate helper");
+  assert.notEqual(toolGroupRendererStart, -1, "later-answer helper should precede the tool-group renderer");
+  const providerFooterHelpers = vm.runInNewContext(
+    `${source.slice(laterAnswerHelperStart, toolGroupRendererStart)};
+({
+  hasLaterAnswer: __cpHasLaterVisibleAssistantBeforeNextUser,
+  resolveFinalTextAssistantId: __cpResolveFinalTextAssistantId,
+})`,
+    {
+      s1(message) {
+        return message?.role === "user" &&
+          Array.isArray(message.content) &&
+          message.content.some(block => block?.type === "text" && block.text?.trim());
+      },
+    },
+  );
+  const finalAnswer = {
+    role: "assistant",
+    content: [{ type: "text", text: "newer final answer" }],
+  };
+  const toolResult = {
+    role: "user",
+    content: [{ type: "tool_result", tool_use_id: "tool-1", content: [] }],
+  };
+  const nextPrompt = {
+    role: "user",
+    content: [{ type: "text", text: "next turn" }],
+  };
+  assert.equal(providerFooterHelpers.hasLaterAnswer([toolResult, finalAnswer], -1), true);
+  assert.equal(providerFooterHelpers.hasLaterAnswer([nextPrompt, finalAnswer], -1), false);
+  assert.equal(providerFooterHelpers.hasLaterAnswer([toolResult], -1), false);
+  assert.equal(providerFooterHelpers.resolveFinalTextAssistantId([{
+    type: "text",
+    block: { type: "text", text: "visible final text" },
+    messageIndex: 1,
+  }], [{
+    id: "tool-progress-id",
+    role: "assistant",
+    content: [{ type: "tool_use", name: "read_page" }],
+  }, {
+    id: "final-text-id",
+    role: "assistant",
+    content: [{ type: "text", text: "visible final text" }],
+  }, {
+    id: "later-tool-only-id",
+    role: "assistant",
+    content: [{ type: "tool_use", name: "click" }],
+  }]), "final-text-id");
+  assertIncludes(
+    source,
+    "C && M && !__cpHasLaterVisibleAssistantBeforeNextUser(n, i) && A",
+    "sidepanel bundle tool-group latest-answer gate",
+  );
+  assertIncludes(
+    source,
+    "const A = __cpResolveFinalTextAssistantId(g, n);",
+    "sidepanel bundle tool-group final-text correlation ID",
+  );
   assertIncludes(source, "const __cpSidepanelRenderMessageGroups = ok;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelRenderConversationScrollLayer = ak;", "sidepanel bundle");
   assertIncludes(source, "const __cpSidepanelTimelineGroupShell = Ul;", "sidepanel bundle");
@@ -1526,6 +1628,7 @@ async function main() {
   await testSidepanelContextUsageIndicatorAnchorsExist();
   await testSidepanelContextUsageIndicatorUsesConfiguredWindowForDisplay();
   await testSessionMarkdownPreservesContentButNormalizesLabels();
+  await testSessionMessagePreservesAssistantCorrelationId();
   await testSidepanelStripsCustomToolTypeForCustomAnthropicProviders();
   await testSidepanelCompactionBlocksConcurrentSendAnchorsExist();
   await testSidepanelRetriesTransientStreamErrorsAnchorsExist();

@@ -1,3 +1,9 @@
+.cp-answer-provider-metrics-anchor {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+}
+
 .cp-answer-provider-metrics {
   display: flex;
   flex-wrap: wrap;
@@ -5,14 +11,15 @@
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  margin-top: 0.35rem;
-  padding-top: 0.35rem;
+  gap: 3px 0;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
   overflow: hidden;
-  color: var(--text-400, #73726c);
-  border-top: 1px solid color-mix(in srgb, var(--border-300, #d8d7d0) 62%, transparent);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  color: hsl(var(--text-400));
+  border-top: 0.5px solid hsl(var(--border-300) / 0.28);
+  font-family: var(--font-ui, ui-sans-serif, system-ui, sans-serif);
   font-size: 0.6875rem;
-  line-height: 1.35;
+  line-height: 1.45;
 }
 
 .cp-answer-provider-metrics-model {
@@ -22,15 +29,28 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: hsl(var(--text-300));
+  font-weight: 500;
 }
 
-.cp-answer-provider-metrics-value,
-.cp-answer-provider-metrics-separator {
+.cp-answer-provider-metrics-value {
   white-space: nowrap;
+}
+
+.cp-answer-provider-metrics-item {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.cp-answer-provider-metrics-separator {
+  white-space: pre;
+  color: hsl(var(--text-500));
 }
 
 @media (max-width: 360px) {
   .cp-answer-provider-metrics {
-    font-size: 0.625rem;
+    font-size: 0.6875rem;
   }
 }
