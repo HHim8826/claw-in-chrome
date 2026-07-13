@@ -299,6 +299,16 @@ async function testExtensionPagesLoad() {
     await optionsPage.evaluate(() => {
       window.location.hash = "options";
     });
+    await optionsPage.waitForSelector("#cp-data-insights-root", {
+      timeout: 15000
+    });
+    await optionsPage.waitForFunction(() => {
+      const panel = document.querySelector("#cp-data-insights-root");
+      return Boolean(panel) &&
+        /Data and insights|数据与洞察|資料與洞察/.test(panel.textContent || "");
+    }, null, {
+      timeout: 15000
+    });
     try {
       await optionsPage.waitForSelector("[data-cp-visualizer-launch]", {
         timeout: 15000

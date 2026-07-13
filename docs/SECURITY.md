@@ -47,6 +47,14 @@ Apply these controls to every security-sensitive change.
 - Render Mermaid with strict security, disabled HTML labels, text and edge
   limits, and a bounded timeout. Remove executable, embedded, animated, event,
   and external-link SVG content before inserting a diagram into the side panel.
+- Export only reviewed settings keys. Exclude credentials by default, require
+  explicit opt-in before creating a plain-text credential-bearing backup, and
+  never include chat history, diagnostics, or telemetry records.
+- Keep provider measurements local and schema-bound. Never record prompts,
+  responses, request bodies, headers, credentials, full URLs, or stack traces.
+- Validate backup kind and schema before previewing or applying an import. Apply
+  only reviewed storage keys and preserve installed credentials when an import
+  omits them.
 
 ## Reporting
 

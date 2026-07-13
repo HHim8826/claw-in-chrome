@@ -41,6 +41,12 @@ Preserve these invariants.
 - Mermaid rendering rejects source over 20,000 encoded bytes or 400 likely
   edges, times out after five seconds, and preserves the original code block on
   any load, render, or sanitization failure.
+- Settings imports validate the document before writing and update only
+  reviewed keys. Credential-free imports preserve installed provider secrets.
+- Provider measurements are best effort and can't fail provider requests. The
+  response path doesn't await storage, writes are serialized through an
+  extension-origin Web Lock, and the store keeps at most 500 records from the
+  most recent 30 days.
 
 ## Local verification
 

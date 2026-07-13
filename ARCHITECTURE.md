@@ -37,6 +37,10 @@ Apply these rules to every change.
 - Only designated loader or page shells may load `src/assets/` directly.
 - `src/shared/claw-contract.js` owns stable storage keys, message names, and
   cross-context constants.
+- `src/shared/settings-backup.js` owns the reviewed settings allowlist, backup
+  schema, import validation, and secret-preserving restore merge.
+- `src/shared/provider-observability.js` owns sanitized provider measurements,
+  retention, aggregation, and best-effort persistence.
 - Producers and consumers of a runtime message must use the same contract key.
 - A bundle patch must include a semantic anchor test and an update to
   `docs/recovery-model.md` when the recovered understanding changes.

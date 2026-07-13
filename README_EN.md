@@ -30,6 +30,12 @@ Put Claw into Chrome's sidebar so you can connect your own model providers direc
   - Can be used together with [`claw-in-chrome-mcp`](https://github.com/S-Trespassing/claw-in-chrome-mcp) to expand browser-side automation and coordination capabilities. MCP uses Chrome `nativeMessaging` and doesn't require Chrome Identity.
 - **⚙️ Finer-grained parameter control**
   - Edit provider parameters that are difficult or impossible to adjust in the original plugin, making it easier to support local models, custom gateways, and third-party platforms.
+- **💾 Settings backup and migration**
+  - Export and import reviewed settings. Provider credentials, chat history,
+    diagnostics, and runtime measurements are excluded by default.
+- **📊 Local provider insights**
+  - Review request count, success rate, tokens, latency, and error summaries in
+    Options. Measurements stay local and don't record prompts or responses.
 - **🌍 Multilingual and UI enhancements**
   - Includes multilingual resources, settings-page enhancements, and visualization-related modules for ongoing iteration and easier troubleshooting.
 

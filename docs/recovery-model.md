@@ -47,6 +47,12 @@ Prefer these seams when implementing behavior.
   configuration, timeout handling, and SVG sanitization. The side-panel
   Markdown enhancer lazy-loads the packaged Mermaid 11.15.0 UMD asset only when
   a `language-mermaid` code fence appears.
+- `settings-backup.js` owns the versioned settings envelope, reviewed storage
+  allowlist, default credential exclusion, and secret-preserving import merge.
+- `provider-observability.js` owns the local-only provider measurement schema,
+  30-day and 500-record retention limits, and dashboard aggregation. The
+  provider adapter records status, latency, errors, and normalized usage
+  without storing request or response content.
 - The `useStorageState` model-config seam resolves configured, fetched, and
   cached custom-provider models before shortcut editors render. Both shortcut
   bundles track the resolved default and replace only empty, temporary, or
@@ -98,6 +104,10 @@ The current recovered layer protects these workflows.
 - Mermaid Markdown fences render as isolated SVG diagrams. Invalid, oversized,
   over-connected, timed-out, or unsanitizable diagrams remain readable as code
   instead of replacing the conversation with a failed render.
+- Options can export and import reviewed settings without chat history or
+  diagnostics. Provider credentials require explicit plain-text export opt-in.
+- Options displays local provider request, token, latency, success, and error
+  summaries and can clear only those measurement records.
 
 ## Known constraint
 
