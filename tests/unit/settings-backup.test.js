@@ -175,6 +175,15 @@ function testDefaultBackupExcludesNestedCredentialNameVariants() {
   assert.equal(serialized.includes("tenant-safe"), true);
 }
 
+function testBackupNormalizesInjectedExportTimeToIsoString() {
+  const document = backup.createBackup(
+    { preferred_locale: "zh-TW" },
+    { now: Date.UTC(2026, 6, 13, 1, 2, 3, 4) },
+  );
+
+  assert.equal(document.exportedAt, "2026-07-13T01:02:03.004Z");
+}
+
 function main() {
   testDefaultBackupExportsReviewedSettingsWithoutPrivateData();
   testInspectBackupRejectsUnsupportedSchemaWithoutChanges();
@@ -182,6 +191,7 @@ function main() {
   testRestoreMergePreservesSecretsOmittedFromBackup();
   testExplicitSecretExportIncludesCredentialsAndMarksDocument();
   testDefaultBackupExcludesNestedCredentialNameVariants();
+  testBackupNormalizesInjectedExportTimeToIsoString();
   console.log("settings backup tests passed");
 }
 

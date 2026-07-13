@@ -457,6 +457,16 @@ async function testEmptyNonStreamContentRetriesAsStream() {
       text: "FOUND: 1\nSHOWING: 1\n---\nref_9 | textbox | Search | textbox | streamed fallback"
     }
   ]);
+  assert.equal(result.measurements.length, 1, "successful stream fallback should be measured");
+  assert.equal(result.measurements[0].outcome, "success");
+  assert.equal(result.measurements[0].status, 200);
+  assert.equal(result.measurements[0].retryCount, 1);
+  assert.equal(result.measurements[0].usage.inputTokens, 42);
+  assert.equal(result.measurements[0].usage.outputTokens, 7);
+  const serializedMeasurement = JSON.stringify(result.measurements[0]);
+  assert.equal(serializedMeasurement.includes("Find the search box."), false);
+  assert.equal(serializedMeasurement.includes("test-key"), false);
+  assert.equal(serializedMeasurement.includes("streamed fallback"), false);
 }
 
 async function testJsonContentToolCallIsConvertedToToolUse() {

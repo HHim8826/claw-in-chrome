@@ -137,7 +137,9 @@
     anchor.href = url;
     anchor.download = `claw-settings-${new Date().toISOString().slice(0, 10)}.json`;
     anchor.click();
-    URL.revokeObjectURL(url);
+    setTimeout(function () {
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
   async function exportSettings(options) {

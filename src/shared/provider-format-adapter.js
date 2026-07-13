@@ -2017,14 +2017,17 @@
         providerUrl,
         contentType
       });
-      return new Response(JSON.stringify(fallbackJson), {
-        status: upstream.status,
-        statusText: upstream.statusText,
-        headers: {
-          "content-type": "application/json; charset=utf-8",
-          "cache-control": "no-store"
-        }
-      });
+      return {
+        response: new Response(JSON.stringify(fallbackJson), {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers: {
+            "content-type": "application/json; charset=utf-8",
+            "cache-control": "no-store"
+          }
+        }),
+        usage: fallbackJson?.usage || {},
+      };
     } catch (error) {
       debugLog("provider.response_transform_stream_fallback_failed", {
         ...attemptInfo,
@@ -3469,13 +3472,19 @@
         try {
           const anthropicResponse = candidate.format === OPENAI_CHAT_FORMAT ? openAIChatToAnthropic(upstreamJson, candidateConfig) : openAIResponsesToAnthropic(upstreamJson);
           if (candidate.format === OPENAI_CHAT_FORMAT && shouldRetryOpenAIChatViaStreamFallback(upstreamJson, anthropicResponse, contentType, isStreamRequest)) {
-            const fallbackResponse = await retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, {
+            const fallbackResult = await retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, {
               attempt: index + 1,
               totalAttempts: candidates.length,
               format: candidate.format
             });
-            if (fallbackResponse) {
-              return fallbackResponse;
+            if (fallbackResult) {
+              requestTracker?.complete?.({
+                outcome: "success",
+                status: fallbackResult.response.status,
+                retryCount: index + retryIndex + 1,
+                usage: fallbackResult.usage,
+              });
+              return fallbackResult.response;
             }
           }
           requestTracker?.complete?.({

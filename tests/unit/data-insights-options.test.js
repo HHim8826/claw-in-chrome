@@ -20,6 +20,7 @@ function createHarness(options = {}) {
   const document = new FakeDocument({ readyState: "complete" });
   document.documentElement.lang = options.locale || "en-US";
   const rafQueue = [];
+  const urlEvents = [];
   const listeners = new Map();
   const sandbox = {
     console,
@@ -29,8 +30,13 @@ function createHarness(options = {}) {
     MutationObserver: FakeMutationObserver,
     Blob,
     URL: {
-      createObjectURL() { return "blob:test"; },
-      revokeObjectURL() {},
+      createObjectURL() {
+        urlEvents.push("create");
+        return "blob:test";
+      },
+      revokeObjectURL() {
+        urlEvents.push("revoke");
+      },
     },
     navigator: { language: options.locale || "en-US" },
     requestAnimationFrame(callback) {
@@ -71,7 +77,18 @@ function createHarness(options = {}) {
     }
   }
 
-  return { chromeMock, document, sandbox, flush };
+  return { chromeMock, document, sandbox, flush, urlEvents };
+}
+
+async function testDownloadDefersBlobUrlRevocationUntilLaterTask() {
+  const harness = createHarness({ storageState: { preferred_locale: "en-US" } });
+  await harness.flush();
+
+  await harness.sandbox.__CP_DATA_INSIGHTS_OPTIONS__.exportSettings({ download: true });
+  assert.deepEqual(harness.urlEvents, ["create"], "download URL must remain valid after click");
+
+  await harness.flush();
+  assert.deepEqual(harness.urlEvents, ["create", "revoke"]);
 }
 
 async function testOptionsPanelExportsImportsAndSummarizesMeasurements() {
@@ -192,6 +209,7 @@ async function testImportFailureKeepsPreviewAndVisibleRetryState() {
 
 async function main() {
   await testOptionsPanelExportsImportsAndSummarizesMeasurements();
+  await testDownloadDefersBlobUrlRevocationUntilLaterTask();
   await testOptionsPanelUsesChineseLocaleVariants();
   await testImportFailureKeepsPreviewAndVisibleRetryState();
   console.log("data insights options tests passed");

@@ -109,6 +109,10 @@
       : {};
     const settings = options && typeof options === "object" ? options : {};
     const includeSecrets = settings.includeSecrets === true;
+    const requestedExportTime = settings.now == null ? new Date() : new Date(settings.now);
+    const exportedAt = Number.isFinite(requestedExportTime.getTime())
+      ? requestedExportTime.toISOString()
+      : new Date().toISOString();
     const reviewedSettings = {};
     for (const key of REVIEWED_STORAGE_KEYS) {
       if (!Object.prototype.hasOwnProperty.call(source, key)) {
@@ -122,7 +126,7 @@
     return {
       kind: BACKUP_KIND,
       schemaVersion: SCHEMA_VERSION,
-      exportedAt: settings.now || new Date().toISOString(),
+      exportedAt,
       includesSecrets: includeSecrets,
       settings: reviewedSettings,
     };
