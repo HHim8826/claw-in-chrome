@@ -123,4 +123,7 @@ and unresolved risk here while executing the plan.
 - Baseline: `npm run validate:fast` reached `check:mermaid-vendor`, then failed
   because only `mermaid-LICENSE.txt` used CRLF instead of the package's LF.
   No feature file had changed.
-
+- Slice 1 RED: `node tests/unit/settings-backup.test.js` failed with
+  `MODULE_NOT_FOUND` for `src/shared/settings-backup.js`.
+- Slice 1 GREEN: the same command passed after adding the versioned envelope,
+  reviewed-key allowlist, and recursive default secret exclusion.
