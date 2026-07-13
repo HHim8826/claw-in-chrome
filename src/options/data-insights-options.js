@@ -96,6 +96,7 @@
   let profiles = [];
   let measurements = [];
   let statusMessage = "";
+  let mountObserver = null;
 
   function localeKey() {
     const value = String(
@@ -211,9 +212,19 @@
     return card;
   }
 
+  function isDefaultOptionsRoute() {
+    const parts = String(window.location?.hash || "").split("?");
+    return parts[0] === "#options" && !/(?:^|&)provider=/.test(parts[1] || "");
+  }
+
   function render() {
     const existing = document.getElementById(ROOT_ID);
-    if (String(window.location?.hash || "#options").split("?")[0] !== "#options") {
+    if (!isDefaultOptionsRoute()) {
+      existing?.remove();
+      return;
+    }
+    const mountTarget = document.getElementById("cp-options-debug-anchor");
+    if (!mountTarget) {
       existing?.remove();
       return;
     }
@@ -330,7 +341,21 @@
     };
     insightsSection.appendChild(clearButton);
     root.appendChild(insightsSection);
-    document.body.appendChild(root);
+    mountTarget.appendChild(root);
+  }
+
+  function observeMountTarget() {
+    if (mountObserver || typeof MutationObserver !== "function") {
+      return;
+    }
+    mountObserver = new MutationObserver(function () {
+      const mountTarget = document.getElementById("cp-options-debug-anchor");
+      const root = document.getElementById(ROOT_ID);
+      if (mountTarget && root?.parentNode !== mountTarget) {
+        render();
+      }
+    });
+    mountObserver.observe(document.body, { childList: true, subtree: true });
   }
 
   async function refresh() {
@@ -355,6 +380,7 @@
     refresh,
   });
   globalThis.__CP_DATA_INSIGHTS_OPTIONS__ = api;
+  observeMountTarget();
   window.addEventListener("hashchange", render);
   window.addEventListener("cp:ui-locale-changed", render);
   chrome.storage.onChanged?.addListener?.(function (changes, areaName) {

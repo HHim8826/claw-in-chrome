@@ -19,6 +19,9 @@ function createHarness(options = {}) {
   }
   const document = new FakeDocument({ readyState: "complete" });
   document.documentElement.lang = options.locale || "en-US";
+  const mountAnchor = document.createElement("div");
+  mountAnchor.id = "cp-options-debug-anchor";
+  document.body.appendChild(mountAnchor);
   const rafQueue = [];
   const urlEvents = [];
   const listeners = new Map();
@@ -49,7 +52,7 @@ function createHarness(options = {}) {
     },
     clearTimeout() {},
     window: {
-      location: { hash: "#options" },
+      location: { hash: options.hash ?? "#options" },
       confirm() { return true; },
       addEventListener(type, listener) {
         const current = listeners.get(type) || [];
@@ -77,7 +80,7 @@ function createHarness(options = {}) {
     }
   }
 
-  return { chromeMock, document, sandbox, flush, urlEvents };
+  return { chromeMock, document, sandbox, flush, urlEvents, mountAnchor };
 }
 
 async function testDownloadDefersBlobUrlRevocationUntilLaterTask() {
@@ -89,6 +92,13 @@ async function testDownloadDefersBlobUrlRevocationUntilLaterTask() {
 
   await harness.flush();
   assert.deepEqual(harness.urlEvents, ["create", "revoke"]);
+}
+
+async function testPanelDoesNotLeakOntoDefaultPermissionsRoute() {
+  const harness = createHarness({ hash: "" });
+  await harness.flush();
+
+  assert.equal(harness.document.getElementById("cp-data-insights-root"), null);
 }
 
 async function testOptionsPanelExportsImportsAndSummarizesMeasurements() {
@@ -129,6 +139,11 @@ async function testOptionsPanelExportsImportsAndSummarizesMeasurements() {
 
   const root = harness.document.getElementById("cp-data-insights-root");
   assert.ok(root, "data and insights panel should render");
+  assert.equal(
+    root.parentNode,
+    harness.mountAnchor,
+    "data and insights panel should stay inside the Options content column",
+  );
   assert.match(String(root.textContent || ""), /Data and insights/);
   assert.match(String(root.textContent || ""), /Requests/);
   assert.match(String(root.textContent || ""), /Input tokens8/);
@@ -209,6 +224,7 @@ async function testImportFailureKeepsPreviewAndVisibleRetryState() {
 
 async function main() {
   await testOptionsPanelExportsImportsAndSummarizesMeasurements();
+  await testPanelDoesNotLeakOntoDefaultPermissionsRoute();
   await testDownloadDefersBlobUrlRevocationUntilLaterTask();
   await testOptionsPanelUsesChineseLocaleVariants();
   await testImportFailureKeepsPreviewAndVisibleRetryState();

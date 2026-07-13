@@ -309,6 +309,51 @@ async function testExtensionPagesLoad() {
     }, null, {
       timeout: 15000
     });
+    const optionsInsightsDesktop = await optionsPage.evaluate(() => {
+      const panel = document.querySelector("#cp-data-insights-root");
+      const grid = panel.querySelector(".cp-data-insights-grid");
+      const style = getComputedStyle(panel);
+      return {
+        parentId: panel.parentElement?.id || "",
+        backgroundColor: style.backgroundColor,
+        borderStyle: style.borderStyle,
+        panelWidth: panel.getBoundingClientRect().width,
+        viewportWidth: document.documentElement.clientWidth,
+        gridDisplay: getComputedStyle(grid).display,
+      };
+    });
+    assert.equal(optionsInsightsDesktop.parentId, "cp-options-debug-anchor");
+    assert.notEqual(optionsInsightsDesktop.backgroundColor, "rgba(0, 0, 0, 0)");
+    assert.notEqual(optionsInsightsDesktop.borderStyle, "none");
+    assert.equal(optionsInsightsDesktop.gridDisplay, "grid");
+    assert.equal(
+      optionsInsightsDesktop.panelWidth <= optionsInsightsDesktop.viewportWidth,
+      true,
+    );
+    await optionsPage.setViewportSize({ width: 320, height: 800 });
+    const optionsInsightsThemes = [];
+    for (const mode of ["light", "dark"]) {
+      optionsInsightsThemes.push(await optionsPage.evaluate((nextMode) => {
+        document.documentElement.dataset.mode = nextMode;
+        const panel = document.querySelector("#cp-data-insights-root");
+        const actions = panel.querySelector(".cp-data-insights-actions");
+        return {
+          mode: nextMode,
+          backgroundColor: getComputedStyle(panel).backgroundColor,
+          viewportWidth: document.documentElement.clientWidth,
+          bodyScrollWidth: document.body.scrollWidth,
+          panelRight: panel.getBoundingClientRect().right,
+          actionsRight: actions.getBoundingClientRect().right,
+        };
+      }, mode));
+    }
+    for (const evidence of optionsInsightsThemes) {
+      assert.notEqual(evidence.backgroundColor, "rgba(0, 0, 0, 0)");
+      assert.equal(evidence.bodyScrollWidth <= evidence.viewportWidth, true);
+      assert.equal(evidence.panelRight <= evidence.viewportWidth, true);
+      assert.equal(evidence.actionsRight <= evidence.viewportWidth, true);
+    }
+    await optionsPage.setViewportSize({ width: 1280, height: 800 });
     try {
       await optionsPage.waitForSelector("[data-cp-visualizer-launch]", {
         timeout: 15000

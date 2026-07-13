@@ -1,0 +1,214 @@
+.cp-data-insights-root {
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  gap: 20px;
+  padding: 24px;
+  overflow: hidden;
+  border: 1px solid hsl(var(--border-300));
+  border-radius: 12px;
+  background: hsl(var(--bg-100));
+  color: hsl(var(--text-100));
+  font-family: var(--font-ui);
+  box-shadow: 0 1px 2px hsl(var(--border-300) / 0.08);
+}
+
+.cp-data-insights-root > .cp-page-heading,
+.cp-data-insights-section .cp-page-heading {
+  margin: 0;
+  color: hsl(var(--text-100));
+  font-family: var(--font-ui);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.cp-data-insights-root > .cp-page-heading {
+  font-family: var(--font-ui-serif);
+  font-size: 24px;
+  letter-spacing: -0.02em;
+}
+
+.cp-data-insights-root .cp-page-subtitle {
+  margin: -12px 0 0;
+  color: hsl(var(--text-400));
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.cp-data-insights-section {
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid hsl(var(--border-300) / 0.72);
+  border-radius: 10px;
+  background: hsl(var(--bg-000));
+}
+
+.cp-data-insights-section .cp-page-subtitle {
+  margin: -10px 0 0;
+}
+
+.cp-data-insights-check {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  color: hsl(var(--text-200));
+  font-size: 13px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.cp-data-insights-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: hsl(var(--accent-100));
+}
+
+.cp-data-insights-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cp-data-insights-root .cp-page-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border: 1px solid hsl(var(--border-300));
+  border-radius: 9px;
+  background: hsl(var(--bg-100));
+  color: hsl(var(--text-200));
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease;
+}
+
+.cp-data-insights-root .cp-page-button:hover:not(:disabled) {
+  border-color: hsl(var(--border-200));
+  background: hsl(var(--bg-200));
+  color: hsl(var(--text-100));
+}
+
+.cp-data-insights-root .cp-page-button:focus-visible,
+.cp-data-insights-filter:focus-visible {
+  outline: 2px solid hsl(var(--accent-100));
+  outline-offset: 2px;
+}
+
+.cp-data-insights-root .cp-page-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.cp-data-insights-filter {
+  box-sizing: border-box;
+  width: min(100%, 280px);
+  min-height: 38px;
+  padding: 0 34px 0 12px;
+  border: 1px solid hsl(var(--border-300));
+  border-radius: 9px;
+  background: hsl(var(--bg-100));
+  color: hsl(var(--text-100));
+  font: inherit;
+  font-size: 13px;
+}
+
+.cp-data-insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.cp-data-insights-metric {
+  box-sizing: border-box;
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+  padding: 13px 14px;
+  border: 1px solid hsl(var(--border-300) / 0.62);
+  border-radius: 9px;
+  background: hsl(var(--bg-100));
+}
+
+.cp-data-insights-metric-label {
+  overflow: hidden;
+  color: hsl(var(--text-400));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cp-data-insights-metric-value {
+  overflow-wrap: anywhere;
+  color: hsl(var(--text-100));
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.cp-data-insights-errors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cp-data-insights-errors li {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: hsl(var(--danger-100) / 0.1);
+  color: hsl(var(--danger-000));
+  font-size: 12px;
+  line-height: 1;
+}
+
+.cp-data-insights-root .cp-page-status {
+  margin: 0;
+  color: hsl(var(--text-400));
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 520px) {
+  .cp-data-insights-root {
+    gap: 14px;
+    padding: 14px;
+    border-radius: 10px;
+  }
+
+  .cp-data-insights-section {
+    gap: 13px;
+    padding: 14px;
+  }
+
+  .cp-data-insights-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .cp-data-insights-root .cp-page-button,
+  .cp-data-insights-filter {
+    width: 100%;
+  }
+}

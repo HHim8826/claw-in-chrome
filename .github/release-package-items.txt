@@ -34,6 +34,7 @@ options/options-debug-logger.js
 options/options.html
 options/options-update-enhancer.js
 options/data-insights-options.js
+options/data-insights-options.css
 pages/pairing.html
 shared/provider-format-adapter.js
 background/service-worker-runtime.js
