@@ -127,7 +127,7 @@ The work is done only when every criterion below is satisfied:
       or recorded as blockers.
 - [x] `npm run validate:fast`, `npm run validate:full`, and
       `npm run inspect:runtime` pass.
-- [ ] Task-owned changes are committed and pushed to the existing PR branch.
+- [x] Task-owned changes are committed and pushed to the existing PR branch.
 
 ## Evidence log
 
@@ -182,3 +182,5 @@ is `9a275f93b44e15a9cf7de7c592787e4a3c32531d`; the worktree started clean on
   passed syntax, docs, architecture, manifest, release packaging, 63 unit and
   integration files, and the headed extension E2E with no page or console
   errors. Expected negative-path fixture logs did not fail the suite.
+- Feature checkpoint `b37322b` (`Add per-answer provider performance metrics`)
+  was pushed successfully to `origin/codex/settings-backup-observability`.
