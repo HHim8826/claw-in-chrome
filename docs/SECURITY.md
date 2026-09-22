@@ -57,7 +57,9 @@ Apply these controls to every security-sensitive change.
   completion event, and attach it only to an answer with the exact same ID.
 - Validate backup kind and schema before previewing or applying an import. Apply
   only reviewed storage keys and preserve installed credentials when an import
-  omits them.
+  omits them. Secretless provider restores preserve credentials only for the
+  same normalized format and endpoint; changed or ambiguous identities clear
+  legacy credential keys.
 
 ## Reporting
 

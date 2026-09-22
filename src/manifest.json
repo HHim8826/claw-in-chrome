@@ -63,7 +63,7 @@
   "storage": {
     "managed_schema": "managed_schema.json"
   },
-  "version": "1.0.79.4",
+  "version": "1.0.79.5",
   "web_accessible_resources": [
     {
       "matches": ["\u003Call_urls>"],

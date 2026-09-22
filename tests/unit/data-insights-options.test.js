@@ -32,14 +32,14 @@ function createHarness(options = {}) {
     Element: FakeElement,
     MutationObserver: FakeMutationObserver,
     Blob,
-    URL: {
-      createObjectURL() {
+    URL: class extends URL {
+      static createObjectURL() {
         urlEvents.push("create");
         return "blob:test";
-      },
-      revokeObjectURL() {
+      }
+      static revokeObjectURL() {
         urlEvents.push("revoke");
-      },
+      }
     },
     navigator: { language: options.locale || "en-US" },
     requestAnimationFrame(callback) {
@@ -107,6 +107,8 @@ async function testOptionsPanelExportsImportsAndSummarizesMeasurements() {
       customProviderProfiles: [{
         id: "provider-main",
         name: "Main provider",
+        baseUrl: "https://current.example/v1",
+        format: "openai_chat",
         apiKey: "sk-installed",
         defaultModel: "model-main",
       }],
@@ -223,12 +225,32 @@ async function testImportFailureKeepsPreviewAndVisibleRetryState() {
 }
 
 async function main() {
+  await testImportClearsCredentialsWhenProviderEndpointChanges();
   await testOptionsPanelExportsImportsAndSummarizesMeasurements();
   await testPanelDoesNotLeakOntoDefaultPermissionsRoute();
   await testDownloadDefersBlobUrlRevocationUntilLaterTask();
   await testOptionsPanelUsesChineseLocaleVariants();
   await testImportFailureKeepsPreviewAndVisibleRetryState();
   console.log("data insights options tests passed");
+}
+
+async function testImportClearsCredentialsWhenProviderEndpointChanges() {
+  const profile = { id: "main", format: "openai_chat", baseUrl: "https://current.example/v1", apiKey: "current-secret" };
+  const harness = createHarness({ storageState: {
+    customProviderConfig: profile, customProviderProfiles: [profile], customProviderActiveProfileId: "main",
+    anthropicApiKey: "current-secret", customProviderOriginalApiKey: "current-secret",
+  } });
+  await harness.flush();
+  const api = harness.sandbox.__CP_DATA_INSIGHTS_OPTIONS__;
+  const backupApi = harness.sandbox.__CP_SETTINGS_BACKUP__;
+  await api.previewImport(backupApi.createBackup({ preferred_locale: "zh-TW" }));
+  await api.applyPreview();
+  assert.equal(harness.chromeMock.storageMock.state.anthropicApiKey, "current-secret", "preference imports must leave credentials alone");
+  const incoming = { ...profile, baseUrl: "https://old.example/v1" };
+  await api.previewImport(backupApi.createBackup({ customProviderConfig: incoming, customProviderProfiles: [incoming] }));
+  await api.applyPreview();
+  assert.doesNotMatch(JSON.stringify(harness.chromeMock.storageMock.state), /current-secret/);
+  assert.equal(harness.chromeMock.storageMock.state.customProviderConfig.baseUrl, "https://old.example/v1");
 }
 
 main().catch(function (error) {

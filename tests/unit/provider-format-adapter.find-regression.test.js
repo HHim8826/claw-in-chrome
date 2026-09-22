@@ -328,6 +328,34 @@ async function testStreamingProviderUsageCompletesMeasurement() {
   assert.match(result.text, new RegExp(`"id":"${result.measurements[0].id}"`));
 }
 
+async function testEmptyChoiceUsageChunkInDirectAndFallbackStreams() {
+  const chunks = [
+    { id: "chat-usage", model: "gpt-5.4", choices: [{ delta: { content: "Answer" }, finish_reason: null }] },
+    { choices: [{ delta: {}, finish_reason: "stop" }] },
+    { choices: [], usage: { prompt_tokens: 100, completion_tokens: 20 } },
+  ];
+  const streamText = chunks.map(chunk => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n";
+  for (const direct of [true, false]) {
+    const result = await runAdapterWithUpstreamHandler(async ({ callIndex }) => {
+      if (!direct && callIndex === 0) return new Response(JSON.stringify({
+        choices: [{ message: { role: "assistant", content: "" }, finish_reason: "stop" }],
+        usage: { completion_tokens: 20 },
+      }), { headers: { "content-type": "text/event-stream" } });
+      return new Response(streamText, { headers: { "content-type": "text/event-stream" } });
+    }, {
+      requestBody: { model: "gpt-5.4", stream: direct, messages: [{ role: "user", content: "Usage" }] },
+      ...(direct ? { responseType: "text" } : {}),
+    });
+    assert.equal(result.measurements.length, 1);
+    assert.equal(result.measurements[0].usage.inputTokens, 100);
+    assert.equal(result.measurements[0].usage.outputTokens, 20);
+    assert.equal(result.measurements[0].retryCount, direct ? 0 : 1);
+    assert.equal(result.upstreamCalls.at(-1).body.stream_options.include_usage, true);
+    if (direct) assert.match(result.text, /"output_tokens":20/);
+    else assert.equal(result.json.usage.output_tokens, 20);
+  }
+}
+
 async function testResponsesStreamingMarksFirstMeaningfulToken() {
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
@@ -374,6 +402,33 @@ async function testResponsesStreamingMarksFirstMeaningfulToken() {
   assert.equal(result.measurements[0].usage.inputTokens, 11);
   assert.equal(result.measurements[0].usage.outputTokens, 3);
   assert.match(result.text, new RegExp(`"id":"${result.measurements[0].id}"`));
+}
+
+async function testFailedResponsesStreamNeverCompletesSuccessfully() {
+  for (const event of ["response.failed", "error"]) {
+    const events = [
+      { type: "response.created", response: { id: "failed-response", status: "in_progress" } },
+      { type: "response.output_text.delta", delta: "Partial answer", output_index: 0, content_index: 0 },
+      event === "error"
+        ? { type: event, code: "server_error", message: "Private upstream failure" }
+        : { type: event, response: { status: "failed", error: { code: "server_error", message: "Private upstream failure" } } },
+    ];
+    const result = await runAdapterWithUpstreamHandler(async () => new Response(
+      events.map(data => `event: ${data.type}\ndata: ${JSON.stringify(data)}\n\n`).join(""),
+      { headers: { "content-type": "text/event-stream" } },
+    ), {
+      config: { format: "openai_responses" }, responseType: "text",
+      requestBody: { model: "gpt-5.4", stream: true, messages: [{ role: "user", content: "Fail" }] },
+    });
+    assert.match(result.text, /event: error/);
+    assert.doesNotMatch(result.text, /event: message_stop|"stop_reason":"end_turn"/);
+    assert.equal(result.measurements.length, 1);
+    assert.equal(result.measurements[0].outcome, "invalid_response");
+    assert.equal(result.measurements[0].errorCategory, "invalid_response");
+    assert.equal(result.dispatchedEvents.length, 1);
+    assert.equal(result.dispatchedEvents[0].detail.measurement.outcome, "invalid_response");
+    assert.doesNotMatch(JSON.stringify(result.measurements), /Private upstream failure/);
+  }
 }
 
 async function testChatToolPlaceholdersDoNotMarkFirstToken() {
@@ -2111,6 +2166,8 @@ async function testDeepSeekDirectStreamReasoningContentIsConvertedToThinkingDelt
 }
 
 async function main() {
+  await testFailedResponsesStreamNeverCompletesSuccessfully();
+  await testEmptyChoiceUsageChunkInDirectAndFallbackStreams();
   await testSuccessfulProviderRequestRecordsSanitizedMeasurement();
   await testProviderHttpErrorRecordsCategoryWithoutResponseBody();
   await testProviderNetworkErrorRecordsWithoutChangingErrorResponse();

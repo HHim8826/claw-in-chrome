@@ -172,7 +172,35 @@
     };
   }
 
+  function providerIdentity(provider) {
+    if (!provider || typeof provider !== "object") return "";
+    const rawFormat = String(provider.format || "").trim().toLowerCase();
+    const format = ({ openai: "openai_chat", responses: "openai_responses" })[rawFormat] || rawFormat;
+    if (!["anthropic", "openai_chat", "openai_responses"].includes(format)) return "";
+    try {
+      const url = new URL(String(provider.baseUrl || "").trim());
+      if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) return "";
+      return JSON.stringify([format, url.origin, url.pathname.replace(/\/+$/, ""), url.search]);
+    } catch (_error) {
+      return "";
+    }
+  }
+
+  function sameProviderIdentity(current, incoming) {
+    const identity = providerIdentity(current);
+    return !!identity && identity === providerIdentity(incoming);
+  }
+
+  function effectiveProvider(snapshot) {
+    const profiles = Array.isArray(snapshot.customProviderProfiles) ? snapshot.customProviderProfiles : [];
+    return profiles.find(profile => profile?.id === snapshot.customProviderActiveProfileId) ||
+      profiles[0] || snapshot.customProviderConfig;
+  }
+
   function mergeImportedValue(current, incoming, includesSecrets, fieldName) {
+    // Discard the entire previous provider subtree before recursive merging so
+    // nested authorization headers cannot cross the same identity boundary.
+    if (fieldName === "customProviderConfig" && !sameProviderIdentity(current, incoming)) current = undefined;
     if (Array.isArray(incoming)) {
       const currentList = Array.isArray(current) ? current : [];
       return incoming.map(function (entry) {
@@ -185,7 +213,8 @@
               return String(candidate?.id || candidate?.name || "").trim() === identity;
             })
           : null;
-        return mergeImportedValue(previous, entry, includesSecrets, "");
+        return mergeImportedValue(previous, entry, includesSecrets,
+          fieldName === "customProviderProfiles" ? "customProviderConfig" : "");
       });
     }
     if (incoming && typeof incoming === "object") {
@@ -232,6 +261,15 @@
         inspectedBackup.includesSecrets === true,
         key,
       );
+    }
+    const providerKeys = ["customProviderProfiles", "customProviderConfig", "customProviderActiveProfileId"];
+    if (!inspectedBackup.includesSecrets && providerKeys.some(key => Object.prototype.hasOwnProperty.call(changes, key))) {
+      const changedConfig = Object.prototype.hasOwnProperty.call(changes, "customProviderConfig") &&
+        !sameProviderIdentity(current.customProviderConfig, changes.customProviderConfig);
+      if (changedConfig || !sameProviderIdentity(effectiveProvider(current), effectiveProvider({ ...current, ...changes }))) {
+        changes.anthropicApiKey = "";
+        changes.customProviderOriginalApiKey = "";
+      }
     }
     return changes;
   }

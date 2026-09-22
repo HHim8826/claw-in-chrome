@@ -1637,6 +1637,7 @@
     }
     if (body?.stream != null) {
       result.stream = body.stream;
+      if (body.stream) result.stream_options = { include_usage: true };
     }
     const effort = resolveReasoningEffort(body);
     if (effort) {
@@ -1896,6 +1897,7 @@
         continue;
       }
       const chunk = safeJsonParse(data, null);
+      if (chunk?.usage && typeof chunk.usage === "object") lastUsage = chunk.usage;
       if (!chunk || !Array.isArray(chunk.choices) || !chunk.choices[0]) {
         continue;
       }
@@ -1904,9 +1906,6 @@
       }
       if (!currentModel && chunk.model) {
         currentModel = String(chunk.model);
-      }
-      if (chunk.usage && typeof chunk.usage === "object") {
-        lastUsage = chunk.usage;
       }
       const choice = chunk.choices[0] || {};
       const delta = choice.delta || {};
@@ -2003,7 +2002,8 @@
   async function retryOpenAIChatAsStreamAndTransform(providerUrl, request, candidateConfig, providerBody, attemptInfo, requestId) {
     const streamBody = {
       ...providerBody,
-      stream: true
+      stream: true,
+      stream_options: { include_usage: true }
     };
     debugLog("provider.request_retry_as_stream_for_empty_content", {
       ...attemptInfo,
@@ -2561,6 +2561,7 @@
         return;
       }
       const chunk = safeJsonParse(data, null);
+      if (chunk?.usage && typeof chunk.usage === "object") lastUsage = chunk.usage;
       if (!chunk || !Array.isArray(chunk.choices) || !chunk.choices[0]) {
         return;
       }
@@ -2573,7 +2574,6 @@
       const choice = chunk.choices[0] || {};
       const delta = choice.delta || {};
       const chatCompatibility = getChatCompatibilityProfile(config, currentModel || config?.defaultModel);
-      lastUsage = chunk.usage || lastUsage;
       ensureMessageStart(output, chunk);
       const reasoningDelta = readFirstStringField(delta, chatCompatibility.streamReasoningFields);
       if (reasoningDelta) {
@@ -2683,15 +2683,7 @@
           }
         }
         closeAllToolBlocks(output);
-        output.push(sseChunk("message_delta", {
-          type: "message_delta",
-          delta: {
-            stop_reason: mapChatStopReason(choice.finish_reason, hasToolUse || openToolBlockIndices.size > 0),
-            stop_sequence: null
-          },
-          usage: getSafeAnthropicUsage(chunk.usage ? buildAnthropicUsageFromChat(chunk.usage) : null)
-        }));
-        hasEmittedMessageDelta = true;
+        // Usage can arrive in a later empty-choice chunk; finalize at DONE/EOF.
       }
       for (const chunkText of output) {
         controller.enqueue(encoder.encode(chunkText));
@@ -3039,6 +3031,11 @@
       }
       const resolvedEvent = eventName || String(data.type || "");
       const responseObject = responseObjectFromEvent(data);
+      if (resolvedEvent === "response.failed" || resolvedEvent === "error") {
+        // Route terminal provider errors through the existing error SSE path.
+        // Do not let EOF turn a partial response into a successful message.
+        throw new Error("Responses provider reported a failed stream.");
+      }
       lastResponseObject = responseObject || lastResponseObject;
       updateResponseMetadata(responseObject);
       if (resolvedEvent === "response.created") {
@@ -3217,6 +3214,9 @@
           })));
           onComplete?.({}, streamErrorCategory);
           controller.close();
+        } finally {
+          try { await reader.cancel(); } catch (_error) {}
+          reader.releaseLock();
         }
       }
     });

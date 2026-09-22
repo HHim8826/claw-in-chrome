@@ -113,6 +113,8 @@ function testRestoreMergePreservesSecretsOmittedFromBackup() {
     customProviderProfiles: [{
       id: "provider-main",
       name: "Moved provider",
+      baseUrl: "https://gateway.example.test/v1",
+      format: "openai_chat",
       apiKey: "secret-not-exported",
       defaultModel: "model-new",
     }],
@@ -123,6 +125,8 @@ function testRestoreMergePreservesSecretsOmittedFromBackup() {
     customProviderProfiles: [{
       id: "provider-main",
       name: "Old provider",
+      baseUrl: "https://gateway.example.test/v1",
+      format: "openai_chat",
       apiKey: "secret-already-installed",
       defaultModel: "model-old",
     }],
@@ -133,6 +137,8 @@ function testRestoreMergePreservesSecretsOmittedFromBackup() {
   assert.deepEqual(changes.customProviderProfiles, [{
     id: "provider-main",
     name: "Moved provider",
+    baseUrl: "https://gateway.example.test/v1",
+    format: "openai_chat",
     apiKey: "secret-already-installed",
     defaultModel: "model-new",
   }]);
@@ -185,6 +191,7 @@ function testBackupNormalizesInjectedExportTimeToIsoString() {
 }
 
 function main() {
+  testSecretsAreBoundToProviderIdentity();
   testDefaultBackupExportsReviewedSettingsWithoutPrivateData();
   testInspectBackupRejectsUnsupportedSchemaWithoutChanges();
   testInspectBackupRejectsWrongKindAndUnknownOnlyPayload();
@@ -193,6 +200,37 @@ function main() {
   testDefaultBackupExcludesNestedCredentialNameVariants();
   testBackupNormalizesInjectedExportTimeToIsoString();
   console.log("settings backup tests passed");
+}
+
+function testSecretsAreBoundToProviderIdentity() {
+  const current = {
+    id: "provider-main", baseUrl: "https://current.example/v1", format: "openai_chat",
+    apiKey: "current-secret", headers: { authorization: "Bearer current-secret" },
+  };
+  for (const incoming of [
+    { ...current, baseUrl: "https://old.example/v1" },
+    { ...current, baseUrl: "https://current.example/other" },
+    { ...current, baseUrl: "http://current.example/v1" },
+    { ...current, baseUrl: "https://current.example:8443/v1" },
+    { ...current, format: "openai_responses" },
+    { ...current, baseUrl: "invalid" },
+    { ...current, baseUrl: "" },
+    { ...current, format: "" },
+  ]) {
+    const inspected = backup.inspectBackup(backup.createBackup({
+      customProviderProfiles: [incoming], customProviderConfig: incoming,
+    }));
+    const changes = backup.buildRestoreChanges(inspected, {
+      customProviderProfiles: [current], customProviderConfig: current,
+    });
+    assert.doesNotMatch(JSON.stringify(changes), /current-secret/, `must not reuse secrets for ${incoming.baseUrl} ${incoming.format}`);
+  }
+  const equivalent = { ...current, baseUrl: " https://CURRENT.example:443/v1/ ", format: "openai" };
+  const changes = backup.buildRestoreChanges(backup.inspectBackup(backup.createBackup({
+    customProviderProfiles: [equivalent],
+  })), { customProviderProfiles: [current] });
+  assert.equal(changes.customProviderProfiles[0].apiKey, "current-secret");
+  assert.equal(changes.customProviderProfiles[0].headers.authorization, "Bearer current-secret");
 }
 
 try {

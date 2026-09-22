@@ -48,7 +48,10 @@ Prefer these seams when implementing behavior.
   Markdown enhancer lazy-loads the packaged Mermaid 11.15.0 UMD asset only when
   a `language-mermaid` code fence appears.
 - `settings-backup.js` owns the versioned settings envelope, reviewed storage
-  allowlist, default credential exclusion, and secret-preserving import merge.
+  allowlist, default credential exclusion, and identity-bound import merge.
+  Secretless restores preserve provider credentials only when the normalized
+  format and endpoint match; changed or ambiguous provider identities clear
+  legacy credential keys instead of carrying them across origins.
 - `provider-observability.js` owns the local-only provider measurement schema,
   30-day and 500-record retention limits, and dashboard aggregation. The
   provider adapter records status, first-token and total latency, errors, and
@@ -127,7 +130,9 @@ The current recovered layer protects these workflows.
   over-connected, timed-out, or unsanitizable diagrams remain readable as code
   instead of replacing the conversation with a failed render.
 - Options can export and import reviewed settings without chat history or
-  diagnostics. Provider credentials require explicit plain-text export opt-in.
+  diagnostics. Provider credentials require explicit plain-text export opt-in,
+  and secretless provider restores bind preserved credentials to the same
+  normalized format and endpoint.
 - Options displays local provider request, token, latency, success, and error
   summaries and can clear only those measurement records.
 - Completed custom-provider answers display model, truthful streamed
