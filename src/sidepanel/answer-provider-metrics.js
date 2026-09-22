@@ -10,8 +10,11 @@
   const REQUEST_ID_ATTRIBUTE = "data-cp-provider-request-id";
   const ANCHOR_ATTRIBUTE = "data-cp-provider-metrics-anchor";
   const PENDING_MAX_AGE_MS = 5 * 60 * 1000;
+  const MAX_RECORDS = Number(contract.MAX_RECORDS) || 500;
   const pending = new Map();
+  const storedMeasurements = new Map();
   const expiredIds = new Set();
+  let scanScheduled = false;
   let preferredLocale = "";
 
   const labels = Object.freeze({
@@ -104,22 +107,10 @@
     });
   }
 
-  function findAnswers(requestId) {
-    return Array.from(document.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)).filter(function (element) {
-      return element.getAttribute(REQUEST_ID_ATTRIBUTE) === requestId;
-    });
-  }
-
   function hasMetricsRow(answer, requestId) {
     return Array.from(answer.children || []).some(function (child) {
       return child.dataset?.cpProviderMetricsRow === "true" &&
         child.dataset?.cpProviderMetricsRequestId === requestId;
-    });
-  }
-
-  function hasDocumentMetricsRow(requestId) {
-    return Array.from(document.querySelectorAll("[data-cp-provider-metrics-row]")).some(function (row) {
-      return row.dataset?.cpProviderMetricsRequestId === requestId;
     });
   }
 
@@ -167,11 +158,11 @@
   function refreshRows() {
     for (const row of Array.from(document.querySelectorAll("[data-cp-provider-metrics-row]"))) {
       const requestId = row.dataset?.cpProviderMetricsRequestId;
-      const entry = requestId ? pending.get(requestId) : null;
-      if (!entry) {
+      const measurement = storedMeasurements.get(requestId) || pending.get(requestId)?.measurement;
+      if (!measurement) {
         continue;
       }
-      const formatted = formatMeasurement(entry.measurement);
+      const formatted = formatMeasurement(measurement);
       renderRow(row, formatted);
     }
   }
@@ -182,24 +173,44 @@
       if (!entry.matched && currentTime - entry.receivedAt > PENDING_MAX_AGE_MS) {
         pending.delete(id);
         expiredIds.add(id);
+        if (expiredIds.size > MAX_RECORDS) expiredIds.delete(expiredIds.values().next().value);
       }
+    }
+    for (const [id, measurement] of storedMeasurements) {
+      if (currentTime - measurement.startedAt > observability.MAX_AGE_MS) storedMeasurements.delete(id);
     }
   }
 
   function scan(now) {
     prune(Number.isFinite(Number(now)) ? Number(now) : Date.now());
-    for (const [id, entry] of pending.entries()) {
-      if (hasDocumentMetricsRow(id)) {
+    const renderedIds = new Set(Array.from(document.querySelectorAll("[data-cp-provider-metrics-row]"),
+      row => row.dataset?.cpProviderMetricsRequestId));
+    const anchors = new Map();
+    for (const answer of document.querySelectorAll(`[${ANCHOR_ATTRIBUTE}]`)) {
+      const id = answer.getAttribute(REQUEST_ID_ATTRIBUTE);
+      if (!anchors.has(id)) anchors.set(id, answer);
+    }
+    for (const [id, answer] of anchors) {
+      const entry = pending.get(id);
+      const measurement = storedMeasurements.get(id) || entry?.measurement;
+      if (!measurement || renderedIds.has(id)) {
         continue;
       }
-      const answers = findAnswers(id);
-      if (answers.length > 0) {
-        entry.matched = attach(answers[0], entry.measurement) || entry.matched;
-      }
+      const matched = attach(answer, measurement);
+      if (entry) entry.matched = matched || entry.matched;
     }
   }
 
-  function receiveMeasurement(value, version, receivedAt) {
+  function scheduleScan() {
+    if (scanScheduled) return;
+    scanScheduled = true;
+    Promise.resolve().then(function () {
+      scanScheduled = false;
+      scan();
+    });
+  }
+
+  function receiveMeasurement(value, version, receivedAt, deferScan) {
     if (Number(version) !== EVENT_VERSION) {
       return false;
     }
@@ -214,7 +225,8 @@
       receivedAt: existing?.receivedAt ?? observedAt,
       matched: existing?.matched === true,
     });
-    scan(observedAt);
+    if (pending.size > MAX_RECORDS) pending.delete(pending.keys().next().value);
+    if (!deferScan) scan(observedAt);
     return true;
   }
 
@@ -223,9 +235,13 @@
   }
 
   function ingestStoredRecords(records) {
-    for (const record of Array.isArray(records) ? records : []) {
-      receiveMeasurement(record, EVENT_VERSION);
+    storedMeasurements.clear();
+    for (const record of observability?.retainMeasurements?.(records) || []) {
+      storedMeasurements.set(record.id, record);
+      pending.delete(record.id);
+      expiredIds.delete(record.id);
     }
+    scheduleScan();
   }
 
   const eventTarget = typeof globalThis.addEventListener === "function" ? globalThis : globalThis.window;
@@ -248,8 +264,17 @@
     refreshRows();
   }).catch(function () {});
 
-  const observer = new MutationObserver(scan);
-  observer.observe(document.body, { childList: true, subtree: true });
+  const observer = new MutationObserver(function (mutations) {
+    const hasAnchor = node => node?.hasAttribute?.(ANCHOR_ATTRIBUTE) ||
+      node?.querySelector?.(`[${ANCHOR_ATTRIBUTE}]`);
+    if (mutations.some(mutation => mutation.type === "attributes" ||
+      [...mutation.addedNodes, ...mutation.removedNodes].some(hasAnchor) ||
+      mutation.target?.hasAttribute?.(ANCHOR_ATTRIBUTE))) scheduleScan();
+  });
+  observer.observe(document.body, {
+    childList: true, subtree: true, attributes: true,
+    attributeFilter: [ANCHOR_ATTRIBUTE, REQUEST_ID_ATTRIBUTE],
+  });
   scan();
 
   globalThis.__CP_ANSWER_PROVIDER_METRICS__ = Object.freeze({

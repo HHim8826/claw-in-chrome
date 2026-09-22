@@ -12,7 +12,7 @@ const metricsPath = path.join(repoRoot, "src", "sidepanel", "answer-provider-met
 function measurement(id, overrides = {}) {
   return {
     id,
-    startedAt: 1_752_364_800_000,
+    startedAt: Date.now(),
     profileId: "provider-main",
     providerName: "Main provider",
     format: "openai_chat",
@@ -237,6 +237,8 @@ async function testStoredLocaleOverridesStaticHtmlLanguage() {
 }
 
 async function main() {
+  await testHistoricalMeasurementSurvivesPendingExpiry();
+  await testStorageBatchHasBoundedDomWork();
   await testBothArrivalOrdersAndDuplicatesUseExactId();
   await testLegacyReactWrapperIsNotMutated();
   await testConcurrencyVersionExpiryAndLegacyProtection();
@@ -245,6 +247,45 @@ async function main() {
   await testMatchedMeasurementSurvivesLateReactRerender();
   await testStoredLocaleOverridesStaticHtmlLanguage();
   console.log("answer provider metrics tests passed");
+}
+
+async function testHistoricalMeasurementSurvivesPendingExpiry() {
+  const record = measurement("late-conversation");
+  const harness = createHarness({ records: [record] });
+  await flushMicrotasks();
+  harness.api.prune(Date.now() + harness.api.PENDING_MAX_AGE_MS + 1);
+  const answer = harness.addAnswer(record.id);
+  harness.api.scan();
+  assert.equal(harness.rows(answer).length, 1, "retained history must match a conversation first opened after five minutes");
+  answer.remove();
+  await harness.chromeMock.chrome.storage.local.set({ providerObservabilityRecords: [record] });
+  await flushMicrotasks();
+  const restored = harness.addAnswer(record.id);
+  harness.api.scan();
+  assert.equal(harness.rows(restored).length, 1, "storage snapshots must remain eligible after pending expiry");
+  restored.remove();
+  await harness.chromeMock.chrome.storage.local.set({ providerObservabilityRecords: [] });
+  await flushMicrotasks();
+  const cleared = harness.addAnswer(record.id);
+  harness.api.scan();
+  assert.equal(harness.rows(cleared).length, 0, "cleared history must leave the cache");
+}
+
+async function testStorageBatchHasBoundedDomWork() {
+  const records = Array.from({ length: 500 }, (_, index) => measurement(`load-${index}`, { startedAt: Date.now() }));
+  const harness = createHarness({ records });
+  const answers = records.slice(0, 20).map(record => harness.addAnswer(record.id));
+  let queries = 0;
+  const query = harness.document.querySelectorAll.bind(harness.document);
+  harness.document.querySelectorAll = selector => { queries += 1; return query(selector); };
+  await flushMicrotasks();
+  assert.ok(queries <= 4, `initial 500-record ingestion must use bounded DOM queries, got ${queries}`);
+  for (const answer of answers) assert.equal(harness.rows(answer).length, 1);
+  queries = 0;
+  await harness.chromeMock.chrome.storage.local.set({ providerObservabilityRecords: records });
+  await flushMicrotasks();
+  assert.ok(queries <= 4, `500-record storage update must use bounded DOM queries, got ${queries}`);
+  for (const answer of answers) assert.equal(harness.rows(answer).length, 1);
 }
 
 main().catch(error => {
