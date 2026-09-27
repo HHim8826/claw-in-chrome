@@ -40,6 +40,7 @@ pages/pairing.html
 shared/provider-format-adapter.js
 shared/browser-batch.js
 shared/tool-activity-labels.js
+shared/link-safety.js
 background/service-worker-runtime.js
 background/service-worker-loader.js
 background/service-worker-detached-window-runtime.js

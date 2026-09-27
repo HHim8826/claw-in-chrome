@@ -137,6 +137,10 @@ Prefer these seams when implementing behavior.
   running, `is_error` is failed, and anything else is done. The side-panel
   label function asks it first and keeps its older labels for tools it
   doesn't cover. Field values and typed text never appear in these labels.
+- The side-panel external-link dialog uses `link-safety.js` to warn about
+  `user:password@` links and show the real host. Its open button stays
+  disabled until the dialog has been visible for 400 ms. Hiding the panel
+  restarts that delay, and the dialog no longer auto-focuses the open button.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

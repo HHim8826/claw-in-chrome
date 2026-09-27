@@ -28151,6 +28151,38 @@ const Qy = ({
     defaultMessage: "This link contains an internationalized domain name that may be deceptive. The domain appears as:",
     id: "n2uO4zTmwR"
   });
+  const __cpCredentialsWarning = r.formatMessage({
+    defaultMessage: "This link contains embedded credentials, which may be an attempt to disguise its destination. You will actually be sent to:",
+    id: "DrFn3Jpzg4"
+  });
+  // 语义锚点：外链确认框的嵌入凭据检测（upstream 1.0.94）：user:pass@host 形式的链接额外提示真实目的地。
+  const __cpLinkUserinfo = a.useMemo(() => globalThis.__CP_LINK_SAFETY__?.inspectUserinfo(t) ?? {
+    hasUserinfo: false,
+    host: null
+  }, [t]);
+  // 语义锚点：外链确认框打开按钮的激活延迟（upstream 1.0.94）：对话框可见满 400ms 后才可确认，面板隐藏再显示会重新计时。
+  const [__cpOpenLinkReady, __cpSetOpenLinkReady] = a.useState(false);
+  a.useEffect(() => {
+    __cpSetOpenLinkReady(false);
+    if (!e) {
+      return;
+    }
+    const n = globalThis.__CP_LINK_SAFETY__?.OPEN_LINK_ACTIVATION_DELAY_MS ?? 400;
+    let s;
+    const r = () => {
+      clearTimeout(s);
+      __cpSetOpenLinkReady(false);
+      if (document.visibilityState !== "hidden") {
+        s = setTimeout(() => __cpSetOpenLinkReady(true), n);
+      }
+    };
+    r();
+    document.addEventListener("visibilitychange", r);
+    return () => {
+      clearTimeout(s);
+      document.removeEventListener("visibilitychange", r);
+    };
+  }, [e, t]);
   const h = a.useMemo(() => function (e) {
     try {
       const t = new URL(e);
@@ -28188,10 +28220,29 @@ const Qy = ({
     cancelText: u,
     onClose: n,
     onConfirm: s,
-    autoFocus: true,
+    autoFocus: false,
+    disabled: !__cpOpenLinkReady,
     children: [l.jsx("div", {
       className: "break-all bg-bg-000 border-0.5 border-border-300 rounded-lg text-text-100 max-h-40 overflow-y-scroll py-3 px-4 mt-3",
       children: p
+    }), __cpLinkUserinfo.hasUserinfo && l.jsx("div", {
+      className: "mt-3 p-3 bg-danger-900 border-0.5 border-danger-200 rounded-lg",
+      children: l.jsxs("div", {
+        className: "flex items-start gap-2",
+        children: [l.jsx(ce, {
+          size: 16,
+          className: "text-danger-000 mt-0.5 flex-shrink-0"
+        }), l.jsxs("div", {
+          className: "text-sm text-danger-000",
+          children: [l.jsx("p", {
+            className: "font-medium",
+            children: __cpCredentialsWarning
+          }), l.jsx("p", {
+            className: "mt-1 font-mono break-all",
+            children: __cpLinkUserinfo.host
+          })]
+        })]
+      })
     }), h.hasPunycode && l.jsx("div", {
       className: "mt-3 p-3 bg-danger-900 border-0.5 border-danger-200 rounded-lg",
       children: l.jsxs("div", {

@@ -76,9 +76,9 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "external-link-safety",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source external-link dialog warns about embedded credentials and delays activation.",
-    owners: ["src/assets/sidepanel-BoLm9pmH.js"],
+    owners: ["src/shared/link-safety.js", "src/assets/sidepanel-BoLm9pmH.js"],
     testTarget: "tests/unit/link-safety.test.js",
   },
   {
