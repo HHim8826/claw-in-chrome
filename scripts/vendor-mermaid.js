@@ -4,7 +4,7 @@ const path = require("node:path");
 const repoRoot = path.join(__dirname, "..");
 const packageRoot = path.join(repoRoot, "node_modules", "mermaid");
 const packageJsonPath = path.join(packageRoot, "package.json");
-const expectedVersion = "11.15.0";
+const expectedVersion = "11.17.2";
 const checkOnly = process.argv.includes("--check");
 
 if (!fs.existsSync(packageJsonPath)) {

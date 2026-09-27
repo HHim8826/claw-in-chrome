@@ -51,7 +51,7 @@ const UPSTREAM_1_0_79_BEHAVIOR_MATRIX = Object.freeze([
   {
     id: "mermaid-artifact-rendering",
     status: "equivalent",
-    evidence: "Markdown Mermaid fences render through a strict, bounded, packaged 11.15.0 runtime.",
+    evidence: "Markdown Mermaid fences render through a strict, bounded, packaged 11.17.2 runtime.",
     owners: [
       "src/assets/sidepanel-BoLm9pmH.js",
       "src/shared/mermaid-renderer.js",

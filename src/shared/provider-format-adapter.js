@@ -1674,7 +1674,9 @@
     return result;
   }
   function openAIChatToAnthropic(body, config) {
+    assertNoProviderError(body);
     const choice = Array.isArray(body?.choices) ? body.choices[0] : null;
+    assertProviderTerminal(OPENAI_CHAT_FORMAT, choice?.finish_reason);
     if (!choice || !choice.message) {
       throw new Error("OpenAI Chat 响应里缺少 choices[0].message。");
     }
@@ -1897,6 +1899,7 @@
         continue;
       }
       const chunk = safeJsonParse(data, null);
+      assertNoProviderError(chunk);
       if (chunk?.usage && typeof chunk.usage === "object") lastUsage = chunk.usage;
       if (!chunk || !Array.isArray(chunk.choices) || !chunk.choices[0]) {
         continue;
@@ -1948,6 +1951,7 @@
         lastFinishReason = choice.finish_reason;
       }
     }
+    assertProviderTerminal(OPENAI_CHAT_FORMAT, lastFinishReason);
     consumeThinkTaggedText(thinkTagState, "", thinkTagHandlers, true);
     const orderedToolCalls = Array.from(toolCallsByIndex.entries()).sort(function (a, b) {
       return a[0] - b[0];
@@ -2026,7 +2030,7 @@
         message: providerError.message,
         bodyPreview: truncateText(providerError.text, 500)
       }, "warn");
-      return null;
+      throw invalidProviderOutcome("Provider stream fallback failed.");
     }
     const upstreamText = await upstream.text();
     try {
@@ -2056,7 +2060,7 @@
         message: error && typeof error.message === "string" ? error.message : String(error || ""),
         bodyPreview: truncateText(upstreamText, 500)
       }, "warn");
-      return null;
+      throw error?.providerInvalidResponse ? error : invalidProviderOutcome("Invalid provider stream fallback.");
     }
   }
   function convertMessagesToResponsesInput(messages) {
@@ -2223,6 +2227,7 @@
     return result;
   }
   function openAIResponsesToAnthropic(body) {
+    assertProviderTerminal(OPENAI_RESPONSES_FORMAT, body);
     const output = Array.isArray(body?.output) ? body.output : null;
     if (!output) {
       throw new Error("OpenAI Responses 响应里缺少 output。");
@@ -2351,12 +2356,103 @@
       return "";
     }).join("");
   }
-  function createAnthropicStreamFromOpenAIChat(stream, config, onComplete, hooks) {
-    const streamHooks = hooks && typeof hooks === "object" ? hooks : {};
+  function invalidProviderOutcome(message) {
+    const error = new Error(message);
+    error.providerInvalidResponse = true;
+    return error;
+  }
+  function assertProviderTerminal(format, value) {
+    if (format === OPENAI_CHAT_FORMAT) {
+      if (!["stop", "length", "tool_calls", "function_call", "content_filter"].includes(value)) {
+        throw invalidProviderOutcome("Chat provider response ended without a valid finish reason.");
+      }
+    } else if (value?.error || !["completed", "incomplete"].includes(value?.status)) {
+      throw invalidProviderOutcome("Responses provider did not return a successful terminal outcome.");
+    } else if (value.status === "incomplete" &&
+        !["max_output_tokens", "max_tokens", "content_filter"].includes(value.incomplete_details?.reason)) {
+      throw invalidProviderOutcome("Responses provider returned an unsupported incomplete outcome.");
+    }
+  }
+  function assertNoProviderError(body) {
+    if (body?.error) throw invalidProviderOutcome("Provider reported an error response.");
+  }
+
+  // Pull one SSE event at a time. Never read while downstream has no demand.
+  // Cancellation closes pending reads, releases the reader, and records once.
+  function createProviderSseStream(stream, processBlock, finalize, onComplete, getUsage) {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     const encoder = new TextEncoder();
     let buffer = "";
+    let eof = false;
+    let stopped = false;
+    let cleanupPromise;
+    function cleanup(reason) {
+      if (!cleanupPromise) cleanupPromise = (async () => {
+        try { await reader.cancel(reason); } catch (_error) {}
+        finally { reader.releaseLock(); }
+      })();
+      return cleanupPromise;
+    }
+    function complete(category) {
+      if (stopped) return;
+      stopped = true;
+      onComplete?.(category ? {} : getUsage(), category);
+    }
+    return new ReadableStream({
+      async pull(controller) {
+        const sink = { enqueue(chunk) { if (!stopped) controller.enqueue(chunk); } };
+        try {
+          // With highWaterMark 0, pull itself represents one outstanding read.
+          while (!stopped) {
+            const separator = findSseSeparator(buffer);
+            if ((separator ? separator.index : buffer.length) > 1024 * 1024) {
+              throw invalidProviderOutcome("Provider SSE event exceeds the size limit.");
+            }
+            if (separator || eof) {
+              const block = separator ? buffer.slice(0, separator.index) : buffer;
+              buffer = separator ? buffer.slice(separator.index + separator.length) : "";
+              const terminal = block.trim() ? await processBlock(block, sink) : false;
+              if (stopped) return;
+              if (terminal || (eof && !buffer)) {
+                const output = [];
+                finalize(output);
+                for (const chunk of output) sink.enqueue(encoder.encode(chunk));
+                complete();
+                controller.close();
+                await cleanup();
+                return;
+              }
+              if (controller.desiredSize < 0) return;
+              continue;
+            }
+            const next = await reader.read();
+            if (stopped) return;
+            eof = next.done;
+            buffer += eof ? decoder.decode() : decoder.decode(next.value, { stream: true });
+          }
+        } catch (error) {
+          if (!stopped) {
+            const category = error?.name === "AbortError" || /aborted/i.test(String(error?.message || ""))
+              ? "aborted" : "invalid_response";
+            sink.enqueue(encoder.encode(sseChunk("error", {
+              type: "error", error: { type: "stream_error", message: String(error?.message || "Provider stream failed.") },
+            })));
+            complete(category);
+            controller.close();
+          }
+          await cleanup(error);
+        }
+      },
+      async cancel(reason) {
+        complete("aborted");
+        await cleanup(reason);
+      },
+    }, { highWaterMark: 0 });
+  }
+  function createAnthropicStreamFromOpenAIChat(stream, config, onComplete, hooks) {
+    const streamHooks = hooks && typeof hooks === "object" ? hooks : {};
+    const encoder = new TextEncoder();
     let messageId = "";
     let currentModel = "";
     let nextContentIndex = 0;
@@ -2519,6 +2615,7 @@
       }
     }
     function finalizeStream(output) {
+      assertProviderTerminal(OPENAI_CHAT_FORMAT, lastFinishReason);
       emitTaggedTextDelta(output, "", true);
       closeCurrentNonTool(output);
       closeAllToolBlocks(output);
@@ -2553,14 +2650,9 @@
         return;
       }
       const data = dataParts.join("\n");
-      if (data === "[DONE]") {
-        finalizeStream(output);
-        for (const chunk of output) {
-          controller.enqueue(encoder.encode(chunk));
-        }
-        return;
-      }
+      if (data === "[DONE]") return true;
       const chunk = safeJsonParse(data, null);
+      assertNoProviderError(chunk);
       if (chunk?.usage && typeof chunk.usage === "object") lastUsage = chunk.usage;
       if (!chunk || !Array.isArray(chunk.choices) || !chunk.choices[0]) {
         return;
@@ -2689,57 +2781,8 @@
         controller.enqueue(encoder.encode(chunkText));
       }
     }
-    return new ReadableStream({
-      async start(controller) {
-        try {
-          while (true) {
-            const next = await reader.read();
-            if (next.done) {
-              break;
-            }
-            buffer += decoder.decode(next.value, {
-              stream: true
-            });
-            let separator = findSseSeparator(buffer);
-            while (separator) {
-              const block = buffer.slice(0, separator.index);
-              buffer = buffer.slice(separator.index + separator.length);
-              if (block.trim()) {
-                await processBlock(block, controller);
-              }
-              separator = findSseSeparator(buffer);
-            }
-          }
-          if (buffer.trim()) {
-            await processBlock(buffer, controller);
-            buffer = "";
-          }
-          const output = [];
-          finalizeStream(output);
-          for (const chunkText of output) {
-            controller.enqueue(encoder.encode(chunkText));
-          }
-          onComplete?.(getSafeAnthropicUsage(
-            lastUsage ? buildAnthropicUsageFromChat(lastUsage) : null,
-          ));
-          controller.close();
-        } catch (error) {
-          const streamErrorCategory = error?.name === "AbortError" ||
-            /aborted/i.test(String(error?.message || ""))
-            ? "aborted"
-            : "invalid_response";
-          controller.enqueue(encoder.encode(sseChunk("error", {
-            type: "error",
-            error: {
-              type: "stream_error",
-              message: error && typeof error.message === "string" ? error.message : "流式转换失败。"
-            }
-          })));
-          onComplete?.({}, streamErrorCategory);
-          controller.close();
-        }
-      }
-    });
+    return createProviderSseStream(stream, processBlock, finalizeStream, onComplete,
+      () => getSafeAnthropicUsage(lastUsage ? buildAnthropicUsageFromChat(lastUsage) : null));
   }
   function responseObjectFromEvent(data) {
     if (data && typeof data === "object" && data.response && typeof data.response === "object") {
@@ -2784,10 +2827,7 @@
   }
   function createAnthropicStreamFromResponses(stream, onComplete, hooks) {
     const streamHooks = hooks && typeof hooks === "object" ? hooks : {};
-    const reader = stream.getReader();
-    const decoder = new TextDecoder();
     const encoder = new TextEncoder();
-    let buffer = "";
     let messageId = "";
     let currentModel = "";
     let hasSentMessageStart = false;
@@ -2796,6 +2836,7 @@
     let hasToolUse = false;
     let nextContentIndex = 0;
     let lastResponseObject = null;
+    let terminalReceived = false;
     let fallbackOpenIndex = null;
     let currentTextIndex = null;
     let currentThinkingIndex = null;
@@ -2838,6 +2879,8 @@
       hasSentMessageStart = true;
     }
     function finalizeResponsesStream(output) {
+      if (!terminalReceived) throw invalidProviderOutcome("Responses stream ended before a terminal event.");
+      assertProviderTerminal(OPENAI_RESPONSES_FORMAT, lastResponseObject);
       if (!hasSentMessageStart) {
         return;
       }
@@ -3036,7 +3079,8 @@
         // Do not let EOF turn a partial response into a successful message.
         throw new Error("Responses provider reported a failed stream.");
       }
-      lastResponseObject = responseObject || lastResponseObject;
+      assertNoProviderError(responseObject);
+      if (data.response) lastResponseObject = responseObject;
       updateResponseMetadata(responseObject);
       if (resolvedEvent === "response.created") {
         ensureMessageStart(output, responseObject);
@@ -3133,93 +3177,20 @@
             toolIndicesByItemId.delete(itemId);
           }
         }
-      } else if (resolvedEvent === "response.completed") {
-        if (!hasSentMessageStart) {
-          ensureMessageStart(output, responseObject);
-        }
-        closeCurrentText(output);
-        closeCurrentThinking(output);
-        const dangling = Array.from(openIndices).sort(function (a, b) {
-          return a - b;
-        });
-        for (const index of dangling) {
-          closeIndex(output, index);
-        }
-        output.push(sseChunk("message_delta", {
-          type: "message_delta",
-          delta: {
-            stop_reason: mapResponsesStopReason(responseObject?.status, hasToolUse, responseObject?.incomplete_details?.reason),
-            stop_sequence: null
-          },
-          usage: getSafeAnthropicUsage(responseObject?.usage ? buildAnthropicUsageFromResponses(responseObject.usage) : null)
-        }));
-        hasEmittedMessageDelta = true;
-        output.push(sseChunk("message_stop", {
-          type: "message_stop"
-        }));
-        hasEmittedMessageStop = true;
+      } else if (resolvedEvent === "response.completed" || resolvedEvent === "response.incomplete") {
+        assertProviderTerminal(OPENAI_RESPONSES_FORMAT, responseObject);
+        lastResponseObject = responseObject;
+        terminalReceived = true;
+        ensureMessageStart(output, responseObject);
       } else if (resolvedEvent === "response.content_part.done" || resolvedEvent === "response.output_item.done" || resolvedEvent === "response.in_progress") {
       }
       for (const chunkText of output) {
         controller.enqueue(encoder.encode(chunkText));
       }
+      return terminalReceived;
     }
-    return new ReadableStream({
-      async start(controller) {
-        try {
-          while (true) {
-            const next = await reader.read();
-            if (next.done) {
-              break;
-            }
-            buffer += decoder.decode(next.value, {
-              stream: true
-            });
-            let separator = findSseSeparator(buffer);
-            while (separator) {
-              const block = buffer.slice(0, separator.index);
-              buffer = buffer.slice(separator.index + separator.length);
-              if (block.trim()) {
-                await processBlock(block, controller);
-              }
-              separator = findSseSeparator(buffer);
-            }
-          }
-          if (buffer.trim()) {
-            await processBlock(buffer, controller);
-            buffer = "";
-          }
-          const output = [];
-          finalizeResponsesStream(output);
-          for (const chunkText of output) {
-            controller.enqueue(encoder.encode(chunkText));
-          }
-          onComplete?.(getSafeAnthropicUsage(
-            lastResponseObject?.usage
-              ? buildAnthropicUsageFromResponses(lastResponseObject.usage)
-              : null,
-          ));
-          controller.close();
-        } catch (error) {
-          const streamErrorCategory = error?.name === "AbortError" ||
-            /aborted/i.test(String(error?.message || ""))
-            ? "aborted"
-            : "invalid_response";
-          controller.enqueue(encoder.encode(sseChunk("error", {
-            type: "error",
-            error: {
-              type: "stream_error",
-              message: error && typeof error.message === "string" ? error.message : "Responses 流式转换失败。"
-            }
-          })));
-          onComplete?.({}, streamErrorCategory);
-          controller.close();
-        } finally {
-          try { await reader.cancel(); } catch (_error) {}
-          reader.releaseLock();
-        }
-      }
-    });
+    return createProviderSseStream(stream, processBlock, finalizeResponsesStream, onComplete,
+      () => getSafeAnthropicUsage(lastResponseObject?.usage ? buildAnthropicUsageFromResponses(lastResponseObject.usage) : null));
   }
   function createSseResponse(response, transformedStream) {
     return new Response(transformedStream, {
@@ -3585,7 +3556,7 @@
             message: error && typeof error.message === "string" ? error.message : String(error || ""),
             bodyPreview: truncateText(upstreamText, 500)
           }, "warn");
-          if (index < candidates.length - 1) {
+          if (!error?.providerInvalidResponse && index < candidates.length - 1) {
             shouldTryNextCandidate = true;
             break;
           }
@@ -3664,10 +3635,10 @@
         stack: error?.stack || ""
       }, "error");
       requestTracker?.complete?.({
-        outcome: "network_error",
-        errorCategory: "network",
+        outcome: error?.providerInvalidResponse ? "invalid_response" : "network_error",
+        errorCategory: error?.providerInvalidResponse ? "invalid_response" : "network",
       });
-      return createAnthropicErrorResponse(500, error && typeof error.message === "string" ? error.message : "自定义供应商协议转换失败。");
+      return createAnthropicErrorResponse(error?.providerInvalidResponse ? 502 : 500, error && typeof error.message === "string" ? error.message : "自定义供应商协议转换失败。");
     }
   };
 })();

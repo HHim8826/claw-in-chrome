@@ -39,8 +39,13 @@ Preserve these invariants.
 - Generic internal side-panel prompt delivery retains its bounded readiness
   retry without exposing that bridge to external websites.
 - Mermaid rendering rejects source over 20,000 encoded bytes or 400 likely
-  edges, times out after five seconds, and preserves the original code block on
+  edges, limits asynchronous waits to five seconds, and preserves the code on
   any load, render, or sanitization failure.
+- Provider streams propagate body cancellation, respect downstream demand, and
+  release reader locks on success, failure, and cancellation. Terminal protocol
+  errors and missing completion never become successful answers or tool turns.
+- Visualizer storage deletions evict cached records immediately. Session lists
+  read metadata only; unrelated updates reuse the selected event graph.
 - Settings imports validate the document before writing and update only
   reviewed keys. Credential-free imports preserve installed provider secrets.
 - Provider measurements are best effort and can't fail provider requests. The

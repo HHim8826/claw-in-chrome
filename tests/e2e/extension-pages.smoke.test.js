@@ -111,6 +111,7 @@ async function capturePageErrors(page, action) {
 async function testExtensionPagesLoad() {
   const extensionId = computeExtensionIdFromKey(manifest.key);
   const contextInfo = await launchExtensionContext();
+  console.log("E2E runtime:", contextInfo.context.browser()?.version(), extensionRoot);
   try {
     const optionsPage = await contextInfo.context.newPage();
     const optionsResult = await capturePageErrors(optionsPage, async () => {
@@ -923,7 +924,7 @@ async function testExtensionPagesLoad() {
         "graph TD\nStream --> Complete";
     });
     await sidepanelPage.waitForFunction(() => {
-      return !document.querySelector("#cp-streamed-mermaid") &&
+      return document.querySelector("#cp-streamed-mermaid")?.dataset.cpMermaidState === "rendered" &&
         document.querySelectorAll(
           ".cp-mermaid-diagram[data-cp-mermaid-state='rendered'] svg",
         ).length === 2;
@@ -978,6 +979,9 @@ async function testExtensionPagesLoad() {
       timeout: 15000
     });
 
+    await testReactMermaidLifecycle(sidepanelPage);
+    await testVisualizerDeletion(contextInfo.context, extensionId);
+
     const serviceWorker = await waitForExtensionServiceWorker(contextInfo.context, extensionId);
     if (serviceWorker) {
       assert.equal(serviceWorker.url().startsWith(`chrome-extension://${extensionId}/`), true);
@@ -985,6 +989,64 @@ async function testExtensionPagesLoad() {
   } finally {
     await closeExtensionContext(contextInfo);
   }
+}
+
+async function testReactMermaidLifecycle(page) {
+  await page.evaluate(async () => {
+    const { r: React } = await import(chrome.runtime.getURL("assets/index-BVS4T5_D.js"));
+    const { R: ReactDOM } = await import(chrome.runtime.getURL("assets/index-5uYI7rOK.js"));
+    const host = document.createElement("div");
+    host.id = "react-mermaid-fixture";
+    document.body.appendChild(host);
+    globalThis.mermaidReactErrors = [];
+    const root = ReactDOM.createRoot(host, { onUncaughtError: error => mermaidReactErrors.push(String(error)) });
+    globalThis.renderMermaidFixture = (source, key = "first") => root.render(React.createElement("div", { key }, source === null ? null :
+      React.createElement("pre", {}, React.createElement("code", { className: "language-mermaid" }, source))));
+    globalThis.unmountMermaidFixture = () => root.unmount();
+    renderMermaidFixture("graph TD\nA --> B");
+  });
+  await page.waitForSelector("#react-mermaid-fixture .cp-mermaid-diagram svg");
+  await page.evaluate(() => renderMermaidFixture("graph TD\nA --> B\nB --> C"));
+  await page.waitForFunction(() => document.querySelector("#react-mermaid-fixture .cp-mermaid-diagram svg")?.textContent.includes("C"));
+  const priorSvg = await page.locator("#react-mermaid-fixture svg").evaluate(node => node.outerHTML);
+  await page.evaluate(() => { document.documentElement.dataset.mode = "light"; });
+  await page.waitForFunction(prior => {
+    const pre = document.querySelector("#react-mermaid-fixture pre");
+    return pre?.dataset.cpMermaidState === "rendered" && pre.querySelector("svg")?.outerHTML !== prior;
+  }, priorSvg);
+  fs.mkdirSync(artifactRoot, { recursive: true });
+  await page.locator("#react-mermaid-fixture").screenshot({ path: path.join(artifactRoot, "mermaid-react-stream.png") });
+  await page.evaluate(() => renderMermaidFixture(null));
+  await page.waitForFunction(() => !document.querySelector("#react-mermaid-fixture pre"));
+  assert.equal(await page.locator("#react-mermaid-fixture .cp-mermaid-diagram").count(), 0);
+  await page.evaluate(() => renderMermaidFixture("graph TD\nNew --> Conversation", "second"));
+  await page.waitForFunction(() => document.querySelector("#react-mermaid-fixture .cp-mermaid-diagram svg")?.textContent.includes("Conversation"));
+  await page.evaluate(() => { renderMermaidFixture("graph TD\nPending --> Result"); unmountMermaidFixture(); });
+  assert.equal(await page.locator("#react-mermaid-fixture .cp-mermaid-diagram").count(), 0);
+  assert.deepEqual(await page.evaluate(() => mermaidReactErrors), []);
+}
+
+async function testVisualizerDeletion(context, extensionId) {
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", error => errors.push(String(error)));
+  try {
+    await page.goto('chrome-extension://' + extensionId + '/visualizer/visualizer.html?scopeId=delete-test&sessionId=one&locale=en-US');
+    await page.evaluate(async () => {
+      const prefix = "claw.chat.scopes.delete-test";
+      const snapshot = (id, text) => ({ meta: { id, scopeId: "delete-test", title: text, updatedAt: id === "one" ? 200 : 100 }, messages: [{ role: "user", content: text }] });
+      const one = snapshot("one", "Deleted session marker");
+      const two = snapshot("two", "Fallback session marker");
+      await chrome.storage.local.set({ [prefix + ".index"]: [one.meta, two.meta], [prefix + ".activeSession"]: one, [prefix + ".byId.one"]: one, [prefix + ".byId.two"]: two });
+    });
+    await page.waitForFunction(() => document.body.textContent.includes("Deleted session marker"));
+    await page.evaluate(() => chrome.storage.local.remove(["claw.chat.scopes.delete-test.activeSession", "claw.chat.scopes.delete-test.byId.one"]));
+    await page.waitForFunction(() => document.body.textContent.includes("Fallback session marker") && !document.body.textContent.includes("Deleted session marker"));
+    await page.evaluate(() => chrome.storage.local.remove(["claw.chat.scopes.delete-test.index", "claw.chat.scopes.delete-test.byId.two"]));
+    await page.waitForSelector(".cpv-live-pill[data-status='empty']");
+    assert.equal((await page.textContent("body")).includes("Fallback session marker"), false);
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
 }
 
 async function main() {

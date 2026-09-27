@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Audit shipped dependencies including vendored devDependencies
+        run: npm run check:dependency-advisories
+
       - name: Run fast validation
         run: npm run validate:fast
 

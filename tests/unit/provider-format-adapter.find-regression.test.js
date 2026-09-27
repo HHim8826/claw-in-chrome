@@ -150,6 +150,11 @@ async function runAdapterWithUpstreamHandler(upstreamHandler, options = {}) {
     }
     throw error;
   }
+  if (options.consumeResponse) {
+    await options.consumeResponse(response);
+    await sandbox.__CP_PROVIDER_OBSERVABILITY__.whenIdle();
+    return { measurements: storageState.providerObservabilityRecords, dispatchedEvents };
+  }
   if (options.responseType === "text") {
     const text = await response.text();
     if (!options.skipObservabilityIdle) {
@@ -2213,7 +2218,9 @@ async function main() {
   console.log("provider-format-adapter find regression tests passed");
 }
 
-main().catch((error) => {
+module.exports = { runAdapterWithUpstreamHandler, runAdapterWithPayload };
+
+if (require.main === module) main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

@@ -85,6 +85,9 @@
     return svgRoot.outerHTML;
   }
 
+  // This bounds asynchronous waits only; it cannot preempt synchronous parser
+  // or renderer work. Keep the packaged dependency patched and test hostile
+  // parser inputs in a separate process with a deadline and heap limit.
   function withTimeout(promise, timeoutMs) {
     let timeoutId;
     return Promise.race([

@@ -91,8 +91,7 @@ function createStorageMock(initialState = {}) {
         continue;
       }
       changes[key] = {
-        oldValue: cloneValue(state[key]),
-        newValue: undefined
+        oldValue: cloneValue(state[key])
       };
       delete state[key];
     }

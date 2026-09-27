@@ -91,10 +91,10 @@ function testPackagedSidePanelOwnsALazyMermaidEnhancer() {
   const packageJson = JSON.parse(
     fs.readFileSync(path.join(root, "package.json"), "utf8"),
   );
-  assert.equal(packageJson.devDependencies.mermaid, "^11.15.0");
+  assert.equal(packageJson.devDependencies.mermaid, "11.17.2");
   assert.equal(
     fs.existsSync(
-      path.join(root, "src", "assets", "vendor", "mermaid-11.15.0.min.js"),
+      path.join(root, "src", "assets", "vendor", "mermaid-11.17.2.min.js"),
     ),
     true,
   );
@@ -105,14 +105,14 @@ function testPackagedSidePanelOwnsALazyMermaidEnhancer() {
   );
   assert.ok(html.includes('/shared/mermaid-renderer.js'));
   assert.ok(html.includes('/sidepanel/mermaid-markdown.js'));
-  assert.equal(html.includes('/assets/vendor/mermaid-11.15.0.min.js'), false);
+  assert.equal(html.includes('/assets/vendor/mermaid-11.17.2.min.js'), false);
 
   const enhancer = fs.readFileSync(
     path.join(root, "src", "sidepanel", "mermaid-markdown.js"),
     "utf8",
   );
   assert.ok(enhancer.includes("pre > code.language-mermaid"));
-  assert.ok(enhancer.includes("assets/vendor/mermaid-11.15.0.min.js"));
+  assert.ok(enhancer.includes("assets/vendor/mermaid-11.17.2.min.js"));
   assert.ok(enhancer.includes("MutationObserver"));
   assert.ok(enhancer.includes("characterData: true"));
 }
@@ -164,7 +164,8 @@ async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
   const enhancer = require(modulePath);
   const pre = {
     dataset: {},
-    replaceWith(value) {
+    isConnected: true,
+    appendChild(value) {
       replacement = value;
     },
   };
@@ -178,6 +179,17 @@ async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
     await enhancer.renderCodeBlock(code);
     assert.equal(renderCount, 2);
     assert.equal(replacement.dataset.cpMermaidState, "rendered");
+    code.textContent += "\nB --> C";
+    await enhancer.renderCodeBlock(code);
+    assert.equal(renderCount, 3, "successful diagrams must follow streamed changes");
+    global.document.documentElement.dataset.mode = "light";
+    await enhancer.renderCodeBlock(code);
+    assert.equal(renderCount, 4, "theme changes must rerender the same source");
+    assert.equal(pre.dataset.cpMermaidState, "rendered");
+    pre.isConnected = false;
+    code.textContent += "\nC --> D";
+    await enhancer.renderCodeBlock(code);
+    assert.equal(renderCount, 4, "unmounted blocks must not render");
   } finally {
     delete require.cache[require.resolve(modulePath)];
     global.document = originalDocument;

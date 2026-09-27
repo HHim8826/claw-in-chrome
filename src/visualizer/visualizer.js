@@ -1234,15 +1234,19 @@
     `;
   }
 
-  function recomputeRun() {
+  const selectRun = core.createVisualizerRunSelector();
+  let recomputeTimer;
+  let forceStorageRender = false;
+  function recomputeRun(forceRender = true) {
     state.sessionGroups = core.collectVisualizerSessionGroups(state.storageSnapshot, {
       prefix: getChatScopePrefix()
     });
-    const nextRun = core.selectVisualizerRun(state.storageSnapshot, {
+    const nextRun = selectRun(state.storageSnapshot, {
       prefix: getChatScopePrefix(),
       scopeId: state.query.scopeId,
       sessionId: state.query.sessionId
     });
+    if (!forceRender && nextRun && nextRun === state.run && !state.sessionBrowserOpen) return;
     const nextRunKey = nextRun ? [nextRun.meta.scopeId, nextRun.meta.sessionId, nextRun.meta.updatedAt].join("::") : "";
     if (nextRunKey !== state.currentRunKey) {
       state.expandedModalPayloadId = "";
@@ -1286,12 +1290,19 @@
     const changedScopeIds = core.getChangedScopeIds(changes, getChatScopePrefix());
     if (changedScopeIds.length === 0) {
       if (localeChanged) {
-        recomputeRun();
+        recomputeRun(true);
       }
       return;
     }
     state.storageSnapshot = core.applyStorageChanges(state.storageSnapshot, changes);
-    recomputeRun();
+    forceStorageRender = forceStorageRender || localeChanged;
+    if (recomputeTimer) return;
+    recomputeTimer = setTimeout(() => {
+      recomputeTimer = null;
+      const force = forceStorageRender;
+      forceStorageRender = false;
+      recomputeRun(force);
+    }, 16);
   }
 
   function moveSelection(direction) {

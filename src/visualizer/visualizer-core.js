@@ -147,8 +147,8 @@
       id: sessionId,
       title: cleanDisplayText(value.title || "", 120),
       preview: cleanDisplayText(value.preview || "", 220),
-      createdAt: normalizeNumber(value.createdAt, Date.now()),
-      updatedAt: normalizeNumber(value.updatedAt, Date.now()),
+      createdAt: normalizeNumber(value.createdAt, 0),
+      updatedAt: normalizeNumber(value.updatedAt, 0),
       messageCount: Math.max(0, Number(value.messageCount) || 0),
       mode: value.mode === "quick" ? "quick" : "standard",
       selectedModel: cleanDisplayText(value.selectedModel || "", 120),
@@ -929,65 +929,51 @@
   }
 
   function collectRunCandidates(storageSnapshot, options) {
-    const storage = storageSnapshot && typeof storageSnapshot === "object" ? storageSnapshot : {};
-    const normalizedOptions = options && typeof options === "object" ? options : {};
-    const prefix = String(normalizedOptions.prefix || DEFAULT_CHAT_SCOPE_PREFIX);
-    const scopeIds = extractSessionScopeIds(storage, prefix);
+    const storage = storageSnapshot || {};
+    const prefix = String(options?.prefix || DEFAULT_CHAT_SCOPE_PREFIX);
     const candidates = [];
-
-    scopeIds.forEach(function (scopeId) {
+    // Discover metadata without normalizing message bodies or building graphs.
+    for (const scopeId of extractSessionScopeIds(storage, prefix)) {
       const storagePrefix = prefix + scopeId;
-      const restoreAnchor = normalizeRestoreAnchor(storage[storagePrefix + ".restoreAnchor"]);
+      const restoreAnchor = storage[storagePrefix + ".restoreAnchor"];
       const indexEntries = normalizeSessionIndexEntries(storage[storagePrefix + ".index"], scopeId);
-      const activeSnapshot = normalizeSessionSnapshot(storage[storagePrefix + ".activeSession"], {
-        scopeId,
-        indexMeta: indexEntries[0] || null
-      });
-      if (activeSnapshot) {
-        const activeRun = buildVisualizerRun(activeSnapshot, {
-          restoreAnchor,
-          source: "active",
-          active: true
-        });
-        if (activeRun) {
-          candidates.push({
-            priority: 3,
-            updatedAt: activeRun.meta.updatedAt,
-            run: activeRun
-          });
-        }
+      function addCandidate(snapshot, indexMeta, active) {
+        if (!snapshot || !Array.isArray(snapshot.messages) || !snapshot.messages.length) return;
+        const meta = normalizeSessionMeta({
+          ...indexMeta, ...snapshot.meta,
+          id: snapshot.meta?.id || snapshot.sessionId || snapshot.id || indexMeta?.id,
+          scopeId: snapshot.scopeId || snapshot.meta?.scopeId || scopeId,
+          selectedModel: snapshot.selectedModel || snapshot.meta?.selectedModel || indexMeta?.selectedModel,
+          currentUrl: snapshot.currentUrl || snapshot.meta?.currentUrl || indexMeta?.currentUrl,
+          updatedAt: snapshot.meta?.updatedAt || snapshot.updatedAt || indexMeta?.updatedAt,
+          createdAt: snapshot.meta?.createdAt || snapshot.createdAt || indexMeta?.createdAt,
+          messageCount: snapshot.messages.length,
+        }, scopeId);
+        if (!meta) return;
+        const run = {
+          meta: {
+            ...meta, sessionId: meta.id, model: meta.selectedModel,
+            url: meta.currentUrl || restoreAnchor?.currentUrl || "",
+            domain: meta.domain || restoreAnchor?.domain || "",
+            tabTitle: meta.tabTitle || restoreAnchor?.tabTitle || "",
+            source: active ? "active" : "recent", active,
+          },
+          snapshot: { meta },
+        };
+        candidates.push({ priority: active ? 3 : 2, updatedAt: meta.updatedAt, run,
+          snapshot, indexMeta, restoreAnchor, scopeId, active });
       }
-
-      indexEntries.forEach(function (entry) {
-        const snapshot = normalizeSessionSnapshot(storage[storagePrefix + ".byId." + entry.id], {
-          scopeId,
-          indexMeta: entry
-        }) || (activeSnapshot && activeSnapshot.meta.id === entry.id ? activeSnapshot : null);
-        if (!snapshot) {
-          return;
-        }
-        const recentRun = buildVisualizerRun(snapshot, {
-          restoreAnchor,
-          source: "recent",
-          active: false
-        });
-        if (!recentRun) {
-          return;
-        }
-        candidates.push({
-          priority: 2,
-          updatedAt: recentRun.meta.updatedAt,
-          run: recentRun
-        });
-      });
-    });
-
-    return dedupeRunCandidates(candidates).sort(function (left, right) {
-      if (left.priority !== right.priority) {
-        return right.priority - left.priority;
+      const active = storage[storagePrefix + ".activeSession"];
+      if (active) {
+        const id = active.meta?.id || active.sessionId || active.id;
+        addCandidate(active, indexEntries.find(entry => entry.id === id) || indexEntries[0], true);
       }
-      return right.updatedAt - left.updatedAt;
-    });
+      for (const entry of indexEntries) {
+        addCandidate(storage[storagePrefix + ".byId." + entry.id], entry, false);
+      }
+    }
+    return dedupeRunCandidates(candidates).sort((left, right) =>
+      right.priority - left.priority || right.updatedAt - left.updatedAt);
   }
 
   function getRunDisplayUrl(run) {
@@ -1107,31 +1093,43 @@
     });
   }
 
+  function createVisualizerRunSelector(config = {}) {
+    // Cache only the selected graph. Storage changes retain unchanged references.
+    let cached;
+    return function (storage, options = {}) {
+      const scopeId = normalizeSessionScopeId(options.scopeId);
+      const sessionId = String(options.sessionId || "").trim();
+      const candidates = collectRunCandidates(storage, options)
+        .filter(candidate => !scopeId || candidate.run.meta.scopeId === scopeId);
+      const exact = candidates.find(candidate => candidate.run.meta.sessionId === sessionId);
+      const ordered = exact ? [exact, ...candidates.filter(item => item !== exact)] : candidates;
+      for (const candidate of ordered) {
+        const revision = JSON.stringify(candidate.indexMeta);
+        if (cached && cached.snapshot === candidate.snapshot &&
+            cached.restoreAnchor === candidate.restoreAnchor && cached.revision === revision &&
+            cached.scopeId === candidate.scopeId && cached.active === candidate.active) {
+          return cached.run;
+        }
+        const snapshot = normalizeSessionSnapshot(candidate.snapshot, {
+          scopeId: candidate.scopeId, indexMeta: candidate.indexMeta,
+        });
+        if (!snapshot) continue;
+        const run = (config.buildRun || buildVisualizerRun)(snapshot, {
+          restoreAnchor: candidate.restoreAnchor,
+          source: candidate.active ? "active" : "recent", active: candidate.active,
+        });
+        if (run) {
+          cached = { ...candidate, revision, run };
+          return run;
+        }
+      }
+      cached = null;
+      return null;
+    };
+  }
+
   function selectVisualizerRun(storageSnapshot, options) {
-    const normalizedOptions = options && typeof options === "object" ? options : {};
-    const requestedScopeId = normalizeSessionScopeId(normalizedOptions.scopeId);
-    const requestedSessionId = String(normalizedOptions.sessionId || "").trim();
-    const candidates = collectRunCandidates(storageSnapshot, normalizedOptions);
-    if (requestedScopeId && requestedSessionId) {
-      const exactMatch = candidates.find(function (candidate) {
-        return candidate.run.meta.scopeId === requestedScopeId && candidate.run.meta.sessionId === requestedSessionId;
-      })?.run || null;
-      if (exactMatch) {
-        return exactMatch;
-      }
-      const scopeFallback = candidates.find(function (candidate) {
-        return candidate.run.meta.scopeId === requestedScopeId;
-      })?.run || null;
-      if (scopeFallback) {
-        return scopeFallback;
-      }
-    }
-    if (requestedScopeId) {
-      return candidates.find(function (candidate) {
-        return candidate.run.meta.scopeId === requestedScopeId;
-      })?.run || null;
-    }
-    return candidates[0]?.run || null;
+    return createVisualizerRunSelector()(storageSnapshot, options);
   }
 
   function applyStorageChanges(storageSnapshot, changes) {
@@ -1144,12 +1142,10 @@
       if (!change || typeof change !== "object") {
         return;
       }
-      if (Object.prototype.hasOwnProperty.call(change, "newValue")) {
-        if (typeof change.newValue === "undefined") {
-          delete current[key];
-        } else {
-          current[key] = change.newValue;
-        }
+      if (typeof change.newValue === "undefined") {
+        delete current[key];
+      } else {
+        current[key] = change.newValue;
       }
     });
     return current;
@@ -1199,6 +1195,7 @@
     exactJsonString,
     safeJsonPreview,
     shouldCollapseText,
+    createVisualizerRunSelector,
     selectVisualizerRun
   };
 });

@@ -125,8 +125,25 @@ async function testQueryOverrideSurvivesUnrelatedScopeChanges() {
 }
 
 async function main() {
+  const key = "claw.chat.scopes.scope-sync.byId.session-old";
+  const deleted = core.applyStorageChanges({ [key]: buildSnapshot("session-old", 100, "old") }, { [key]: { oldValue: {} } });
+  assert.equal(Object.hasOwn(deleted, key), false, "Chrome omits newValue on deletion");
   await testStorageChangesPromoteActiveRunWithoutFullReload();
   await testQueryOverrideSurvivesUnrelatedScopeChanges();
+  const prefix = "claw.chat.scopes.scope-sync";
+  const storage = createStorageMock({
+    [`${prefix}.index`]: [{ id: "one", scopeId: "scope-sync" }, { id: "two", scopeId: "scope-sync" }],
+    [`${prefix}.activeSession`]: buildSnapshot("one", 200, "one"),
+    [`${prefix}.byId.one`]: buildSnapshot("one", 200, "one"),
+    [`${prefix}.byId.two`]: buildSnapshot("two", 100, "two"),
+  });
+  let cached = await storage.area.get(null);
+  storage.onChanged.addListener((changes) => { cached = core.applyStorageChanges(cached, changes); });
+  await storage.area.remove([`${prefix}.activeSession`, `${prefix}.byId.one`]);
+  assert.equal(core.selectVisualizerRun(cached, { scopeId: "scope-sync", sessionId: "one" }).meta.sessionId, "two");
+  await storage.area.remove(Object.keys(storage.state));
+  assert.deepEqual(cached, {});
+  assert.equal(core.selectVisualizerRun(cached), null);
   console.log("visualizer storage sync integration tests passed");
 }
 

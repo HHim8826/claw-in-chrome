@@ -41,7 +41,7 @@ function inspectRuntime() {
       schema: managedSchemaPath,
       keys: Object.keys(managedSchema?.properties || {}),
     },
-    mermaidVendor: "assets/vendor/mermaid-11.15.0.min.js",
+    mermaidVendor: "assets/vendor/mermaid-11.17.2.min.js",
     diagnostics: {
       sidepanel: "globalThis.__CP_SIDEPANEL_DEBUG__",
       options: "globalThis.__CP_OPTIONS_DEBUG__",
