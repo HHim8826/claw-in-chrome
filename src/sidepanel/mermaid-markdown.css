@@ -19,3 +19,6 @@ pre[data-cp-mermaid-state="loading"] {
   min-height: 6rem;
   opacity: 0.72;
 }
+
+pre[data-cp-mermaid-state="rendered"] > code { display: none; }
+pre:not([data-cp-mermaid-state="rendered"]) > .cp-mermaid-diagram { display: none; }

@@ -10,11 +10,12 @@
 })(typeof globalThis !== "undefined" ? globalThis : this, function (root) {
   const MERMAID_SELECTOR =
     "pre > code.language-mermaid, pre > code.lang-mermaid";
-  const VENDOR_PATH = "assets/vendor/mermaid-11.15.0.min.js";
+  const VENDOR_PATH = "assets/vendor/mermaid-11.17.2.min.js";
   let vendorPromise;
   let renderRuntimePromise;
   let nextDiagramId = 0;
   const renderAttempts = new WeakMap();
+  const diagramHosts = new WeakMap();
 
   function loadMermaidVendor() {
     const existing = root.mermaid?.default || root.mermaid;
@@ -70,39 +71,46 @@
 
   async function renderCodeBlock(codeElement) {
     const pre = codeElement?.parentElement;
-    if (!pre) {
+    if (!pre || !pre.isConnected) {
       return;
     }
     const source = String(codeElement.textContent || "");
+    const theme = getTheme();
     const previousAttempt = renderAttempts.get(pre);
-    if (previousAttempt?.source === source) {
+    if (previousAttempt?.source === source && previousAttempt.theme === theme) {
       return;
     }
-    const attempt = { source };
+    const attempt = { source, theme };
     renderAttempts.set(pre, attempt);
     pre.dataset.cpMermaidState = "loading";
     try {
       const runtime = await getRenderRuntime();
       const result = await runtime.render(source, {
         id: `cp-mermaid-${++nextDiagramId}`,
-        theme: getTheme(),
+        theme,
       });
-      if (renderAttempts.get(pre) !== attempt) {
+      if (renderAttempts.get(pre) !== attempt || !pre.isConnected || codeElement.textContent !== source || getTheme() !== theme) {
         return;
       }
       if (!result.ok) {
         pre.dataset.cpMermaidState = result.reason || "error";
         return;
       }
-      const container = root.document.createElement("div");
+      const container = diagramHosts.get(pre) || root.document.createElement("div");
       container.className = "cp-mermaid-diagram";
       container.dataset.cpMermaidState = "rendered";
       container.setAttribute("role", "img");
       container.setAttribute("aria-label", "Mermaid diagram");
       container.innerHTML = result.svg;
-      pre.replaceWith(container);
+      // React retains its pre/code nodes. Our host shares the pre lifecycle,
+      // so React can update or remove its children without detached-node errors.
+      if (!diagramHosts.has(pre)) {
+        diagramHosts.set(pre, container);
+        pre.appendChild(container);
+      }
+      pre.dataset.cpMermaidState = "rendered";
     } catch (error) {
-      if (renderAttempts.get(pre) !== attempt) {
+      if (renderAttempts.get(pre) !== attempt || !pre.isConnected || codeElement.textContent !== source || getTheme() !== theme) {
         return;
       }
       pre.dataset.cpMermaidState = "error";
@@ -132,6 +140,9 @@
           }
           continue;
         }
+        if (record.target?.matches?.(MERMAID_SELECTOR)) {
+          renderCodeBlock(record.target);
+        }
         for (const node of record.addedNodes) {
           if (node.nodeType === 1) {
             if (node.matches?.(MERMAID_SELECTOR)) {
@@ -152,6 +163,9 @@
       subtree: true,
       characterData: true,
     });
+    const themeObserver = new root.MutationObserver(() => scanForMermaidCodeBlocks(root.document));
+    themeObserver.observe(root.document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
+    root.matchMedia?.("(prefers-color-scheme: dark)")?.addEventListener?.("change", () => scanForMermaidCodeBlocks(root.document));
     return observer;
   }
 

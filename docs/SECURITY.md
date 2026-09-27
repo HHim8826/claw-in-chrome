@@ -45,7 +45,7 @@ Apply these controls to every security-sensitive change.
   material from diagnostics even when configured providers introduce those
   fields.
 - Render Mermaid with strict security, disabled HTML labels, text and edge
-  limits, and a bounded timeout. Remove executable, embedded, animated, event,
+  limits, and an asynchronous timeout. Remove executable, embedded, animated, event,
   and external-link SVG content before inserting a diagram into the side panel.
 - Export only reviewed settings keys. Exclude credentials by default, require
   explicit opt-in before creating a plain-text credential-bearing backup, and
@@ -60,6 +60,19 @@ Apply these controls to every security-sensitive change.
   omits them. Secretless provider restores preserve credentials only for the
   same normalized format and endpoint; changed or ambiguous identities clear
   legacy credential keys.
+
+## Packaged renderer dependencies
+
+Mermaid is a production browser dependency even though npm lists it under
+`devDependencies`. Pin the vendor version, regenerate its packaged asset, and
+run `npm run check:dependency-advisories` with development dependencies included.
+CI and releases run this audit in addition to the vendor consistency check.
+
+The five-second render deadline bounds asynchronous waits. It cannot interrupt
+synchronous JavaScript on the page. Byte and edge limits also cannot replace
+security updates: the XY chart and radar advisory inputs are small. The isolated
+advisory regression uses a process deadline and heap cap to test the patched
+packaged parser. Browser tests verify normal rendering and React ownership.
 
 ## Reporting
 

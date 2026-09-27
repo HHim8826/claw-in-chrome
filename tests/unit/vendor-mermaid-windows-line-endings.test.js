@@ -14,7 +14,7 @@ function testVendorCheckAcceptsEquivalentTextLineEndings() {
   );
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.match(result.stdout, /Vendored Mermaid 11\.15\.0 is current/);
+  assert.match(result.stdout, /Vendored Mermaid 11\.17\.2 is current/);
 }
 
 try {

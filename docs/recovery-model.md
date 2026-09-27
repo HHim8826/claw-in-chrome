@@ -45,8 +45,19 @@ Prefer these seams when implementing behavior.
   readable runtime.
 - `mermaid-renderer.js` owns Mermaid source limits, strict renderer
   configuration, timeout handling, and SVG sanitization. The side-panel
-  Markdown enhancer lazy-loads the packaged Mermaid 11.15.0 UMD asset only when
+  Markdown enhancer lazy-loads the packaged Mermaid 11.17.2 UMD asset only when
   a `language-mermaid` code fence appears.
+- The Mermaid enhancer retains React-owned pre/code nodes and appends its SVG
+  host inside the pre. Source and theme changes refresh that host, stale async
+  results are discarded, and removing the pre removes the diagram with it.
+- Provider stream adapters share a demand-driven SSE reader. Body cancellation
+  reaches the upstream reader and releases its lock. Chat requires a finish
+  reason; Responses requires a completed or supported incomplete outcome.
+  Error envelopes and premature EOF never emit successful message completion.
+- The visualizer builds its browser from session metadata, deduplicates active
+  and historical records before graph construction, and caches one selected
+  graph by snapshot identity and metadata revision. Storage updates are batched;
+  deletion events without newValue evict cached keys.
 - `settings-backup.js` owns the versioned settings envelope, reviewed storage
   allowlist, default credential exclusion, and identity-bound import merge.
   Secretless restores preserve provider credentials only when the normalized

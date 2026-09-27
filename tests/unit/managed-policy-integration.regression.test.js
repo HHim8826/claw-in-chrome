@@ -67,7 +67,7 @@ function testRuntimeInspectionReportsManagedPolicyAndMermaidVendor() {
   });
   assert.equal(
     inspection.mermaidVendor,
-    "assets/vendor/mermaid-11.15.0.min.js",
+    "assets/vendor/mermaid-11.17.2.min.js",
   );
 }
 
