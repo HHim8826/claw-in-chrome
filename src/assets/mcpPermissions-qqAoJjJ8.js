@@ -7926,10 +7926,11 @@ const De = {
               e === "category_org_blocked")
           ) {
             return {
-              error:
-                e === "category_org_blocked"
-                  ? "This site is blocked by your organization's policy."
-                  : "This site is not allowed due to safety restrictions.",
+              error: await __cpBlockedSiteErrorMessage(
+                e,
+                o,
+                "This site is not allowed due to safety restrictions.",
+              ),
             };
           }
         } catch {}
@@ -15464,6 +15465,89 @@ const __cpMcpTablessToolNames = [
   "turn_answer_start",
   "shortcuts_list",
 ];
+// __cp-blocked-navigation-guard:start
+// 语义锚点：被封锁站点的错误文案（upstream 1.0.94）。
+// category_org_blocked 若命中浏览器管理员下发的 blockedUrlPatterns，使用专属的管理员策略文案。
+async function __cpBlockedSiteErrorMessage(e, t, r) {
+  if (e === "category_org_blocked") {
+    try {
+      if (await $.isUrlBlockedByManagedPolicy(t)) {
+        return "This site is blocked by a policy set by your browser's administrator.";
+      }
+    } catch {}
+    return "This site is blocked by your organization's policy.";
+  }
+  return r;
+}
+// 语义锚点：工具执行中途导航到被封锁站点的检测（upstream 1.0.94）。
+// 成功返回后再检查目标 tab 的 url 与 pendingUrl；命中则丢弃本次结果（含截图），返回 navigation_blocked_mid_call。
+const __cpBlockedNavigationReportedTabs = new Set();
+async function __cpDetectMidCallBlockedNavigation(e) {
+  let t;
+  try {
+    t = await chrome.tabs.get(e);
+  } catch {
+    return null;
+  }
+  for (const r of [t?.url, t?.pendingUrl]) {
+    if (!r) {
+      continue;
+    }
+    const e = await O.getCategory(r);
+    if (Ja(e)) {
+      return await __cpBlockedSiteErrorMessage(e, r, "This site is blocked.");
+    }
+  }
+  return null;
+}
+function __cpInstallBlockedNavigationGuard(e) {
+  const t = new Set([
+    ...Xa,
+    ...__cpMcpTablessToolNames,
+    "tabs_context",
+    "tabs_create",
+    "shortcuts_execute",
+  ]);
+  for (const r of e) {
+    if (
+      !r ||
+      typeof r.execute != "function" ||
+      r.__cpBlockedNavigationGuarded ||
+      t.has(r.name)
+    ) {
+      continue;
+    }
+    const o = r.execute;
+    r.execute = async (e, t) => {
+      const a = await o(e, t);
+      if (!a || typeof a != "object" || "type" in a || a.error) {
+        return a;
+      }
+      const n = a.tabContext?.executedOnTabId ?? t?.tabId;
+      if (typeof n != "number") {
+        return a;
+      }
+      const s = await __cpDetectMidCallBlockedNavigation(n);
+      if (!s) {
+        return a;
+      }
+      for (const e of [a.imageId, ...(a.mintedImageIds ?? [])]) {
+        if (e) {
+          __cpMcpLocalImageRegistry.delete(e);
+        }
+      }
+      __cpBlockedNavigationReportedTabs.add(n);
+      const i = Array.isArray(a.batchItems) && a.batchItems.length > 0 ? a.batchItems.length : 1;
+      return {
+        error: `${s} (${i} prior result${i === 1 ? "" : "s"} discarded; 0 not run)`,
+        errorCode: "navigation_blocked_mid_call",
+      };
+    };
+    r.__cpBlockedNavigationGuarded = true;
+  }
+}
+// __cp-blocked-navigation-guard:end
+__cpInstallBlockedNavigationGuard(za);
 function __cpMcpResolvePermissionNetlocFromUrl(e) {
   try {
     const t = new URL(e);
@@ -16321,11 +16405,7 @@ async function wn(e) {
       };
       m("claude_chrome.mcp.tool_called", o);
       __cpBackgroundDebugTrack("claude_chrome.mcp.tool_called", o, "warn");
-      return bn(
-        t === "category_org_blocked"
-          ? "This site is blocked by your organization's policy."
-          : "This site is blocked.",
-      );
+      return bn(await __cpBlockedSiteErrorMessage(t, u, "This site is blocked."));
     }
   }
   if (l !== undefined && a()) {
@@ -16453,6 +16533,11 @@ async function wn(e) {
     );
     i("tool_execute_ms");
     f = h?.is_error === true;
+    // 语义锚点：本次调用已因中途导航到封锁站点而报错时，清掉 webNavigation 留给下一次调用的同一条错误。
+    if (l !== undefined && __cpBlockedNavigationReportedTabs.delete(l)) {
+      cn = undefined;
+      ln = undefined;
+    }
   } catch (v) {
     if (g) {
       i("tool_execute_ms");

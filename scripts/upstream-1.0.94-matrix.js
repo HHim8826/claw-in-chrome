@@ -27,7 +27,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "mid-call-blocked-navigation",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source discards results when a call navigates into a blocked site and uses dedicated managed-policy wording.",
     owners: ["src/assets/mcpPermissions-qqAoJjJ8.js", "src/shared/managed-policy.js"],
     testTarget: "tests/unit/blocked-navigation-guard.regression.test.js",

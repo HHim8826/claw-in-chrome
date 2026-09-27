@@ -81946,8 +81946,8 @@ const QY = ({
       }), l.jsx("p", {
         className: "font-base text-text-300 mt-[7px]",
         children: s === "category_org_blocked" ? i.formatMessage({
-          defaultMessage: "This site is blocked by your organization's policy.",
-          id: "Rc2RmGjQRw"
+          defaultMessage: "This site is blocked by a policy set by your browser's administrator.",
+          id: "sSc7jfY6Q4"
         }) : n ? i.formatMessage({
           defaultMessage: "Claw cannot assist with the content on this page.",
           id: "WDCnAlgy2l"

@@ -96,6 +96,13 @@ Prefer these seams when implementing behavior.
   ledger so clicks stay in the full-resolution frame. The `key` action rejects
   page-zoom shortcuts before dispatching keys, and `type` requires non-empty
   string text.
+- `__cpInstallBlockedNavigationGuard(za)` wraps every page-acting tool in the
+  shared tool list, so the side panel and MCP executors both see it. After a
+  successful call it checks the target tab's URL and pending URL; a blocked
+  category discards the result and any screenshot and returns
+  `navigation_blocked_mid_call`. The MCP executor then clears the
+  webNavigation error that would otherwise repeat on the next call.
+  Managed-policy matches use the browser-administrator wording everywhere.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.
