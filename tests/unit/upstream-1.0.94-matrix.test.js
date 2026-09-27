@@ -48,10 +48,16 @@ function testClaudeSurfacesStayExcluded() {
   assert.equal(statuses["element-selection-mcp-notification"], "excluded");
 }
 
+function testNoAcceptedBehaviorRemainsMissing() {
+  const missing = UPSTREAM_1_0_94_BEHAVIOR_MATRIX.filter(({ status }) => status === "missing").map(({ id }) => id);
+  assert.deepEqual(missing, [], "every accepted 1.0.94 behavior must be implemented or excluded with evidence");
+}
+
 function main() {
   testSourceIdentityIsPinned();
   testEveryBehaviorHasAnAuditableOwner();
   testClaudeSurfacesStayExcluded();
+  testNoAcceptedBehaviorRemainsMissing();
   console.log("upstream 1.0.94 behavior matrix tests passed");
 }
 

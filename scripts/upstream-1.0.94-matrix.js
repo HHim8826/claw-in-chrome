@@ -83,10 +83,11 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "markdown-local-time-hint",
-    status: "missing",
-    evidence: "Source Markdown shows the reader's local time for times with an explicit zone.",
-    owners: ["src/assets/sidepanel-BoLm9pmH.js"],
-    testTarget: "tests/unit/local-time-hint.test.js",
+    status: "excluded",
+    evidence: "Source defines a time-with-zone tooltip and parsing regexes, but the memoized component is never assigned or rendered and the regex results are discarded.",
+    risk: "Porting dormant code would ship an unreleased Markdown rewrite with time-zone guessing that upstream 1.0.94 never shows.",
+    owners: ["docs/product-specs/upstream-1.0.94-recovery.md"],
+    testTarget: "tests/unit/upstream-1.0.94-matrix.test.js",
   },
   {
     id: "claude-account-surfaces",

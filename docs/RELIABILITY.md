@@ -31,7 +31,18 @@ Preserve these invariants.
 - Release versions increase monotonically, use an unused Git tag, and never
   overwrite assets for an existing release.
 - Offscreen GIF generation rejects more than 50 frames or more than 50,000,000
-  decoded pixels before starting the encoder.
+  decoded pixels before starting the encoder. Mixed-size frames are padded to
+  the largest frame, and the padded grid obeys the same pixel budget.
+- `browser_batch` runs items sequentially and stops at the first error,
+  cancellation, unknown tool, or tab outside the group. It waits up to three
+  seconds for a loading tab between items and commits in-batch screenshot
+  coordinate contexts only when the whole batch succeeds.
+- `read_page` never fails on size alone. It stops after 10,000 elements and
+  truncates oversized output at a line boundary with a size note.
+- Debugger attach retries with backoff after removing foreign-extension frames
+  and rethrows the original error when retries are exhausted.
+- Links opened by clicks in a minimized window become background tabs in the
+  same group instead of foreground windows.
 - Managed URL policy uses safe defaults when policy storage is unavailable or
   malformed, and it refreshes when managed storage changes.
 - The manifest remains provider-independent: it has no Claude.ai site bridge,

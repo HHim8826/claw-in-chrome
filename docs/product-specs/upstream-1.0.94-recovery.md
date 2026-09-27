@@ -59,7 +59,9 @@ current seams. Each group is recorded in the executable behavior matrix in
     permission states for the affected host.
 11. External-link confirmation warns about embedded credentials and delays
     activation of the open button.
-12. Times with an explicit time zone in answers show the reader's local time.
+12. The source's local-time hint for times with an explicit time zone is
+    recorded as excluded. Its component is never rendered in 1.0.94, so
+    porting it would add behavior upstream doesn't ship.
 
 ## Non-goals
 

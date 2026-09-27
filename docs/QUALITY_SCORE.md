@@ -45,6 +45,14 @@ dependencies, but release-size tracking remains necessary. The opaque
 `Conway` and `squares` remote-host surfaces remain excluded until they have a
 stable local user contract and security model.
 
+The upstream 1.0.94 recovery adds readable modules for `browser_batch`, tool
+activity labels, and link safety, plus narrow anchored patches for the tool
+runtime, content scripts, and side panel. The 1.0.94 behavior matrix fails
+while any accepted group remains `missing`. Chat Completions providers still
+receive tool-result screenshots only as metadata because tool messages can't
+carry image parts. That pre-existing limitation affects single screenshots
+and batches alike.
+
 The provider-independence pass removes the recovered Claude.ai onboarding,
 forced-organization, and Chrome Identity slices while retaining generic MCP
 Native Messaging, Mermaid, and managed URL policy. The upstream behavior matrix
