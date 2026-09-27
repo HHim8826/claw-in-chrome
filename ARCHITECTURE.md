@@ -53,6 +53,8 @@ Apply these rules to every change.
   sequential execution, stop-on-error formatting, progress summaries, and
   result conversion. The tool runtime injects tab, permission, blocked-site,
   GIF, and coordinate-context dependencies; it doesn't duplicate batch logic.
+- `src/options/options-card-helpers.js` owns the locale rule, element helper,
+  default-route check, and remount observer shared by readable Options cards.
 - Producers and consumers of a runtime message must use the same contract key.
 - A bundle patch must include a semantic anchor test and an update to
   `docs/recovery-model.md` when the recovered understanding changes.

@@ -444,19 +444,33 @@ async function testGenerateGifPadsMixedSizeFramesToTheLargestFrame() {
   }
 }
 
-async function testGenerateGifRejectsPaddedGridOverBudget() {
-  const imageSizes = [{ width: 7000, height: 7000 }, ...Array.from({ length: 9 }, () => ({ width: 10, height: 10 }))];
+async function testGenerateGifScalesPaddedGridIntoBudget() {
+  // 40 frames at 0.8 MP plus 10 at 1.15 MP decode within budget, but padding
+  // every frame to the largest size would need 57.5 MP.
+  const imageSizes = [
+    ...Array.from({ length: 40 }, () => ({ width: 1000, height: 800 })),
+    ...Array.from({ length: 10 }, () => ({ width: 1150, height: 1000 }))
+  ];
   const harness = createOffscreenHarness({ imageSizes });
   const listener = harness.onMessage.listeners[0];
   const result = await invokeMessageHandler(listener, {
     type: "GENERATE_GIF",
     frames: imageSizes.map(() => ({ format: "png", base64: "AA==" })),
-    options: {}
+    options: {
+      showClickIndicators: false,
+      showDragPaths: false,
+      showActionLabels: false,
+      showProgressBar: false,
+      showWatermark: false
+    }
   });
 
-  assert.equal(result.response.success, false);
-  assert.match(result.response.error, /GIF padded pixel budget exceeds 50000000/);
-  assert.equal(harness.gifCreations, 0);
+  assert.equal(result.response.success, true, "the export still succeeds");
+  const { width, height } = harness.gifOptions[0];
+  assert.ok(width < 1150 && height < 1000, "the encoder grid is scaled down");
+  assert.ok(width * height * imageSizes.length <= 50000000, "the scaled grid fits the pixel budget");
+  assert.ok(Math.abs(width / height - 1.15) < 0.01, "the grid keeps its aspect ratio");
+  assert.equal(harness.gifFrames.every((frame) => frame.width === width && frame.height === height), true);
 }
 
 async function main() {
@@ -467,7 +481,7 @@ async function main() {
   await testGenerateGifRejectsDecodedPixelBudgetBeforeEncoding();
   await testGenerateGifKeepsSuccessfulResponseContractWithinBudget();
   await testGenerateGifPadsMixedSizeFramesToTheLargestFrame();
-  await testGenerateGifRejectsPaddedGridOverBudget();
+  await testGenerateGifScalesPaddedGridIntoBudget();
   console.log("offscreen tests passed");
 }
 

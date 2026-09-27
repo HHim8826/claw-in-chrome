@@ -1,9 +1,11 @@
 (function () {
   "use strict";
 
-  if (!globalThis.chrome?.storage?.local) {
+  const card = globalThis.__CP_OPTIONS_CARD__;
+  if (!card || !globalThis.chrome?.storage?.local) {
     return;
   }
+  const { localeKey, node, isDefaultOptionsRoute } = card;
 
   const ROOT_ID = "cp-browser-tools-root";
   const STORAGE_KEY =
@@ -32,40 +34,8 @@
   let batchEnabled = true;
   let mountObserver = null;
 
-  function localeKey() {
-    const value = String(
-      document.documentElement?.dataset?.cpUiLocale ||
-      document.documentElement?.lang ||
-      navigator?.language ||
-      "en",
-    ).toLowerCase();
-    if (value.startsWith("zh-tw") || value.startsWith("zh-hant")) {
-      return "zh-TW";
-    }
-    if (value.startsWith("zh")) {
-      return "zh-CN";
-    }
-    return "en";
-  }
-
   function strings() {
     return stringsByLocale[localeKey()] || stringsByLocale.en;
-  }
-
-  function node(tag, className, text) {
-    const element = document.createElement(tag);
-    if (className) {
-      element.className = className;
-    }
-    if (text != null) {
-      element.textContent = String(text);
-    }
-    return element;
-  }
-
-  function isDefaultOptionsRoute() {
-    const parts = String(window.location?.hash || "").split("?");
-    return parts[0] === "#options" && !/(?:^|&)provider=/.test(parts[1] || "");
   }
 
   async function setBrowserBatchEnabled(enabled) {
@@ -76,7 +46,7 @@
 
   function render() {
     const existing = document.getElementById(ROOT_ID);
-    const mountTarget = document.getElementById("cp-options-debug-anchor");
+    const mountTarget = card.getMountTarget();
     if (!isDefaultOptionsRoute() || !mountTarget) {
       existing?.remove();
       return;
@@ -103,17 +73,7 @@
   }
 
   function observeMountTarget() {
-    if (mountObserver || typeof MutationObserver !== "function") {
-      return;
-    }
-    mountObserver = new MutationObserver(function () {
-      const mountTarget = document.getElementById("cp-options-debug-anchor");
-      const root = document.getElementById(ROOT_ID);
-      if (mountTarget && root?.parentNode !== mountTarget) {
-        render();
-      }
-    });
-    mountObserver.observe(document.body, { childList: true, subtree: true });
+    mountObserver ||= card.observeMountTarget(ROOT_ID, render);
   }
 
   async function refresh() {

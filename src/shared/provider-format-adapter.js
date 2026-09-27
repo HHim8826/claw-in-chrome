@@ -37,8 +37,13 @@
   });
   const CHAT_TOOL_RESULT_IMAGE_MODES = ["user_message", "metadata"];
   const CHAT_TOOL_RESULT_IMAGE_REJECTION_STATUSES = [400, 415, 422];
-  // Provider/model pairs that rejected forwarded tool-result images this page session.
-  const chatToolResultImageRejections = new Set();
+  // Only the most recent tool-result screenshots travel as images; older ones stay
+  // described in their tool messages so long sessions don't resend every screenshot.
+  const DEFAULT_CHAT_TOOL_RESULT_IMAGE_LIMIT = 8;
+  const CHAT_TOOL_RESULT_IMAGE_ERROR_PATTERN = /image|vision|multi-?modal|visual|picture/i;
+  const CHAT_TOOL_RESULT_IMAGE_COUNT_PATTERN = /at most|maximum|\bmax\b|too many|exceed|limit|up to/i;
+  // Image handling learned per provider/model this page session: { mode?, limit? }.
+  const chatToolResultImagePolicies = new Map();
   const THINK_OPEN_TAG = "<think>";
   const THINK_CLOSE_TAG = "</think>";
   const TOOL_CALL_OPEN_TAG = "<tool_call>";
@@ -896,8 +901,14 @@
   }
   // Chat Completions tool messages can't carry image parts, so tool-result images
   // travel in the user message that follows the contiguous tool messages.
-  function buildToolResultVisualChatParts(block) {
-    const imageDataUrls = collectToolResultImageDataUrls(block);
+  function buildToolResultVisualChatParts(block, budget) {
+    const imageDataUrls = collectToolResultImageDataUrls(block).filter(function () {
+      if (!budget) {
+        return true;
+      }
+      budget.seen += 1;
+      return budget.seen > budget.skip;
+    });
     if (!imageDataUrls.length) {
       return [];
     }
@@ -916,30 +927,73 @@
   function chatToolResultImageKey(config, model) {
     return String(config?.baseUrl || "").trim().toLowerCase() + "|" + String(model || config?.defaultModel || "").trim().toLowerCase();
   }
-  // `chatToolResultImages` is an internal override used by the request fallback;
-  // stored provider configs don't persist it.
-  function resolveChatToolResultImageMode(config, chatCompatibility, model) {
-    const configured = String(config?.chatToolResultImages || "").trim().toLowerCase();
-    if (CHAT_TOOL_RESULT_IMAGE_MODES.includes(configured)) {
-      return configured;
+  // `chatToolResultImages` and `chatToolResultImageLimit` are internal overrides used
+  // by the request fallback; stored provider configs don't persist them.
+  function resolveChatToolResultImagePolicy(config, chatCompatibility, model) {
+    const learned = chatToolResultImagePolicies.get(chatToolResultImageKey(config, model)) || {};
+    const configuredMode = String(config?.chatToolResultImages || "").trim().toLowerCase();
+    let mode = "user_message";
+    if (CHAT_TOOL_RESULT_IMAGE_MODES.includes(configuredMode)) {
+      mode = configuredMode;
+    } else if (learned.mode === "metadata" || chatCompatibility?.toolResultImages === "metadata") {
+      mode = "metadata";
     }
-    if (chatToolResultImageRejections.has(chatToolResultImageKey(config, model))) {
-      return "metadata";
-    }
-    return chatCompatibility?.toolResultImages === "metadata" ? "metadata" : "user_message";
+    const configuredLimit = Math.floor(Number(config?.chatToolResultImageLimit));
+    const limit = configuredLimit > 0
+      ? configuredLimit
+      : learned.limit > 0
+        ? learned.limit
+        : DEFAULT_CHAT_TOOL_RESULT_IMAGE_LIMIT;
+    return {
+      mode,
+      limit
+    };
   }
-  function anthropicBodyHasToolResultImages(body) {
+  function countToolResultImages(body) {
+    let count = 0;
     for (const message of Array.isArray(body?.messages) ? body.messages : []) {
       if (message?.role !== "user" || !Array.isArray(message.content)) {
         continue;
       }
       for (const block of message.content) {
-        if (block?.type === "tool_result" && collectToolResultImageDataUrls(block).length) {
-          return true;
+        if (block?.type === "tool_result") {
+          count += collectToolResultImageDataUrls(block).length;
         }
       }
     }
-    return false;
+    return count;
+  }
+  // Decides how to retry a Chat Completions request whose forwarded images were
+  // rejected: a count limit lowers the cap, anything else drops images entirely.
+  function planChatToolResultImageFallback(providerError, forwardedCount) {
+    const errorText = String(providerError?.message || "") + " " + String(providerError?.text || "");
+    if (
+      !CHAT_TOOL_RESULT_IMAGE_REJECTION_STATUSES.includes(providerError?.status) ||
+      !CHAT_TOOL_RESULT_IMAGE_ERROR_PATTERN.test(errorText)
+    ) {
+      return null;
+    }
+    if (forwardedCount > 1 && CHAT_TOOL_RESULT_IMAGE_COUNT_PATTERN.test(errorText)) {
+      const match = errorText.match(/(\d+)\s*images?/i) || errorText.match(/at most\s+(\d+)/i);
+      const parsed = match ? Number(match[1]) : NaN;
+      const limit = Math.max(1, Math.min(Number.isFinite(parsed) && parsed > 0 ? parsed : 1, forwardedCount - 1));
+      return {
+        override: {
+          chatToolResultImageLimit: limit
+        },
+        learned: {
+          limit
+        }
+      };
+    }
+    return {
+      override: {
+        chatToolResultImages: "metadata"
+      },
+      learned: {
+        mode: "metadata"
+      }
+    };
   }
   function collapseSystemMessages(messages) {
     if (!Array.isArray(messages)) {
@@ -1646,7 +1700,7 @@
         });
         // 部分 OpenAI 兼容接口要求 tool 结果紧跟 tool_calls，不能在中间插入额外消息。
         if (forwardToolResultImages) {
-          pendingToolVisualParts.push(...buildToolResultVisualChatParts(block));
+          pendingToolVisualParts.push(...buildToolResultVisualChatParts(block, options.toolResultImageBudget));
         }
       }
     }
@@ -1660,7 +1714,12 @@
       result.model = body.model;
     }
     const chatCompatibility = getChatCompatibilityProfile(config, body?.model);
-    const toolResultImageMode = resolveChatToolResultImageMode(config, chatCompatibility, body?.model);
+    const toolResultImagePolicy = resolveChatToolResultImagePolicy(config, chatCompatibility, body?.model);
+    const toolResultImageMode = toolResultImagePolicy.mode;
+    const toolResultImageBudget = {
+      skip: Math.max(0, countToolResultImages(body) - toolResultImagePolicy.limit),
+      seen: 0
+    };
     const messages = [];
     const systemText = formatAnthropicSystemForSingleMessage(body?.system);
     if (systemText) {
@@ -1689,7 +1748,8 @@
             chatCompatibility,
             requestReasoningState,
           ),
-          toolResultImageMode
+          toolResultImageMode,
+          toolResultImageBudget
         }));
         updateOpenAIChatRequestReasoningState(requestReasoningState, content);
       }
@@ -3438,17 +3498,23 @@
           candidateConfig.promptCacheKey,
           candidateConfig,
         );
-      // Text-only Chat Completions models reject image_url parts; such a request
-      // retries once with image metadata only, and a successful retry is remembered.
-      let canRetryWithoutToolResultImages =
-        candidate.format === OPENAI_CHAT_FORMAT &&
-        resolveChatToolResultImageMode(
+      // A Chat Completions provider that rejects forwarded screenshots with an
+      // image-related error retries once (fewer images or none); a successful retry
+      // is remembered for this provider and model.
+      const toolResultImagePolicy = candidate.format === OPENAI_CHAT_FORMAT
+        ? resolveChatToolResultImagePolicy(
           candidateConfig,
           getChatCompatibilityProfile(candidateConfig, body?.model),
           body?.model,
-        ) === "user_message" &&
-        anthropicBodyHasToolResultImages(body);
-      let pendingToolResultImageRejectionKey = "";
+        )
+        : null;
+      const forwardedToolResultImageCount = toolResultImagePolicy?.mode === "user_message"
+        ? Math.min(countToolResultImages(body), toolResultImagePolicy.limit)
+        : 0;
+      let canRetryToolResultImages = forwardedToolResultImageCount > 0;
+      let pendingToolResultImagePolicy = null;
+      let appliedMaxTokensLimit = null;
+      let lastRetryIndex = 0;
       const providerUrl = buildProviderUrl(candidateConfig);
       const isStreamRequest = !!providerBody.stream;
       debugLog("provider.request_attempt", {
@@ -3462,6 +3528,7 @@
       let shouldTryNextCandidate = false;
       let lastProviderError = null;
       for (let retryIndex = 0; retryIndex < 3; retryIndex++) {
+        lastRetryIndex = retryIndex;
         const upstream = await nativeFetch(providerUrl, {
           method: "POST",
           headers: buildProviderHeaders(request.headers, candidateConfig, isStreamRequest),
@@ -3475,6 +3542,7 @@
           const detectedLimit = extractMaxTokenLimit(providerError.message) || extractMaxTokenLimit(providerError.text);
           const appliedClamp = detectedLimit != null ? clampRequestMaxTokens(providerBody, detectedLimit) : null;
           if (appliedClamp) {
+            appliedMaxTokensLimit = appliedClamp.next;
             debugLog("provider.request_retry_with_capped_max_tokens", {
               attempt: index + 1,
               retry: retryIndex + 1,
@@ -3491,26 +3559,33 @@
             }, "warn");
             continue;
           }
-          if (
-            canRetryWithoutToolResultImages &&
-            CHAT_TOOL_RESULT_IMAGE_REJECTION_STATUSES.includes(providerError.status)
-          ) {
-            canRetryWithoutToolResultImages = false;
-            pendingToolResultImageRejectionKey = chatToolResultImageKey(candidateConfig, body?.model);
+          const imageFallback = canRetryToolResultImages
+            ? planChatToolResultImageFallback(providerError, forwardedToolResultImageCount)
+            : null;
+          if (imageFallback) {
+            canRetryToolResultImages = false;
+            pendingToolResultImagePolicy = {
+              key: chatToolResultImageKey(candidateConfig, body?.model),
+              learned: imageFallback.learned
+            };
             providerBody = anthropicToOpenAIChat(
               body,
               candidateConfig.promptCacheKey,
               {
                 ...candidateConfig,
-                chatToolResultImages: "metadata"
+                ...imageFallback.override
               },
             );
-            debugLog("provider.request_retry_without_tool_result_images", {
+            if (appliedMaxTokensLimit != null) {
+              clampRequestMaxTokens(providerBody, appliedMaxTokensLimit);
+            }
+            debugLog("provider.request_retry_with_fewer_tool_result_images", {
               attempt: index + 1,
               retry: retryIndex + 1,
               format: candidate.format,
               providerUrl,
               status: providerError.status,
+              imageLimit: imageFallback.learned.limit ?? 0,
               message: providerError.message
             }, "warn");
             continue;
@@ -3541,9 +3616,12 @@
           });
           return createAnthropicErrorResponse(providerError.status, providerError.message);
         }
-        if (pendingToolResultImageRejectionKey) {
-          chatToolResultImageRejections.add(pendingToolResultImageRejectionKey);
-          pendingToolResultImageRejectionKey = "";
+        if (pendingToolResultImagePolicy) {
+          chatToolResultImagePolicies.set(pendingToolResultImagePolicy.key, {
+            ...(chatToolResultImagePolicies.get(pendingToolResultImagePolicy.key) || {}),
+            ...pendingToolResultImagePolicy.learned
+          });
+          pendingToolResultImagePolicy = null;
         }
         const contentType = upstream.headers.get("content-type") || "";
         debugLog("provider.request_upstream_ok", {
@@ -3683,6 +3761,17 @@
       }
       if (lastProviderError && index < candidates.length - 1) {
         continue;
+      }
+      // Retries ran out (for example, repeated clamps): report the provider's last
+      // error instead of a generic failure.
+      if (lastProviderError) {
+        requestTracker?.complete?.({
+          outcome: "http_error",
+          status: lastProviderError.status,
+          errorCategory: classifyProviderHttpError(lastProviderError.status),
+          retryCount: index + lastRetryIndex,
+        });
+        return createAnthropicErrorResponse(lastProviderError.status, lastProviderError.message);
       }
     }
     return createAnthropicErrorResponse(500, "自定义供应商请求失败。");

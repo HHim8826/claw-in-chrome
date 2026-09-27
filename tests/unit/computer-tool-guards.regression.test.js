@@ -120,6 +120,21 @@ function testComputerSchemasAndActionsExposeGuards() {
     "zoom reads scale before the context shadows its input",
   );
   assert.equal(source.includes("scale: zoomCaptureScale,"), true, "zoom capture applies scale");
+  assert.equal(
+    source.includes("async processScreenshotInContentScript(e, t, r, o, a, n, s, i, d, f) {"),
+    true,
+    "the compression fallback accepts the full-resolution frame",
+  );
+  assert.equal(
+    source.includes("if (f?.frameWidth && f?.frameHeight) {\n      l.frameWidth = f.frameWidth;\n      l.frameHeight = f.frameHeight;\n    }"),
+    true,
+    "fallback screenshots keep the coordinate frame and scale note",
+  );
+  assert.equal(
+    source.includes("r?.pendingContextScope,\n        scaledCaptureTarget.frameWidth"),
+    true,
+    "the scaled capture passes its frame to the fallback",
+  );
 }
 
 function main() {

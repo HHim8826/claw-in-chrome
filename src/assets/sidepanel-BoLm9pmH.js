@@ -32430,7 +32430,13 @@ function __cpBrowserBatchRowLabel(e, t, n, s) {
   if (!r) {
     return null;
   }
-  const i = e.formatMessage({
+  // 没有进度事件（重新打开面板或恢复历史会话）的失败批次，只显示动作总数，不虚报完成数。
+  const i = r.completed === null ? e.formatMessage({
+    defaultMessage: "Batch — {count, plural, one {# action} other {# actions}}",
+    id: "9PnBSKt3zo"
+  }, {
+    count: r.total
+  }) : e.formatMessage({
     defaultMessage: "Batch — {completed}/{total} actions",
     id: "q1/79Ks14U"
   }, {

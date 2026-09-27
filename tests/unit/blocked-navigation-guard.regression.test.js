@@ -42,7 +42,7 @@ function loadGuard({ tabs, managedBlocked = [], apiCategories = {} }) {
   };
   vm.createContext(context);
   vm.runInContext(
-    `${source.slice(start, end)}\nthis.install = __cpInstallBlockedNavigationGuard; this.messageFor = __cpBlockedSiteErrorMessage; this.reported = __cpBlockedNavigationReportedTabs;`,
+    `${source.slice(start, end)}\nthis.install = __cpInstallBlockedNavigationGuard; this.messageFor = __cpBlockedSiteErrorMessage; this.reported = __cpBlockedNavigationReportedToolUses;`,
     context,
   );
   return context;
@@ -56,13 +56,40 @@ async function testManagedPolicyNavigationDiscardsResult() {
   const guard = loadGuard({ tabs: { 5: { url: "https://intranet.example/admin" } }, managedBlocked: ["intranet.example"] });
   const computer = tool("computer", { output: "Clicked", imageId: "ss_1", tabContext: { executedOnTabId: 5 } });
   guard.install([computer]);
-  const result = await computer.execute({ action: "left_click" }, { tabId: 5 });
+  const result = await computer.execute({ action: "left_click" }, { tabId: 5, toolUseId: "tu_mcp", trackBlockedNavigation: true });
   assert.deepEqual({ ...result }, {
-    error: `${ADMIN_MESSAGE} (1 prior result discarded; 0 not run)`,
+    error: `${ADMIN_MESSAGE} (this call's result was discarded)`,
     errorCode: "navigation_blocked_mid_call",
   });
   assert.equal(guard.__cpMcpLocalImageRegistry.has("ss_1"), false, "discarded screenshot is forgotten");
-  assert.equal(guard.reported.has(5), true, "the tab is marked as already reported");
+  assert.equal(guard.reported.has("tu_mcp"), true, "the MCP tool use is marked as already reported");
+}
+
+async function testSidePanelCallsAreNotRecorded() {
+  const guard = loadGuard({ tabs: { 5: { url: "https://intranet.example/admin" } }, managedBlocked: ["intranet.example"] });
+  const computer = tool("computer", { output: "Clicked" });
+  guard.install([computer]);
+  const result = await computer.execute({ action: "left_click" }, { tabId: 5, toolUseId: "tu_panel" });
+  assert.equal(result.errorCode, "navigation_blocked_mid_call");
+  assert.equal(guard.reported.size, 0, "only the MCP executor consumes reported entries, so the side panel never writes them");
+}
+
+async function testBatchItemsAreLeftToTheBatch() {
+  const guard = loadGuard({ tabs: { 5: { url: "https://intranet.example/admin" } }, managedBlocked: ["intranet.example"] });
+  const inner = tool("computer", { output: "Clicked" });
+  const blockedBatch = tool("browser_batch", { error: "actions[0] failed: blocked", errorCode: "batch_domain_blocked", batchItems: [] });
+  guard.install([inner, blockedBatch]);
+  const innerResult = await inner.execute({}, { tabId: 5, inBatch: true, toolUseId: "tu_batch", trackBlockedNavigation: true });
+  assert.equal(innerResult.output, "Clicked", "items inside a batch are checked by the batch itself");
+  await blockedBatch.execute({}, { tabId: 5, toolUseId: "tu_batch", trackBlockedNavigation: true });
+  assert.equal(guard.reported.has("tu_batch"), true, "a batch that reported a block is recorded for the MCP executor");
+
+  const okGuard = loadGuard({ tabs: { 5: { url: "https://intranet.example/admin" } }, managedBlocked: ["intranet.example"] });
+  const okBatch = tool("browser_batch", { batchItems: [{ label: "computer:left_click", output: "Clicked" }] });
+  okGuard.install([okBatch]);
+  const okResult = await okBatch.execute({}, { tabId: 5, toolUseId: "tu_ok", trackBlockedNavigation: true });
+  assert.equal(okResult.batchItems.length, 1, "the guard doesn't re-check a finished batch");
+  assert.equal(okGuard.reported.has("tu_ok"), false);
 }
 
 async function testPendingUrlIsChecked() {
@@ -81,7 +108,7 @@ async function testOtherBlockCategoriesUseGenericWording() {
   const find = tool("find", { output: "found" });
   guard.install([find]);
   const result = await find.execute({}, { tabId: 5 });
-  assert.equal(result.error, "This site is blocked. (1 prior result discarded; 0 not run)");
+  assert.equal(result.error, "This site is blocked. (this call's result was discarded)");
 }
 
 async function testSafeResultsAndSentinelsPassThrough() {
@@ -128,10 +155,11 @@ function testRuntimeWiring() {
   const source = read(mcpPath);
   assert.equal(source.includes("__cpInstallBlockedNavigationGuard(za);"), true, "guard wraps the shared tool list");
   assert.equal(
-    source.includes("if (l !== undefined && __cpBlockedNavigationReportedTabs.delete(l)) {\n      cn = undefined;\n      ln = undefined;\n    }"),
+    source.includes("if (__cpBlockedNavigationReportedToolUses.delete(t)) {\n      cn = undefined;\n      ln = undefined;\n    }"),
     true,
     "MCP executor doesn't report the same blocked navigation on the next call",
   );
+  assert.equal(source.includes("availableTools: za,\n          trackBlockedNavigation: true,"), true, "only the MCP executor records reports");
   assert.equal(
     source.split("await __cpBlockedSiteErrorMessage(").length - 1 >= 3,
     true,
@@ -147,6 +175,8 @@ function testRuntimeWiring() {
 
 async function main() {
   await testManagedPolicyNavigationDiscardsResult();
+  await testSidePanelCallsAreNotRecorded();
+  await testBatchItemsAreLeftToTheBatch();
   await testPendingUrlIsChecked();
   await testOtherBlockCategoriesUseGenericWording();
   await testSafeResultsAndSentinelsPassThrough();

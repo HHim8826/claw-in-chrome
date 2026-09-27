@@ -277,6 +277,88 @@ async function testImageRejectionFallsBackToMetadata() {
   assert.equal(noImages.upstreamBodies.length, 1, "requests without forwarded images keep their single attempt");
 }
 
+function screenshotHistory(count) {
+  const messages = [{ role: "user", content: "Take screenshots." }];
+  for (let index = 0; index < count; index += 1) {
+    messages.push({ role: "assistant", content: [{ type: "tool_use", id: `toolu_${index}`, name: "computer", input: {} }] });
+    messages.push({ role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_${index}`, content: [image(`IMG${index}X`)] }] });
+  }
+  return messages;
+}
+
+function forwardedImages(body) {
+  return (JSON.stringify(body).match(/data:image\/png;base64,IMG\d+X/g) || []).map((url) => url.slice("data:image/png;base64,".length));
+}
+
+async function testOnlyRecentToolImagesAreForwarded() {
+  const body = await sendThroughAdapter("openai_chat", screenshotHistory(10));
+  assert.deepEqual(
+    forwardedImages(body),
+    ["IMG2X", "IMG3X", "IMG4X", "IMG5X", "IMG6X", "IMG7X", "IMG8X", "IMG9X"],
+    "only the eight most recent tool-result screenshots travel as images",
+  );
+  const olderTool = body.messages.find((message) => message.role === "tool" && message.tool_call_id === "toolu_0");
+  assert.equal(olderTool.content.includes('"data_length"'), true, "older screenshots stay described in their tool messages");
+}
+
+async function testUnrelatedBadRequestsAreNotRetried() {
+  const messages = toolTurn([{ id: "toolu_shot", name: "computer" }], [{ id: "toolu_shot", content: [image("SHOT")] }]);
+  const adapter = createAdapter("openai_chat", {}, () => ({
+    status: 400,
+    payload: { error: { message: "This model's maximum context length is 8192 tokens." } },
+  }));
+  const result = await adapter.send(messages);
+  assert.equal(result.status, 400);
+  assert.equal(adapter.upstreamBodies.length, 1, "errors that don't mention images keep their single attempt");
+
+  await adapter.send(messages);
+  assert.equal(JSON.stringify(adapter.upstreamBodies[1]).includes("data:image/png;base64,SHOT"), true, "the model isn't downgraded to text-only");
+}
+
+async function testImageCountLimitsLowerTheCap() {
+  const rejectsExtraImages = (body) =>
+    forwardedImages(body).length > 1
+      ? { status: 400, payload: { error: { message: "At most 1 image(s) may be provided in one request." } } }
+      : null;
+  const adapter = createAdapter("openai_chat", {}, rejectsExtraImages);
+  const first = await adapter.send(screenshotHistory(3));
+  assert.equal(first.status, 200);
+  assert.equal(adapter.upstreamBodies.length, 2);
+  assert.deepEqual(forwardedImages(adapter.upstreamBodies[1]), ["IMG2X"], "the retry keeps the most recent screenshot");
+
+  await adapter.send(screenshotHistory(4));
+  assert.equal(adapter.upstreamBodies.length, 3, "the learned cap applies to later turns");
+  assert.deepEqual(forwardedImages(adapter.upstreamBodies[2]), ["IMG3X"], "a vision model keeps seeing its latest screenshot");
+}
+
+async function testImageFallbackKeepsMaxTokenClamp() {
+  const messages = toolTurn([{ id: "toolu_shot", name: "computer" }], [{ id: "toolu_shot", content: [image("SHOT")] }]);
+  const responses = [
+    { status: 400, payload: { error: { message: "max_tokens > 32" } } },
+    { status: 400, payload: { error: { message: "This model does not support image input." } } },
+  ];
+  const adapter = createAdapter("openai_chat", {}, () => responses.shift() || null);
+  const result = await adapter.send(messages);
+  assert.equal(result.status, 200);
+  assert.equal(adapter.upstreamBodies.length, 3);
+  assert.equal(adapter.upstreamBodies[1].max_tokens, 32);
+  assert.equal(adapter.upstreamBodies[2].max_tokens, 32, "rebuilding without images keeps the clamp");
+  assert.equal(JSON.stringify(adapter.upstreamBodies[2]).includes("image_url"), false);
+}
+
+async function testExhaustedRetriesReturnTheProviderError() {
+  const messages = toolTurn([{ id: "toolu_shot", name: "computer" }], [{ id: "toolu_shot", content: [image("SHOT")] }]);
+  const responses = [
+    { status: 400, payload: { error: { message: "max_tokens > 48" } } },
+    { status: 400, payload: { error: { message: "This model does not support image input." } } },
+    { status: 400, payload: { error: { message: "max_tokens > 16" } } },
+  ];
+  const adapter = createAdapter("openai_chat", {}, () => responses.shift() || null);
+  const result = await adapter.send(messages);
+  assert.equal(result.status, 400, "the last provider error is returned instead of a generic failure");
+  assert.equal(JSON.stringify(result.json).includes("max_tokens > 16"), true);
+}
+
 async function main() {
   await testResponsesForwardsBatchImagesInOrder();
   await testChatForwardsBatchImagesAfterTheToolMessage();
@@ -285,6 +367,11 @@ async function main() {
   await testChatWithoutImagesIsUnchanged();
   await testTextOnlyProvidersKeepMetadata();
   await testImageRejectionFallsBackToMetadata();
+  await testOnlyRecentToolImagesAreForwarded();
+  await testUnrelatedBadRequestsAreNotRetried();
+  await testImageCountLimitsLowerTheCap();
+  await testImageFallbackKeepsMaxTokenClamp();
+  await testExhaustedRetriesReturnTheProviderError();
   console.log("provider format adapter tool-result image tests passed");
 }
 

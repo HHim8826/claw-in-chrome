@@ -17,8 +17,9 @@ through Claw's readable recovery layer.
 
 The supplied source is `C:\Users\leo\Downloads\Claude-Chrome.zip` with manifest
 version `1.0.94` and `git-hash.txt` value
-`e884a41a3e844489d46a5eac649ad57d54a9c5bf`. The current Claw manifest version
-is `1.0.79.6`.
+`e884a41a3e844489d46a5eac649ad57d54a9c5bf`. Planning started from Claw
+`1.0.79.6`. The branch later merged `1.0.79.7` from `main` and releases the
+recovered behavior as `1.0.94.0`.
 
 Inspection compared localized strings that the source code actually
 references, both content scripts, the tool runtime, the service worker, the

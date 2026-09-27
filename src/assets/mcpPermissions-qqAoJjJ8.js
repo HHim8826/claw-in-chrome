@@ -4761,6 +4761,12 @@ class H {
         o,
         i,
         r?.pendingContextScope,
+        scaledCaptureTarget.frameWidth
+          ? {
+              frameWidth: scaledCaptureTarget.frameWidth,
+              frameHeight: scaledCaptureTarget.frameHeight,
+            }
+          : undefined,
       );
     } finally {
       if (!r?.skipIndicator) {
@@ -4768,7 +4774,7 @@ class H {
       }
     }
   }
-  async processScreenshotInContentScript(e, t, r, o, a, n, s, i, d) {
+  async processScreenshotInContentScript(e, t, r, o, a, n, s, i, d, f) {
     const c = await x({
       target: {
         tabId: e,
@@ -4883,6 +4889,11 @@ class H {
       throw new Error("Failed to process screenshot in content script");
     }
     const l = c[0].result;
+    // 语义锚点：回退链收到的已是按 scale 截取的图片；这里补回全分辨率坐标帧，坐标换算与 scale 说明保持一致。
+    if (f?.frameWidth && f?.frameHeight) {
+      l.frameWidth = f.frameWidth;
+      l.frameHeight = f.frameHeight;
+    }
     // 语义锚点：content-script 压缩回退链也会回填同一份 screenshot viewport context 账本。
     M.stashPendingContext(e, l, d);
     return l;
@@ -16131,7 +16142,19 @@ async function __cpBlockedSiteErrorMessage(e, t, r) {
 }
 // 语义锚点：工具执行中途导航到被封锁站点的检测（upstream 1.0.94）。
 // 成功返回后再检查目标 tab 的 url 与 pendingUrl；命中则丢弃本次结果（含截图），返回 navigation_blocked_mid_call。
-const __cpBlockedNavigationReportedTabs = new Set();
+// MCP tool-use IDs whose blocked navigation was already reported in their own result;
+// the MCP executor consumes the entry so webNavigation doesn't repeat it on the next call.
+const __cpBlockedNavigationReportedToolUses = new Set();
+const __cpBlockedNavigationErrorCodes = new Set([
+  "navigation_blocked_mid_call",
+  "batch_domain_blocked",
+  "batch_navigation_blocked",
+]);
+function __cpMarkBlockedNavigationReported(e) {
+  if (e?.trackBlockedNavigation && e.toolUseId) {
+    __cpBlockedNavigationReportedToolUses.add(e.toolUseId);
+  }
+}
 async function __cpDetectMidCallBlockedNavigation(e) {
   let t;
   try {
@@ -16170,6 +16193,17 @@ function __cpInstallBlockedNavigationGuard(e) {
     const o = r.execute;
     r.execute = async (e, t) => {
       const a = await o(e, t);
+      // browser_batch checks every item itself (inner tools run with inBatch), so the
+      // guard only records a block the batch already reported.
+      if (t?.inBatch) {
+        return a;
+      }
+      if (r.name === "browser_batch") {
+        if (a && __cpBlockedNavigationErrorCodes.has(a.errorCode)) {
+          __cpMarkBlockedNavigationReported(t);
+        }
+        return a;
+      }
       if (!a || typeof a != "object" || "type" in a || a.error) {
         return a;
       }
@@ -16186,10 +16220,9 @@ function __cpInstallBlockedNavigationGuard(e) {
           __cpMcpLocalImageRegistry.delete(e);
         }
       }
-      __cpBlockedNavigationReportedTabs.add(n);
-      const i = Array.isArray(a.batchItems) && a.batchItems.length > 0 ? a.batchItems.length : 1;
+      __cpMarkBlockedNavigationReported(t);
       return {
-        error: `${s} (${i} prior result${i === 1 ? "" : "s"} discarded; 0 not run)`,
+        error: `${s} (this call's result was discarded)`,
         errorCode: "navigation_blocked_mid_call",
       };
     };
@@ -16393,6 +16426,7 @@ class Va {
           permissionManager: i ?? this.context.permissionManager,
           createAnthropicMessage: this.createAnthropicMessage(),
           availableTools: za,
+          trackBlockedNavigation: true,
         };
         const d = za.find((t) => t.name === e);
         if (!d) {
@@ -17194,7 +17228,7 @@ async function wn(e) {
     i("tool_execute_ms");
     f = h?.is_error === true;
     // 语义锚点：本次调用已因中途导航到封锁站点而报错时，清掉 webNavigation 留给下一次调用的同一条错误。
-    if (l !== undefined && __cpBlockedNavigationReportedTabs.delete(l)) {
+    if (__cpBlockedNavigationReportedToolUses.delete(t)) {
       cn = undefined;
       ln = undefined;
     }

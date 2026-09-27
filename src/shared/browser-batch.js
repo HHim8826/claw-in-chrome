@@ -150,10 +150,46 @@
     const remaining = total - index - 1;
     const discard = NAVIGATION_BLOCK_CODES.has(errorCode);
     return {
-      error: `actions[${index}] (${label}) failed: ${message} (${discard ? discardedNote(items.length, total - items.length) : `${items.length} completed, ${remaining} remaining`})`,
+      error: `actions[${index}] (${label}) failed: ${message} (${discard ? discardedNote(items.length, remaining) : `${items.length} completed, ${remaining} remaining`})`,
       errorCode: errorCode || "batch_subaction_failed",
       batchItems: discard ? [] : summarizeItems(items),
     };
+  }
+
+  function netlocOf(url) {
+    try {
+      return new URL(url).host;
+    } catch {
+      return "";
+    }
+  }
+
+  // A one-time grant belongs to the whole batch call: PermissionManager revokes it on
+  // first use, so later items on the same host reuse the approval instead of failing.
+  function scopeOnceGrantsToBatch(permissionManager, toolUseId) {
+    if (!permissionManager || typeof permissionManager.checkPermission !== "function" || !toolUseId) {
+      return permissionManager;
+    }
+    const approvedHosts = new Set();
+    return new Proxy(permissionManager, {
+      get(target, property) {
+        if (property === "checkPermission") {
+          return async function (url, ...rest) {
+            const host = netlocOf(url);
+            if (host && approvedHosts.has(host)) {
+              return { allowed: true, needsPrompt: false };
+            }
+            const result = await target.checkPermission(url, ...rest);
+            if (host && result?.allowed && result.permission?.duration === "once" && result.permission.toolUseId === toolUseId) {
+              approvedHosts.add(host);
+            }
+            return result;
+          };
+        }
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
   }
 
   function hostnameOf(url) {
@@ -250,6 +286,12 @@
       }
 
       let allPriorTrivial = true;
+      const itemContext = {
+        ...context,
+        permissionManager: scopeOnceGrantsToBatch(context.permissionManager, context.toolUseId),
+        inBatch: true,
+        pendingContextScope: scope,
+      };
       for (let index = 0; index < total; index += 1) {
         const action = actions[index];
         const label = actionLabel(action);
@@ -266,7 +308,6 @@
           const blocked = await deps.detectBlockedNavigation(preTabId);
           if (blocked) {
             progress({ ...base, status: "error", error: blocked });
-            forgetMintedImages();
             return failure(items, index, total, label, blocked, "batch_domain_blocked");
           }
         }
@@ -280,11 +321,7 @@
 
         running = { ...base, status: "running" };
         progress(running);
-        const result = await tool.execute(coercedInput, {
-          ...context,
-          inBatch: true,
-          pendingContextScope: scope,
-        });
+        const result = await tool.execute(coercedInput, itemContext);
 
         if (result && typeof result === "object" && "type" in result) {
           const host = result.url ? hostnameOf(result.url) : "";
@@ -307,12 +344,26 @@
           const message = result?.error || "Unknown error";
           progress({ ...base, status: "error", error: message });
           running = undefined;
-          if (result?.errorCode === "navigation_blocked_mid_call") {
-            forgetMintedImages();
-          }
           return failure(items, index, total, label, message, result?.errorCode);
         }
 
+        running = undefined;
+        if (result.imageId) {
+          mintedImageIds.push(result.imageId);
+        }
+        // The batch owns blocked-site checks for its items (inner tools skip the
+        // runtime guard while inBatch): one check before and one after each item.
+        const executedTabId =
+          (typeof coercedInput?.tabId === "number" ? coercedInput.tabId : undefined) ??
+          result.tabContext?.executedOnTabId ??
+          context.tabId;
+        if (await isSessionTab(executedTabId, context, deps)) {
+          const blocked = await deps.detectBlockedNavigation(executedTabId);
+          if (blocked) {
+            progress({ ...base, status: "error", error: blocked });
+            return failure(items, index, total, label, blocked, "batch_domain_blocked");
+          }
+        }
         progress({
           ...base,
           status: "ok",
@@ -320,7 +371,6 @@
           base64Image: result.base64Image,
           imageFormat: result.imageFormat,
         });
-        running = undefined;
         if (result.tabContext) {
           lastTabContext = result.tabContext;
         }
@@ -331,22 +381,6 @@
           imageFormat: result.imageFormat,
         });
         allPriorTrivial = allPriorTrivial && isTrivialAction(action);
-        if (result.imageId) {
-          mintedImageIds.push(result.imageId);
-        }
-
-        const executedTabId =
-          (typeof coercedInput?.tabId === "number" ? coercedInput.tabId : undefined) ??
-          result.tabContext?.executedOnTabId ??
-          context.tabId;
-        if (await isSessionTab(executedTabId, context, deps)) {
-          const blocked = await deps.detectBlockedNavigation(executedTabId);
-          if (blocked) {
-            progress({ ...base, status: "error", error: blocked });
-            forgetMintedImages();
-            return failure(items, index, total, label, blocked, "batch_domain_blocked");
-          }
-        }
         if (executedTabId !== undefined) {
           await deps.recordStep?.(action.name, coercedInput, executedTabId, result.base64Image);
           if (index < total - 1) {
@@ -371,8 +405,11 @@
       }
       return { error: message, errorCode: "batch_exception", batchItems: summarizeItems(items) };
     } finally {
+      // Any exit that doesn't commit drops the batch's screenshots, so a failed or
+      // blocked batch can't leave image IDs that a later upload_image could reuse.
       if (!committed) {
         deps.clearPendingContexts?.(scope);
+        forgetMintedImages();
       }
     }
   }
@@ -459,9 +496,12 @@
           input: action?.input ?? {},
           status: toolResult ? (toolResult.is_error ? "error" : "ok") : "running",
         }));
+    // Without live events (a reopened panel or a restored session) a failed batch
+    // doesn't say how far it got, so its completed count is unknown (null).
+    const unknownProgress = list.length === 0 && toolResult?.is_error === true;
     return {
       total,
-      completed: steps.filter((step) => step.status !== "running").length,
+      completed: unknownProgress ? null : steps.filter((step) => step.status !== "running").length,
       failed: steps.some((step) => step.status === "error") || !!toolResult?.is_error,
       steps,
     };

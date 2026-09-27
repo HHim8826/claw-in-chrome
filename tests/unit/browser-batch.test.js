@@ -115,7 +115,7 @@ async function testSuccessfulBatchRunsSequentially() {
 
 async function testFirstErrorStopsTheBatch() {
   const computer = tool("computer", (input) =>
-    input.action === "screenshot" ? { output: "Captured", base64Image: "IMG" } : { error: "boom" },
+    input.action === "screenshot" ? { output: "Captured", base64Image: "IMG", imageId: "ss_failed" } : { error: "boom" },
   );
   const find = tool("find", () => ({ output: "found" }));
   const { deps, log } = createDeps();
@@ -135,6 +135,53 @@ async function testFirstErrorStopsTheBatch() {
   assert.deepEqual(result.batchItems, [{ label: "computer:screenshot", output: "Captured [Image omitted due to error]" }]);
   assert.equal(find.calls.length, 0);
   assert.deepEqual(log.cleared, [7], "deferred contexts are cleared on failure");
+  assert.deepEqual(log.forgotten, ["ss_failed"], "screenshots from a failed batch can't be uploaded later");
+}
+
+async function testSuccessfulBatchKeepsItsScreenshots() {
+  const computer = tool("computer", () => ({ output: "Captured", base64Image: "IMG", imageId: "ss_kept" }));
+  const { deps, log } = createDeps();
+  const result = await batch.execute({ actions: [{ name: "computer", input: { action: "screenshot" } }] }, { tabId: 5, availableTools: [computer] }, deps);
+  assert.deepEqual(result.mintedImageIds, ["ss_kept"]);
+  assert.deepEqual(log.forgotten, []);
+}
+
+async function testFailuresAfterScreenshotsForgetThem() {
+  const shot = tool("computer", () => ({ output: "Captured", base64Image: "IMG", imageId: "ss_early" }));
+  const throwing = tool("find", () => {
+    throw new Error("kaboom");
+  });
+  const exception = createDeps();
+  await batch.execute(
+    { actions: [{ name: "computer", input: { action: "screenshot" } }, { name: "find", input: {} }] },
+    { tabId: 5, availableTools: [shot, throwing] },
+    exception.deps,
+  );
+  assert.deepEqual(exception.log.forgotten, ["ss_early"], "exceptions forget earlier screenshots");
+
+  const unknown = createDeps();
+  await batch.execute(
+    { actions: [{ name: "computer", input: { action: "screenshot" } }, { name: "nope", input: {} }] },
+    { tabId: 5, availableTools: [shot] },
+    unknown.deps,
+  );
+  assert.deepEqual(unknown.log.forgotten, ["ss_early"], "unknown tools forget earlier screenshots");
+
+  let cancelled = false;
+  const cancelling = createDeps();
+  await batch.execute(
+    { actions: [{ name: "computer", input: { action: "screenshot" } }, { name: "computer", input: { action: "screenshot" } }] },
+    {
+      tabId: 5,
+      availableTools: [tool("computer", () => {
+        cancelled = true;
+        return { output: "Captured", base64Image: "IMG", imageId: "ss_before_cancel" };
+      })],
+      isCancelled: () => cancelled,
+    },
+    cancelling.deps,
+  );
+  assert.deepEqual(cancelling.log.forgotten, ["ss_before_cancel"], "cancellation forgets earlier screenshots");
 }
 
 async function testPermissionPromptsSurfaceOnlyAfterTrivialItems() {
@@ -178,7 +225,7 @@ async function testBlockedNavigationDiscardsPriorResults() {
   );
   assert.equal(
     result.error,
-    "actions[0] (computer:screenshot) failed: This site is blocked by a policy set by your browser's administrator. (1 prior result discarded; 2 not run)",
+    "actions[0] (computer:screenshot) failed: This site is blocked by a policy set by your browser's administrator. (0 prior results discarded; 2 not run)",
   );
   assert.equal(result.errorCode, "batch_domain_blocked");
   assert.deepEqual(result.batchItems, []);
@@ -291,6 +338,26 @@ function testProgressSummary() {
   assert.equal(live.failed, true);
   const restored = batch.summarizeProgress([], input, { is_error: false });
   assert.equal(restored.completed, 2);
+  const restoredFailure = batch.summarizeProgress([], input, { is_error: true });
+  assert.equal(restoredFailure.completed, null, "a restored failed batch doesn't claim every step completed");
+  assert.equal(restoredFailure.failed, true);
+}
+
+async function testBlockedAfterEarlierStepsCountsOnlyPriorResults() {
+  const computer = tool("computer", () => ({ output: "ok" }));
+  let checks = 0;
+  const { deps } = createDeps({
+    detectBlockedNavigation: async () => {
+      checks += 1;
+      return checks === 4 ? "blocked" : null;
+    },
+  });
+  const result = await batch.execute(
+    { actions: [{ name: "computer", input: { action: "left_click" } }, { name: "computer", input: { action: "left_click" } }, { name: "computer", input: { action: "left_click" } }] },
+    { tabId: 5, availableTools: [computer] },
+    deps,
+  );
+  assert.equal(result.error, "actions[1] (computer:left_click) failed: blocked (1 prior result discarded; 1 not run)");
 }
 
 function testRuntimeWiring() {
@@ -306,6 +373,7 @@ function testRuntimeWiring() {
   assert.equal(sidepanel.includes("availableTools: __cpActiveToolsForTurn(),"), true, "the side panel passes its enabled tools");
   assert.equal(sidepanel.includes("onBatchProgress: e => __cpBrowserBatchProgressStore.upsert(n, e),"), true);
   assert.equal(sidepanel.includes("if (globalThis.__CP_BROWSER_BATCH__?.isBatchResult(e)) {"), true, "side-panel results keep batch images");
+  assert.equal(sidepanel.includes("const i = r.completed === null ? e.formatMessage({"), true, "restored failed batches show only the action count");
   const loader = read("src/background/service-worker-loader.js");
   assert.equal(loader.includes('import "../shared/browser-batch.js";'), true);
   const sidepanelHtml = read("src/sidepanel/sidepanel.html");
@@ -318,6 +386,8 @@ async function main() {
   await testValidation();
   await testSuccessfulBatchRunsSequentially();
   await testFirstErrorStopsTheBatch();
+  await testSuccessfulBatchKeepsItsScreenshots();
+  await testFailuresAfterScreenshotsForgetThem();
   await testPermissionPromptsSurfaceOnlyAfterTrivialItems();
   await testBlockedNavigationDiscardsPriorResults();
   await testMidCallGuardErrorsAlsoDiscard();
@@ -326,6 +396,7 @@ async function main() {
   testToolResultContent();
   testPromptHelpers();
   testProgressSummary();
+  await testBlockedAfterEarlierStepsCountsOnlyPriorResults();
   testRuntimeWiring();
   console.log("browser batch tests passed");
 }

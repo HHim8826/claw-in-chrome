@@ -3,9 +3,11 @@
 
   const backupApi = globalThis.__CP_SETTINGS_BACKUP__;
   const observability = globalThis.__CP_PROVIDER_OBSERVABILITY__;
-  if (!backupApi || !observability || !globalThis.chrome?.storage?.local) {
+  const card = globalThis.__CP_OPTIONS_CARD__;
+  if (!backupApi || !observability || !card || !globalThis.chrome?.storage?.local) {
     return;
   }
+  const { localeKey, node, isDefaultOptionsRoute } = card;
 
   const ROOT_ID = "cp-data-insights-root";
   const stringsByLocale = {
@@ -98,35 +100,8 @@
   let statusMessage = "";
   let mountObserver = null;
 
-  function localeKey() {
-    const value = String(
-      document.documentElement?.dataset?.cpUiLocale ||
-      document.documentElement?.lang ||
-      navigator?.language ||
-      "en",
-    ).toLowerCase();
-    if (value.startsWith("zh-tw") || value.startsWith("zh-hant")) {
-      return "zh-TW";
-    }
-    if (value.startsWith("zh")) {
-      return "zh-CN";
-    }
-    return "en";
-  }
-
   function strings() {
     return stringsByLocale[localeKey()] || stringsByLocale.en;
-  }
-
-  function node(tag, className, text) {
-    const element = document.createElement(tag);
-    if (className) {
-      element.className = className;
-    }
-    if (text != null) {
-      element.textContent = String(text);
-    }
-    return element;
   }
 
   function downloadBackup(documentValue) {
@@ -212,18 +187,13 @@
     return card;
   }
 
-  function isDefaultOptionsRoute() {
-    const parts = String(window.location?.hash || "").split("?");
-    return parts[0] === "#options" && !/(?:^|&)provider=/.test(parts[1] || "");
-  }
-
   function render() {
     const existing = document.getElementById(ROOT_ID);
     if (!isDefaultOptionsRoute()) {
       existing?.remove();
       return;
     }
-    const mountTarget = document.getElementById("cp-options-debug-anchor");
+    const mountTarget = card.getMountTarget();
     if (!mountTarget) {
       existing?.remove();
       return;
@@ -345,17 +315,7 @@
   }
 
   function observeMountTarget() {
-    if (mountObserver || typeof MutationObserver !== "function") {
-      return;
-    }
-    mountObserver = new MutationObserver(function () {
-      const mountTarget = document.getElementById("cp-options-debug-anchor");
-      const root = document.getElementById(ROOT_ID);
-      if (mountTarget && root?.parentNode !== mountTarget) {
-        render();
-      }
-    });
-    mountObserver.observe(document.body, { childList: true, subtree: true });
+    mountObserver ||= card.observeMountTarget(ROOT_ID, render);
   }
 
   async function refresh() {

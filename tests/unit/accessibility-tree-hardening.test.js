@@ -165,6 +165,29 @@ function testSensitiveValuesAreRedacted() {
   assert.match(output, /button "Pay now"/);
 }
 
+function testLabelsKeepNestedTextButSkipControls() {
+  const document = createDocument();
+  const { create } = document;
+  const email = create("input", { id: "email", type: "email" });
+  const phone = create("input", { id: "phone", type: "tel" });
+  const countryCode = create(
+    "select",
+    { "aria-label": "Country code" },
+    create("option", { value: "+886" }, "Taiwan +886"),
+    create("option", { value: "+81" }, "Japan +81"),
+  );
+  document.body.append(
+    create("label", { for: "email" }, create("span", {}, "Email"), create("abbr", {}, "*")),
+    email,
+    create("label", { for: "phone" }, create("span", {}, "Phone"), countryCode),
+    phone,
+  );
+  const context = loadTree(document);
+  const output = context.window.__generateAccessibilityTree("interactive", null, 50000, null).pageContent;
+  assert.match(output, /textbox "Email\*"/, "text inside nested label elements names the field");
+  assert.match(output, /textbox "Phone" \[ref_\d+\] type="tel"/, "controls inside the label don't leak option text into the name");
+}
+
 function testRefsAreReusedThroughReverseMap() {
   const { document, pw } = buildFormPage();
   const context = loadTree(document);
@@ -175,6 +198,17 @@ function testRefsAreReusedThroughReverseMap() {
   const ref = context.window.__claudeElementReverseMap.get(pw);
   assert.match(ref, /^ref_\d+$/);
   assert.equal(context.window.__claudeElementMap[ref].deref(), pw);
+}
+
+function testOverlongFirstLineIsCutAtTheLimit() {
+  const { document } = buildFormPage();
+  const context = loadTree(document);
+  const full = context.window.__generateAccessibilityTree("all", null, 50000, null).pageContent;
+  const firstLineLength = full.indexOf("\n");
+  const limit = Math.floor(firstLineLength / 2);
+  const [body, note] = context.window.__generateAccessibilityTree("all", null, limit, null).pageContent.split("\n[output truncated at ");
+  assert.equal(body, full.slice(0, limit), "without a line boundary the output is cut at max_chars, never beyond it");
+  assert.ok(note);
 }
 
 function testOversizedOutputIsTruncatedAtLineBoundary() {
@@ -204,6 +238,19 @@ function testTraversalIsCappedAtTenThousandElements() {
   assert.match(output, /\[truncated at 10000 elements — page is very large; use a refId or smaller depth to focus\]$/);
 }
 
+function testExactlyTenThousandElementsIsNotTruncated() {
+  const document = createDocument();
+  for (let index = 0; index < 10000; index += 1) {
+    document.body.append(document.create("button", {}, `Item ${index}`));
+  }
+  // Hidden trailing content that the interactive filter skips must not count as truncation.
+  document.body.append(document.create("div", {}, "not interactive"));
+  const context = loadTree(document);
+  const output = context.window.__generateAccessibilityTree("interactive", null, null, null).pageContent;
+  assert.equal(output.split("\n").filter((line) => line.includes("button")).length, 10000);
+  assert.equal(output.includes("[truncated at 10000 elements"), false, "a complete traversal has no truncation note");
+}
+
 function testReadPageDescriptionDocumentsTruncation() {
   const source = fs.readFileSync(mcpPermissionsPath, "utf8");
   assert.equal(
@@ -217,9 +264,12 @@ function testReadPageDescriptionDocumentsTruncation() {
 
 function main() {
   testSensitiveValuesAreRedacted();
+  testLabelsKeepNestedTextButSkipControls();
   testRefsAreReusedThroughReverseMap();
   testOversizedOutputIsTruncatedAtLineBoundary();
+  testOverlongFirstLineIsCutAtTheLimit();
   testTraversalIsCappedAtTenThousandElements();
+  testExactlyTenThousandElementsIsNotTruncated();
   testReadPageDescriptionDocumentsTruncation();
   console.log("accessibility tree hardening tests passed");
 }

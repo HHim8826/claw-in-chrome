@@ -32,7 +32,8 @@ Preserve these invariants.
   overwrite assets for an existing release.
 - Offscreen GIF generation rejects more than 50 frames or more than 50,000,000
   decoded pixels before starting the encoder. Mixed-size frames are padded to
-  the largest frame, and the padded grid obeys the same pixel budget.
+  the largest frame. When that padded grid would exceed the pixel budget, the
+  grid and every frame scale down proportionally instead of failing the export.
 - `browser_batch` runs items sequentially and stops at the first error,
   cancellation, unknown tool, or tab outside the group. It waits up to three
   seconds for a loading tab between items and commits in-batch screenshot

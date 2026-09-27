@@ -7,6 +7,7 @@ const { FakeDocument, FakeElement, FakeMutationObserver } = require("../helpers/
 
 const repoRoot = path.join(__dirname, "..", "..");
 const optionsPath = path.join(repoRoot, "src", "options", "browser-tools-options.js");
+const cardHelpersPath = path.join(repoRoot, "src", "options", "options-card-helpers.js");
 
 function createHarness(options = {}) {
   const chromeMock = createChromeMock({ storageState: options.storageState || {} });
@@ -28,6 +29,7 @@ function createHarness(options = {}) {
     },
   };
   sandbox.globalThis = sandbox;
+  runScriptInSandbox(cardHelpersPath, sandbox);
   runScriptInSandbox(optionsPath, sandbox);
   return { chromeMock, document, sandbox };
 }
@@ -67,6 +69,16 @@ async function testHiddenOutsideOptionsRoute() {
 function testPageLoadsTheModule() {
   const html = fs.readFileSync(path.join(repoRoot, "src", "options", "options.html"), "utf8");
   assert.equal(html.includes('<script src="/options/browser-tools-options.js"></script>'), true);
+  assert.ok(
+    html.indexOf('<script src="/options/options-card-helpers.js"></script>') > -1 &&
+      html.indexOf('<script src="/options/options-card-helpers.js"></script>') < html.indexOf('<script src="/options/browser-tools-options.js"></script>'),
+    "the shared card helpers load before the option cards",
+  );
+  for (const modulePath of ["browser-tools-options.js", "data-insights-options.js"]) {
+    const source = fs.readFileSync(path.join(repoRoot, "src", "options", modulePath), "utf8");
+    assert.equal(source.includes("function localeKey()"), false, `${modulePath} uses the shared locale helper`);
+    assert.equal(source.includes("new MutationObserver"), false, `${modulePath} uses the shared mount observer`);
+  }
   const release = fs.readFileSync(path.join(repoRoot, ".github", "release-package-items.txt"), "utf8");
   assert.equal(release.includes("options/browser-tools-options.js"), true);
 }

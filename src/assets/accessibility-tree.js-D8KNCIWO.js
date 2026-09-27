@@ -37,15 +37,35 @@
       return r.indexOf(i) !== -1;
     });
   };
-  // 语义锚点：label[for] 只取直接文本节点，避免把 label 内嵌控件（如 select 全部 option）的文本读进名称。
-  const __cpAccessibilityTreeDirectText = function (e) {
+  // 语义锚点：label[for] 名称收集所有后代文本（含 <span>/<abbr> 等），但跳过内嵌表单控件，
+  // 避免把 label 包住的 select 全部 option、按钮文字或输入值读进字段名称。
+  const __cpAccessibilityTreeLabelControlTags = [
+    "SELECT",
+    "OPTION",
+    "DATALIST",
+    "INPUT",
+    "TEXTAREA",
+    "BUTTON",
+  ];
+  const __cpAccessibilityTreeCollectLabelText = function (e) {
     var t = "";
     for (var r = 0; r < e.childNodes.length; r++) {
-      if (e.childNodes[r].nodeType === Node.TEXT_NODE) {
-        t += e.childNodes[r].textContent;
+      var i = e.childNodes[r];
+      if (i.nodeType === Node.TEXT_NODE) {
+        t += i.textContent;
+      } else if (
+        i.nodeType === Node.ELEMENT_NODE &&
+        __cpAccessibilityTreeLabelControlTags.indexOf(
+          String(i.tagName).toUpperCase(),
+        ) === -1
+      ) {
+        t += __cpAccessibilityTreeCollectLabelText(i);
       }
     }
-    return t.trim();
+    return t;
+  };
+  const __cpAccessibilityTreeDirectText = function (e) {
+    return __cpAccessibilityTreeCollectLabelText(e).replace(/\s+/g, " ").trim();
   };
   // 语义锚点：read_page 共享这组 filter/depth/ref_id 常量，避免 bundle 内部魔法字符串继续扩散。
   // 语义锚点：read_page / find 共享的 ref writer 主入口。
@@ -314,14 +334,17 @@
       // 语义锚点：元素是否纳入可访问性树（按 filter/aria-hidden/viewport 可见性/role/label）
       const __cpAccessibilityTreeShouldIncludeElement = w;
       let b = function (e, t, r) {
-        if (
-          __cpAccessibilityTreeSerializedCount <
-            __cpAccessibilityTreeMaxElements &&
-          !(t > a) &&
-          e &&
-          e.tagName
-        ) {
+        if (!__cpAccessibilityTreeCapReached && !(t > a) && e && e.tagName) {
           var i = w(e, r) || (r.refId !== null && t === 0);
+          // 语义锚点：只有封顶后还遇到要序列化的元素才算截断；恰好 1 万个元素的完整遍历不追加截断提示。
+          if (
+            i &&
+            __cpAccessibilityTreeSerializedCount >=
+              __cpAccessibilityTreeMaxElements
+          ) {
+            __cpAccessibilityTreeCapReached = true;
+            return;
+          }
           var sensitiveSelect =
             e.tagName.toLowerCase() === "select" &&
             __cpAccessibilityTreeIsSensitiveField(e);
@@ -400,6 +423,7 @@
       const __cpAccessibilityTreeTraverseAndSerialize = b;
       var n = [];
       var __cpAccessibilityTreeSerializedCount = 0;
+      var __cpAccessibilityTreeCapReached = false;
       // 语义锚点：read_page 参数规约：filter 默认 all，depth 默认 15，ref_id 命中时只展开目标子树。
       var a = t ?? __cpAccessibilityTreeDefaultDepth;
       var o = {
@@ -448,7 +472,7 @@
       }
       var c = n.join("\n");
       // 语义锚点：元素数封顶后追加截断提示（upstream 1.0.94）。
-      if (__cpAccessibilityTreeSerializedCount >= __cpAccessibilityTreeMaxElements) {
+      if (__cpAccessibilityTreeCapReached) {
         c +=
           "\n[truncated at " +
           __cpAccessibilityTreeMaxElements +
@@ -462,6 +486,8 @@
       if (r != null && c.length > r) {
         var f = c.length;
         var truncateAt = c.lastIndexOf("\n", r);
+        // 语义锚点：只有首行本身就超过 max_chars（没有可用的行边界）时才在行中截断；
+        // 为了不超出调用方给的字符上限，这里不往后找下一个换行。
         if (truncateAt <= 0) {
           truncateAt = Math.max(0, r);
         }
