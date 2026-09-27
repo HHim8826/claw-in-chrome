@@ -50,6 +50,8 @@ Prefer these seams when implementing behavior.
 - The Mermaid enhancer retains React-owned pre/code nodes and appends its SVG
   host inside the pre. Source and theme changes refresh that host, stale async
   results are discarded, and removing the pre removes the diagram with it.
+  Reused code nodes that change language clear the diagram and restore source
+  visibility; class changes and nested text updates share the same observer.
 - Provider stream adapters share a demand-driven SSE reader. Body cancellation
   reaches the upstream reader and releases its lock. Chat requires a finish
   reason; Responses requires a completed or supported incomplete outcome.

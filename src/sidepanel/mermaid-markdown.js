@@ -69,9 +69,20 @@
       : "light";
   }
 
+  function clearCodeBlock(pre) {
+    renderAttempts.delete(pre);
+    diagramHosts.get(pre)?.remove();
+    diagramHosts.delete(pre);
+    delete pre.dataset.cpMermaidState;
+  }
+
   async function renderCodeBlock(codeElement) {
     const pre = codeElement?.parentElement;
     if (!pre || !pre.isConnected) {
+      return;
+    }
+    if (!codeElement.matches?.(MERMAID_SELECTOR)) {
+      clearCodeBlock(pre);
       return;
     }
     const source = String(codeElement.textContent || "");
@@ -85,6 +96,7 @@
     pre.dataset.cpMermaidState = "loading";
     try {
       const runtime = await getRenderRuntime();
+      if (renderAttempts.get(pre) !== attempt || !pre.isConnected) return;
       const result = await runtime.render(source, {
         id: `cp-mermaid-${++nextDiagramId}`,
         theme,
@@ -133,15 +145,16 @@
     scanForMermaidCodeBlocks(root.document);
     const observer = new root.MutationObserver((records) => {
       for (const record of records) {
-        if (record.type === "characterData") {
-          const codeElement = record.target?.parentElement;
-          if (codeElement?.matches?.(MERMAID_SELECTOR)) {
-            renderCodeBlock(codeElement);
-          }
+        if (record.type === "attributes") {
+          if (record.target?.matches?.("pre > code")) renderCodeBlock(record.target);
           continue;
         }
-        if (record.target?.matches?.(MERMAID_SELECTOR)) {
-          renderCodeBlock(record.target);
+        const affectedCode = (record.target.nodeType === 3
+          ? record.target.parentElement : record.target)?.closest?.("pre > code");
+        if (affectedCode) renderCodeBlock(affectedCode);
+        if (record.type === "characterData") continue;
+        if (record.target.tagName === "PRE" && !record.target.querySelector(MERMAID_SELECTOR)) {
+          clearCodeBlock(record.target);
         }
         for (const node of record.addedNodes) {
           if (node.nodeType === 1) {
@@ -162,6 +175,8 @@
       childList: true,
       subtree: true,
       characterData: true,
+      attributes: true,
+      attributeFilter: ["class"],
     });
     const themeObserver = new root.MutationObserver(() => scanForMermaidCodeBlocks(root.document));
     themeObserver.observe(root.document.documentElement, { attributes: true, attributeFilter: ["data-mode"] });
