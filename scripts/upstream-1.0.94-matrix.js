@@ -6,7 +6,7 @@ const UPSTREAM_1_0_94_SOURCE = Object.freeze({
 const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   {
     id: "read-page-hardening",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source accessibility tree redacts sensitive values, reuses refs through a reverse WeakMap, caps traversal, and truncates at a line boundary.",
     owners: ["src/assets/accessibility-tree.js-D8KNCIWO.js"],
     testTarget: "tests/unit/accessibility-tree-hardening.test.js",

@@ -80,6 +80,12 @@ Prefer these seams when implementing behavior.
 - The MCP bundle's service-worker diagnostic seam sanitizes persisted and
   console payloads with the same helper. Permission `action_data` is treated as
   private text and raw payloads are never used as a logging fallback.
+- The accessibility-tree content script owns `read_page` serialization. It
+  redacts password, hidden, credential, one-time-code, and payment-card values,
+  never lists options of those selects, reuses refs through
+  `__claudeElementReverseMap`, stops after 10,000 elements, and truncates
+  oversized output at a line boundary with a size note instead of returning an
+  error.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

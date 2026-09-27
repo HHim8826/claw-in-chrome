@@ -992,11 +992,14 @@ async function testAccessibilityTreeAnchorsExist() {
   assertIncludes(source, "语义锚点：read_page 共享这组 filter/depth/ref_id 常量，避免 bundle 内部魔法字符串继续扩散。", "accessibility-tree bundle");
   assertIncludes(source, "语义锚点：read_page 主入口：支持 filter/depth/charLimit/ref_id 四段参数，返回文本化可访问性树与 viewport。", "accessibility-tree bundle");
   assertIncludes(source, "语义锚点：interactive filter 只保留可操作控件；all 模式则继续接受结构节点、具名节点和非 generic role 节点。", "accessibility-tree bundle");
-  assertIncludes(source, "语义锚点：ref writer 会先复用旧 ref，再为首次命中的元素分配新的 ref_X。", "accessibility-tree bundle");
+  assertIncludes(source, "语义锚点：ref writer 会先经反向索引复用旧 ref（校验 WeakRef 仍指向同一元素），再为首次命中的元素分配新的 ref_X。", "accessibility-tree bundle");
+  assertIncludes(source, "window.__claudeElementReverseMap ||= new WeakMap();", "accessibility-tree bundle");
+  assertIncludes(source, "const __cpAccessibilityTreeIsSensitiveField = function (e) {", "accessibility-tree bundle");
+  assertIncludes(source, "const __cpAccessibilityTreeMaxElements = 10000;", "accessibility-tree bundle");
   assertIncludes(source, "语义锚点：read_page 参数规约：filter 默认 all，depth 默认 15，ref_id 命中时只展开目标子树。", "accessibility-tree bundle");
   assertIncludes(source, "语义锚点：ref_id 增量读取链：通过 WeakRef 账本定位旧节点；映射失效时返回指导性错误，让调用方重新 read_page 全量拉树。", "accessibility-tree bundle");
   assertIncludes(source, "语义锚点：一次生成结束后，会对 WeakRef 账本做全表 sweep，删掉已经失效的陈旧 ref。", "accessibility-tree bundle");
-  assertIncludes(source, "语义锚点：序列化结果超限时不截断正文，而是返回收窄 depth / ref_id 的操作建议。", "accessibility-tree bundle");
+  assertIncludes(source, "语义锚点：序列化结果超限时在行边界截断正文，并附上完整长度与收窄 depth / ref_id 的提示（upstream 1.0.94），不再整体报错。", "accessibility-tree bundle");
 }
 
 async function testAgentVisualIndicatorAnchorsExist() {
