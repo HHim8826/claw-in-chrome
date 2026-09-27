@@ -23,15 +23,22 @@
     streamReasoningFields: ["reasoning"],
     requestReasoningField: null,
     requestReasoningPolicy: "always",
-    thinkingFallback: "think_tags"
+    thinkingFallback: "think_tags",
+    toolResultImages: "user_message"
   });
   const DEEPSEEK_CHAT_COMPATIBILITY = Object.freeze({
     responseReasoningFields: ["reasoning_content", "reasoning"],
     streamReasoningFields: ["reasoning_content", "reasoning"],
     requestReasoningField: "reasoning_content",
     requestReasoningPolicy: "tool_context",
-    thinkingFallback: "omit"
+    thinkingFallback: "omit",
+    // DeepSeek's Chat Completions API is text-only and rejects image_url parts.
+    toolResultImages: "metadata"
   });
+  const CHAT_TOOL_RESULT_IMAGE_MODES = ["user_message", "metadata"];
+  const CHAT_TOOL_RESULT_IMAGE_REJECTION_STATUSES = [400, 415, 422];
+  // Provider/model pairs that rejected forwarded tool-result images this page session.
+  const chatToolResultImageRejections = new Set();
   const THINK_OPEN_TAG = "<think>";
   const THINK_CLOSE_TAG = "</think>";
   const TOOL_CALL_OPEN_TAG = "<tool_call>";
@@ -863,15 +870,18 @@
     appendToolResultImageDataUrls(block?.content, output, 0);
     return output;
   }
+  function formatToolResultVisualMarker(block) {
+    const toolUseId = String(block?.tool_use_id || "");
+    return "Visual output returned by tool" + (toolUseId ? " " + toolUseId : "") + ". Use the following image(s) as tool results.";
+  }
   function buildToolResultVisualResponsesInput(block) {
     const imageDataUrls = collectToolResultImageDataUrls(block);
     if (!imageDataUrls.length) {
       return null;
     }
-    const toolUseId = String(block?.tool_use_id || "");
     const content = [{
       type: "input_text",
-      text: "Visual output returned by tool" + (toolUseId ? " " + toolUseId : "") + ". Use the following image(s) as tool results."
+      text: formatToolResultVisualMarker(block)
     }];
     for (const url of imageDataUrls) {
       content.push({
@@ -883,6 +893,53 @@
       role: "user",
       content
     };
+  }
+  // Chat Completions tool messages can't carry image parts, so tool-result images
+  // travel in the user message that follows the contiguous tool messages.
+  function buildToolResultVisualChatParts(block) {
+    const imageDataUrls = collectToolResultImageDataUrls(block);
+    if (!imageDataUrls.length) {
+      return [];
+    }
+    return [{
+      type: "text",
+      text: formatToolResultVisualMarker(block)
+    }].concat(imageDataUrls.map(function (url) {
+      return {
+        type: "image_url",
+        image_url: {
+          url
+        }
+      };
+    }));
+  }
+  function chatToolResultImageKey(config, model) {
+    return String(config?.baseUrl || "").trim().toLowerCase() + "|" + String(model || config?.defaultModel || "").trim().toLowerCase();
+  }
+  // `chatToolResultImages` is an internal override used by the request fallback;
+  // stored provider configs don't persist it.
+  function resolveChatToolResultImageMode(config, chatCompatibility, model) {
+    const configured = String(config?.chatToolResultImages || "").trim().toLowerCase();
+    if (CHAT_TOOL_RESULT_IMAGE_MODES.includes(configured)) {
+      return configured;
+    }
+    if (chatToolResultImageRejections.has(chatToolResultImageKey(config, model))) {
+      return "metadata";
+    }
+    return chatCompatibility?.toolResultImages === "metadata" ? "metadata" : "user_message";
+  }
+  function anthropicBodyHasToolResultImages(body) {
+    for (const message of Array.isArray(body?.messages) ? body.messages : []) {
+      if (message?.role !== "user" || !Array.isArray(message.content)) {
+        continue;
+      }
+      for (const block of message.content) {
+        if (block?.type === "tool_result" && collectToolResultImageDataUrls(block).length) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
   function collapseSystemMessages(messages) {
     if (!Array.isArray(messages)) {
@@ -1516,10 +1573,20 @@
       options.allowRequestReasoning === true && role === "assistant"
         ? String(chatCompatibility?.requestReasoningField || "")
         : "";
+    // Images from consecutive tool results wait here until the tool messages end,
+    // then lead the next user message so tool messages stay adjacent to tool_calls.
+    const forwardToolResultImages = options.toolResultImageMode === "user_message" && role === "user";
+    const pendingToolVisualParts = [];
+    const releaseToolVisualParts = function () {
+      if (pendingToolVisualParts.length) {
+        contentParts.push(...pendingToolVisualParts.splice(0));
+      }
+    };
     for (const block of content) {
       const type = block?.type || "";
       if (type === "text") {
         if (typeof block.text === "string") {
+          releaseToolVisualParts();
           contentParts.push({
             type: "text",
             text: block.text
@@ -1530,6 +1597,7 @@
       if (type === "image") {
         const mediaType = block?.source?.media_type || "image/png";
         const data = block?.source?.data || "";
+        releaseToolVisualParts();
         contentParts.push({
           type: "image_url",
           image_url: {
@@ -1547,6 +1615,7 @@
       }
       const semanticText = serializeAnthropicSemanticBlockForOpenAI(block);
       if (semanticText) {
+        releaseToolVisualParts();
         contentParts.push({
           type: "text",
           text: semanticText
@@ -1554,6 +1623,7 @@
         continue;
       }
       if (type === "tool_use") {
+        releaseToolVisualParts();
         toolCalls.push({
           id: String(block.id || ""),
           type: "function",
@@ -1575,8 +1645,12 @@
           content: serializeToolResultForOpenAI(block)
         });
         // 部分 OpenAI 兼容接口要求 tool 结果紧跟 tool_calls，不能在中间插入额外消息。
+        if (forwardToolResultImages) {
+          pendingToolVisualParts.push(...buildToolResultVisualChatParts(block));
+        }
       }
     }
+    releaseToolVisualParts();
     flushPendingOpenAIChatMessage(result, role, contentParts, toolCalls, reasoningParts, reasoningField);
     return result;
   }
@@ -1586,6 +1660,7 @@
       result.model = body.model;
     }
     const chatCompatibility = getChatCompatibilityProfile(config, body?.model);
+    const toolResultImageMode = resolveChatToolResultImageMode(config, chatCompatibility, body?.model);
     const messages = [];
     const systemText = formatAnthropicSystemForSingleMessage(body?.system);
     if (systemText) {
@@ -1613,7 +1688,8 @@
             content,
             chatCompatibility,
             requestReasoningState,
-          )
+          ),
+          toolResultImageMode
         }));
         updateOpenAIChatRequestReasoningState(requestReasoningState, content);
       }
@@ -3351,7 +3427,7 @@
         ...config,
         format: candidate.format
       };
-      const providerBody = candidate.format === OPENAI_CHAT_FORMAT
+      let providerBody = candidate.format === OPENAI_CHAT_FORMAT
         ? anthropicToOpenAIChat(
           body,
           candidateConfig.promptCacheKey,
@@ -3362,6 +3438,17 @@
           candidateConfig.promptCacheKey,
           candidateConfig,
         );
+      // Text-only Chat Completions models reject image_url parts; such a request
+      // retries once with image metadata only, and a successful retry is remembered.
+      let canRetryWithoutToolResultImages =
+        candidate.format === OPENAI_CHAT_FORMAT &&
+        resolveChatToolResultImageMode(
+          candidateConfig,
+          getChatCompatibilityProfile(candidateConfig, body?.model),
+          body?.model,
+        ) === "user_message" &&
+        anthropicBodyHasToolResultImages(body);
+      let pendingToolResultImageRejectionKey = "";
       const providerUrl = buildProviderUrl(candidateConfig);
       const isStreamRequest = !!providerBody.stream;
       debugLog("provider.request_attempt", {
@@ -3374,7 +3461,7 @@
       });
       let shouldTryNextCandidate = false;
       let lastProviderError = null;
-      for (let retryIndex = 0; retryIndex < 2; retryIndex++) {
+      for (let retryIndex = 0; retryIndex < 3; retryIndex++) {
         const upstream = await nativeFetch(providerUrl, {
           method: "POST",
           headers: buildProviderHeaders(request.headers, candidateConfig, isStreamRequest),
@@ -3404,6 +3491,30 @@
             }, "warn");
             continue;
           }
+          if (
+            canRetryWithoutToolResultImages &&
+            CHAT_TOOL_RESULT_IMAGE_REJECTION_STATUSES.includes(providerError.status)
+          ) {
+            canRetryWithoutToolResultImages = false;
+            pendingToolResultImageRejectionKey = chatToolResultImageKey(candidateConfig, body?.model);
+            providerBody = anthropicToOpenAIChat(
+              body,
+              candidateConfig.promptCacheKey,
+              {
+                ...candidateConfig,
+                chatToolResultImages: "metadata"
+              },
+            );
+            debugLog("provider.request_retry_without_tool_result_images", {
+              attempt: index + 1,
+              retry: retryIndex + 1,
+              format: candidate.format,
+              providerUrl,
+              status: providerError.status,
+              message: providerError.message
+            }, "warn");
+            continue;
+          }
           debugLog("provider.request_failed", {
             attempt: index + 1,
             retry: retryIndex + 1,
@@ -3429,6 +3540,10 @@
             retryCount: index + retryIndex,
           });
           return createAnthropicErrorResponse(providerError.status, providerError.message);
+        }
+        if (pendingToolResultImageRejectionKey) {
+          chatToolResultImageRejections.add(pendingToolResultImageRejectionKey);
+          pendingToolResultImageRejectionKey = "";
         }
         const contentType = upstream.headers.get("content-type") || "";
         debugLog("provider.request_upstream_ok", {

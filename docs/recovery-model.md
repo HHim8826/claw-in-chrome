@@ -56,6 +56,17 @@ Prefer these seams when implementing behavior.
   reaches the upstream reader and releases its lock. Chat requires a finish
   reason; Responses requires a completed or supported incomplete outcome.
   Error envelopes and premature EOF never emit successful message completion.
+- Tool-result images reach both OpenAI formats. Each `tool_result` still
+  becomes a tool message or function output that describes its images as
+  metadata. Chat Completions keeps consecutive `role: "tool"` messages
+  adjacent to `tool_calls`. It then sends one user message with a
+  `Visual output returned by tool <id>` marker and `image_url` parts per
+  result, in order, before any trailing user text. Responses appends the same
+  marker and images after each function output. The DeepSeek chat profile
+  stays metadata-only because its API is text-only. When a 400, 415, or 422
+  response rejects forwarded images, the request retries once in metadata
+  mode. A successful retry marks that base URL and model as text-only for the
+  rest of the page session.
 - The visualizer builds its browser from session metadata, deduplicates active
   and historical records before graph construction, and caches one selected
   graph by snapshot identity and metadata revision. Storage updates are batched;

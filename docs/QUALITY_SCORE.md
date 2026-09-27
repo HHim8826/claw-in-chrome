@@ -48,10 +48,11 @@ stable local user contract and security model.
 The upstream 1.0.94 recovery adds readable modules for `browser_batch`, tool
 activity labels, and link safety, plus narrow anchored patches for the tool
 runtime, content scripts, and side panel. The 1.0.94 behavior matrix fails
-while any accepted group remains `missing`. Chat Completions providers still
-receive tool-result screenshots only as metadata because tool messages can't
-carry image parts. That pre-existing limitation affects single screenshots
-and batches alike.
+while any accepted group remains `missing`. Chat Completions providers receive
+tool-result screenshots in a user message after the tool messages. Text-only
+providers fall back to image metadata through a remembered retry instead of a
+provider setting, so the first screenshot turn on such a model costs one
+rejected request per page session.
 
 The provider-independence pass removes the recovered Claude.ai onboarding,
 forced-organization, and Chrome Identity slices while retaining generic MCP
