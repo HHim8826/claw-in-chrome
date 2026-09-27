@@ -48,7 +48,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "phantom-cursor-and-stop-hardening",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source indicator draws UPDATE_PHANTOM_CURSOR positions, requires trusted stop clicks, and reports STOP_AGENT_DROPPED.",
     owners: ["src/assets/agent-visual-indicator.js-Ct7LqXhp.js"],
     testTarget: "tests/unit/agent-indicator-phantom-cursor.test.js",

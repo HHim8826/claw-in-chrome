@@ -116,6 +116,13 @@ Prefer these seams when implementing behavior.
   runtime opens up to three unique `http(s)` links as background tabs next to
   the source tab in its group, then reports the new tab IDs. The
   `cicMinimizedWindowGuard` storage value `false` disables the guard.
+- `dispatchMouseEvent` sends the contract message `UPDATE_PHANTOM_CURSOR` before
+  each CDP mouse event. The indicator content script draws an `aria-hidden`
+  cursor only while the agent indicator is active. It keeps the plain arrow
+  visible during screenshots and hides the highlight layer. The Stop button
+  ignores untrusted clicks. If the agent is still active 1.5 seconds later,
+  the page sends `STOP_AGENT_DROPPED`, which the worker only acknowledges, and
+  shows a short hint.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

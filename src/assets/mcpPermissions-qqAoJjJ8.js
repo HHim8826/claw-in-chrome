@@ -4188,6 +4188,20 @@ class H {
     return t;
   }
   async dispatchMouseEvent(e, t) {
+    // 语义锚点：每个鼠标事件先把页面 phantom cursor 移到目标坐标（upstream 1.0.94）。
+    // 移动/滚轮事件在目标 tab 处于前台时最多等 250ms，让光标动画先于真实事件完成。
+    const o = chrome.tabs
+      .sendMessage(e, {
+        type: __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor,
+        x: Math.round(t.x),
+        y: Math.round(t.y),
+      })
+      .catch(() => {});
+    if ((t.type === "mouseMoved" || t.type === "mouseWheel") && !t.skipCursorWait) {
+      if ((await chrome.tabs.get(e).catch(() => {}))?.active) {
+        await Promise.race([o, new Promise((e) => setTimeout(e, 250))]);
+      }
+    }
     const r = {
       type: t.type,
       x: Math.round(t.x),
@@ -15186,6 +15200,9 @@ const __cpAgentIndicatorContract =
   globalThis.__CP_CONTRACT__?.agentIndicator || {};
 const __cpAgentIndicatorRuntimeMessageTypes =
   __cpAgentIndicatorContract.RUNTIME_MESSAGE_TYPES || {};
+const __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor =
+  __cpAgentIndicatorRuntimeMessageTypes.UPDATE_PHANTOM_CURSOR ||
+  "UPDATE_PHANTOM_CURSOR";
 const __cpMcpBridgeRuntimeMessageTypePairingConfirmed =
   __cpMcpBridgeContractMessages.pairing_confirmed || "pairing_confirmed";
 const __cpMcpBridgeRuntimeMessageTypePairingDismissed =

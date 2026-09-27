@@ -90,6 +90,8 @@ const __cpBackgroundMessageTypeExecuteScheduledTask =
   __cpContractMessages.EXECUTE_SCHEDULED_TASK || "EXECUTE_SCHEDULED_TASK";
 const __cpBackgroundMessageTypeStopAgent =
   __cpContractMessages.STOP_AGENT || "STOP_AGENT";
+const __cpBackgroundMessageTypeStopAgentDropped =
+  __cpContractMessages.STOP_AGENT_DROPPED || "STOP_AGENT_DROPPED";
 const __cpBackgroundMessageTypeSwitchToMainTab =
   __cpContractMessages.SWITCH_TO_MAIN_TAB || "SWITCH_TO_MAIN_TAB";
 const __cpBackgroundMessageTypeSecondaryTabCheckMain =
@@ -1052,6 +1054,11 @@ chrome.runtime.onMessage.addListener((e, s, a) => {
               targetTabId: n,
             });
           }
+          a({
+            success: true,
+          });
+        } else if (e.type === __cpBackgroundMessageTypeStopAgentDropped) {
+          // 语义锚点：页面 Stop 1.5s 内未生效的回报（upstream 1.0.94）；这里只确认收到，不触发额外停止或遥测。
           a({
             success: true,
           });
