@@ -32399,6 +32399,11 @@ const nb = (e, t, n, s) => {
     const r = e.split("__");
     const i = r.length >= 3 ? r[2] : e;
     const o = t ?? {};
+    // 语义锚点：浏览器工具行优先使用进行中/完成/失败三态标签（upstream 1.0.94，shared/tool-activity-labels.js）；未覆盖的工具沿用下方旧标签。
+    const __cpToolActivityLabel = globalThis.__CP_TOOL_ACTIVITY_LABELS__?.describe(i, o, s, n);
+    if (__cpToolActivityLabel) {
+      return __cpToolActivityLabel;
+    }
     if (i === "computer") {
       const e = o.action;
       switch (e) {

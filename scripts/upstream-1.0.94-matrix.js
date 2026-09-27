@@ -69,9 +69,9 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "tool-activity-labels",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source tool rows use running, done, and failed labels with host permission states.",
-    owners: ["src/assets/sidepanel-BoLm9pmH.js"],
+    owners: ["src/shared/tool-activity-labels.js", "src/assets/sidepanel-BoLm9pmH.js"],
     testTarget: "tests/unit/tool-activity-labels.test.js",
   },
   {

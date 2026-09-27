@@ -132,6 +132,11 @@ Prefer these seams when implementing behavior.
   `browserBatchEnabled` isn't `false`. Its row shows live `completed/total`
   progress from a bounded store that holds no image bytes. The GIF recorder is
   now the named helper `__cpRecordGifFrameForToolCall`.
+- `tool-activity-labels.js` owns running, done, and failed labels for
+  browser tool rows. The state comes from the tool result: no result is
+  running, `is_error` is failed, and anything else is done. The side-panel
+  label function asks it first and keeps its older labels for tools it
+  doesn't cover. Field values and typed text never appear in these labels.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.
