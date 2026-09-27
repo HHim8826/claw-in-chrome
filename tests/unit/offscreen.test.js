@@ -57,12 +57,15 @@ function createOffscreenHarness(options = {}) {
   let imageCreations = 0;
   let gifCreations = 0;
   let gifFramesAdded = 0;
+  const gifOptions = [];
+  const gifFrames = [];
 
   class FakeImage {
     constructor() {
+      const size = options.imageSizes?.[imageCreations];
       imageCreations += 1;
-      this.width = options.imageWidth || 100;
-      this.height = options.imageHeight || 100;
+      this.width = size?.width || options.imageWidth || 100;
+      this.height = size?.height || options.imageHeight || 100;
     }
 
     set src(value) {
@@ -120,8 +123,9 @@ function createOffscreenHarness(options = {}) {
   }
 
   class FakeGif {
-    constructor() {
+    constructor(gifConfig) {
       gifCreations += 1;
+      gifOptions.push(gifConfig);
       this.handlers = new Map();
     }
 
@@ -129,8 +133,13 @@ function createOffscreenHarness(options = {}) {
       this.handlers.set(type, handler);
     }
 
-    addFrame() {
+    addFrame(canvas) {
       gifFramesAdded += 1;
+      gifFrames.push({
+        width: canvas.width,
+        height: canvas.height,
+        fills: canvas.fills || []
+      });
     }
 
     render() {
@@ -198,15 +207,27 @@ function createOffscreenHarness(options = {}) {
     document: {
       createElement(tagName) {
         assert.equal(tagName, "canvas");
-        return {
+        const canvas = {
           width: 0,
           height: 0,
+          fills: [],
           getContext() {
             return {
-              drawImage() {}
+              fillStyle: "",
+              drawImage() {},
+              fillRect(x, y, width, height) {
+                canvas.fills.push({
+                  fillStyle: this.fillStyle,
+                  x,
+                  y,
+                  width,
+                  height
+                });
+              }
             };
           }
         };
+        return canvas;
       }
     }
   };
@@ -235,7 +256,9 @@ function createOffscreenHarness(options = {}) {
     },
     get gifFramesAdded() {
       return gifFramesAdded;
-    }
+    },
+    gifOptions,
+    gifFrames
   };
 }
 
@@ -386,6 +409,56 @@ async function testGenerateGifKeepsSuccessfulResponseContractWithinBudget() {
   assert.equal(harness.gifFramesAdded, 1);
 }
 
+async function testGenerateGifPadsMixedSizeFramesToTheLargestFrame() {
+  const harness = createOffscreenHarness({
+    imageSizes: [{ width: 320, height: 180 }, { width: 200, height: 240 }]
+  });
+  const listener = harness.onMessage.listeners[0];
+  const result = await invokeMessageHandler(listener, {
+    type: "GENERATE_GIF",
+    frames: [
+      { format: "png", base64: "AA==" },
+      { format: "png", base64: "AA==" }
+    ],
+    options: {
+      showClickIndicators: false,
+      showDragPaths: false,
+      showActionLabels: false,
+      showProgressBar: false,
+      showWatermark: false
+    }
+  });
+
+  assert.equal(result.response.success, true);
+  assert.equal(result.response.result.width, 320);
+  assert.equal(result.response.result.height, 240);
+  assert.equal(harness.gifOptions[0].width, 320);
+  assert.equal(harness.gifOptions[0].height, 240);
+  assert.deepEqual(
+    harness.gifFrames.map(({ width, height }) => [width, height]),
+    [[320, 240], [320, 240]],
+    "every frame matches the encoder grid"
+  );
+  for (const frame of harness.gifFrames) {
+    assert.deepEqual(frame.fills, [{ fillStyle: "#ffffff", x: 0, y: 0, width: 320, height: 240 }]);
+  }
+}
+
+async function testGenerateGifRejectsPaddedGridOverBudget() {
+  const imageSizes = [{ width: 7000, height: 7000 }, ...Array.from({ length: 9 }, () => ({ width: 10, height: 10 }))];
+  const harness = createOffscreenHarness({ imageSizes });
+  const listener = harness.onMessage.listeners[0];
+  const result = await invokeMessageHandler(listener, {
+    type: "GENERATE_GIF",
+    frames: imageSizes.map(() => ({ format: "png", base64: "AA==" })),
+    options: {}
+  });
+
+  assert.equal(result.response.success, false);
+  assert.match(result.response.error, /GIF padded pixel budget exceeds 50000000/);
+  assert.equal(harness.gifCreations, 0);
+}
+
 async function main() {
   await testKeepaliveAndBlobRevocationMessagesWork();
   await testPlaySoundMessageUsesDefaultAndCustomVolume();
@@ -393,6 +466,8 @@ async function main() {
   await testGenerateGifRejectsFrameCountBeforeLoadingImages();
   await testGenerateGifRejectsDecodedPixelBudgetBeforeEncoding();
   await testGenerateGifKeepsSuccessfulResponseContractWithinBudget();
+  await testGenerateGifPadsMixedSizeFramesToTheLargestFrame();
+  await testGenerateGifRejectsPaddedGridOverBudget();
   console.log("offscreen tests passed");
 }
 

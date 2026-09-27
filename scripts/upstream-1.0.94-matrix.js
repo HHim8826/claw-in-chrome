@@ -55,7 +55,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "gif-mixed-frame-padding",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source offscreen GIF export pads mixed-size frames after overlays.",
     owners: ["src/offscreen/offscreen.js"],
     testTarget: "tests/unit/offscreen.test.js",

@@ -417,6 +417,25 @@ function applyActionIndicators(canvas, action, options, scaleFactor = 1) {
   }
 }
 
+/**
+ * Pad a canvas to `width × height` with white right and bottom borders.
+ * Returns the original canvas when it already matches. Padding happens after
+ * overlays so the progress bar and watermark stay on the frame's visible edge.
+ */
+function padCanvasToSize(canvas, width, height) {
+  if (canvas.width === width && canvas.height === height) {
+    return canvas;
+  }
+  const padded = document.createElement("canvas");
+  padded.width = width;
+  padded.height = height;
+  const ctx = padded.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  ctx.drawImage(canvas, 0, 0);
+  return padded;
+}
+
 // ============ GIF GENERATION FUNCTION ============
 
 /**
@@ -468,8 +487,16 @@ async function generateGif(frames, options = {}) {
     images.push(img);
   }
   console.log(`[Offscreen] All ${images.length} images loaded`);
-  const width = images[0].width;
-  const height = images[0].height;
+  // gif.js encodes every frame on one fixed grid. Frames can differ in size
+  // (zoom crops, scaled screenshots, resized windows), so encode at the largest
+  // frame and pad smaller frames right/bottom after their overlays are drawn.
+  const width = Math.max(...images.map((img) => img.width));
+  const height = Math.max(...images.map((img) => img.height));
+  if (width * height * images.length > __cpOffscreenGifMaxTotalPixels) {
+    throw new Error(
+      `GIF padded pixel budget exceeds ${__cpOffscreenGifMaxTotalPixels}`,
+    );
+  }
   console.log(`[Offscreen] Enhancing frames with indicators and overlays...`);
 
   // Create enhanced canvases with all indicators and overlays
@@ -520,7 +547,7 @@ async function generateGif(frames, options = {}) {
     console.log(
       `[Offscreen] Frame ${index + 1}/${images.length} enhanced (progress: ${Math.round(progress * 100)}%)`,
     );
-    return canvas;
+    return padCanvasToSize(canvas, width, height);
   });
   console.log(
     `[Offscreen] Creating GIF encoder: ${width}x${height}, workers: 2`,
