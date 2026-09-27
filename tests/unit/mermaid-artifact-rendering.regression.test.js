@@ -139,6 +139,7 @@ async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
       return {
         dataset: {},
         setAttribute() {},
+        remove() { this.removed = true; },
         set innerHTML(value) {
           this.svg = value;
         },
@@ -169,7 +170,7 @@ async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
       replacement = value;
     },
   };
-  const code = { parentElement: pre, textContent: "graph TD\nA -" };
+  const code = { parentElement: pre, textContent: "graph TD\nA -", isMermaid: true, matches() { return this.isMermaid; } };
 
   try {
     assert.equal(enhancer.getTheme(), "dark");
@@ -186,10 +187,17 @@ async function testStreamedMermaidRetriesChangedSourceAndUsesDataMode() {
     await enhancer.renderCodeBlock(code);
     assert.equal(renderCount, 4, "theme changes must rerender the same source");
     assert.equal(pre.dataset.cpMermaidState, "rendered");
+    code.isMermaid = false;
+    await enhancer.renderCodeBlock(code);
+    assert.equal(pre.dataset.cpMermaidState, undefined, "language changes restore source visibility");
+    assert.equal(replacement.removed, true, "language changes remove the old diagram");
+    code.isMermaid = true;
+    await enhancer.renderCodeBlock(code);
+    assert.equal(renderCount, 5, "the same source can become Mermaid again");
     pre.isConnected = false;
     code.textContent += "\nC --> D";
     await enhancer.renderCodeBlock(code);
-    assert.equal(renderCount, 4, "unmounted blocks must not render");
+    assert.equal(renderCount, 5, "unmounted blocks must not render");
   } finally {
     delete require.cache[require.resolve(modulePath)];
     global.document = originalDocument;

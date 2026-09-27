@@ -1000,8 +1000,8 @@ async function testReactMermaidLifecycle(page) {
     document.body.appendChild(host);
     globalThis.mermaidReactErrors = [];
     const root = ReactDOM.createRoot(host, { onUncaughtError: error => mermaidReactErrors.push(String(error)) });
-    globalThis.renderMermaidFixture = (source, key = "first") => root.render(React.createElement("div", { key }, source === null ? null :
-      React.createElement("pre", {}, React.createElement("code", { className: "language-mermaid" }, source))));
+    globalThis.renderMermaidFixture = (source, key = "first", language = "mermaid") => root.render(React.createElement("div", { key }, source === null ? null :
+      React.createElement("pre", {}, React.createElement("code", { className: "language-" + language }, source))));
     globalThis.unmountMermaidFixture = () => root.unmount();
     renderMermaidFixture("graph TD\nA --> B");
   });
@@ -1016,6 +1016,18 @@ async function testReactMermaidLifecycle(page) {
   }, priorSvg);
   fs.mkdirSync(artifactRoot, { recursive: true });
   await page.locator("#react-mermaid-fixture").screenshot({ path: path.join(artifactRoot, "mermaid-react-stream.png") });
+  await page.evaluate(() => {
+    globalThis.originalMermaidCode = document.querySelector("#react-mermaid-fixture code");
+    renderMermaidFixture("graph TD\nA --> B\nB --> C", "first", "text");
+  });
+  await page.waitForFunction(() => {
+    const code = document.querySelector("#react-mermaid-fixture code");
+    return code === originalMermaidCode && code.className === "language-text" &&
+      getComputedStyle(code).display !== "none" &&
+      !document.querySelector("#react-mermaid-fixture .cp-mermaid-diagram");
+  });
+  await page.evaluate(() => renderMermaidFixture("graph TD\nA --> B\nB --> C"));
+  await page.waitForSelector("#react-mermaid-fixture .cp-mermaid-diagram svg");
   await page.evaluate(() => renderMermaidFixture(null));
   await page.waitForFunction(() => !document.querySelector("#react-mermaid-fixture pre"));
   assert.equal(await page.locator("#react-mermaid-fixture .cp-mermaid-diagram").count(), 0);
