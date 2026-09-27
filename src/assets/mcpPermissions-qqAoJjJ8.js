@@ -1004,8 +1004,13 @@ function U(e, t) {
 class $ {
   static blockedUrlPatterns = null;
   static listenerRegistered = false;
-  static async isUrlBlockedByManagedPolicy(e) {
+  // 语义锚点：站点封锁 = 管理员 blockedUrlPatterns（只读）+ 使用者设定页的封锁清单。
+  static async isUrlBlockedBySitePolicy(e) {
     return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).isUrlBlocked(e);
+  }
+  // 返回 "managed" | "user" | null，决定封锁文案。
+  static async getUrlBlockSource(e) {
+    return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).getBlockSource(e);
   }
   static registerChangeListener() {}
   static async loadBlockedUrlPatterns() {
@@ -1023,7 +1028,7 @@ class O {
   static CACHE_TTL_MS = 300000;
   static pendingRequests = new Map();
   static async getCategory(e) {
-    if (await $.isUrlBlockedByManagedPolicy(e)) {
+    if (await $.isUrlBlockedBySitePolicy(e)) {
       return "category_org_blocked";
     }
     const t = R(D(e));
@@ -16128,12 +16133,17 @@ const __cpBrowserBatchTool = {
 za.push(__cpBrowserBatchTool);
 // __cp-blocked-navigation-guard:start
 // 语义锚点：被封锁站点的错误文案（upstream 1.0.94）。
-// category_org_blocked 若命中浏览器管理员下发的 blockedUrlPatterns，使用专属的管理员策略文案。
+// category_org_blocked 若命中浏览器管理员下发的 blockedUrlPatterns，使用专属的管理员策略文案；
+// 命中使用者在设定页加入的封锁清单时，说明是使用者自己封锁的。
 async function __cpBlockedSiteErrorMessage(e, t, r) {
   if (e === "category_org_blocked") {
     try {
-      if (await $.isUrlBlockedByManagedPolicy(t)) {
+      const o = await $.getUrlBlockSource(t);
+      if (o === "managed") {
         return "This site is blocked by a policy set by your browser's administrator.";
+      }
+      if (o === "user") {
+        return "This site is on your blocked sites list in Claw in Chrome settings.";
       }
     } catch {}
     return "This site is blocked by your organization's policy.";

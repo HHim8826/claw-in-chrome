@@ -54,7 +54,13 @@ Apply these rules to every change.
   result conversion. The tool runtime injects tab, permission, blocked-site,
   GIF, and coordinate-context dependencies; it doesn't duplicate batch logic.
 - `src/options/options-card-helpers.js` owns the locale rule, element helper,
-  default-route check, and remount observer shared by readable Options cards.
+  route checks, mount anchors, remount observer, panel shell, and switch row
+  shared by readable Options cards.
+- `src/options/browser-tools-options.js` owns the Browser tools switches:
+  batching and the two upstream kill switches.
+- `src/options/site-blocklist-options.js` owns the Permissions-tab blocked
+  sites card. It edits only the local list and reads administrator patterns
+  through `managed-policy.js`.
 - Producers and consumers of a runtime message must use the same contract key.
 - A bundle patch must include a semantic anchor test and an update to
   `docs/recovery-model.md` when the recovered understanding changes.

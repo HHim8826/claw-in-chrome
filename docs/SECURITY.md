@@ -36,6 +36,9 @@ Apply these controls to every security-sensitive change.
 - Treat `blockedUrlPatterns` as administrator-owned, read-only policy.
   Normalize malformed values without writing them to local storage, and apply
   managed-storage changes without requiring a reload.
+- The user's `userBlockedUrlPatterns` list can only add blocks. It never
+  removes or overrides an administrator pattern, and an administrator match
+  keeps the administrator wording.
 - Keep the product provider-independent. Don't add Claude-only origins,
   organization gates, onboarding bridges, or the `identity` permission without
   an approved feature brief and security review.
@@ -71,7 +74,8 @@ Apply these controls to every security-sensitive change.
 - Accept only trusted user clicks on the page Stop button so page scripts
   can't synthesize a stop.
 - Remove foreign-extension iframes only after Chrome refuses the debugger
-  attach, and keep `cicStripExtensionInterference` as a local kill switch.
+  attach, and keep `cicStripExtensionInterference` as a local kill switch
+  that the Browser tools card exposes.
 - Warn about `user:password@` links in the external-link dialog and keep its
   open button disabled for 400 ms after the dialog becomes visible.
 

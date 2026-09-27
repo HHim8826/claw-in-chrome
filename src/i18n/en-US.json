@@ -966,5 +966,6 @@
   "nfn1MOHJNy": "Performed browser actions",
   "+dIJ5ibT8Q": "Couldn't perform browser actions",
   "UJdVFK2KyY": "Following a plan",
-  "DrFn3Jpzg4": "This link contains embedded credentials, which may be an attempt to disguise its destination. You will actually be sent to:"
+  "DrFn3Jpzg4": "This link contains embedded credentials, which may be an attempt to disguise its destination. You will actually be sent to:",
+  "cpUserBlockedSite": "This site is on your blocked sites list in Claw settings."
 }

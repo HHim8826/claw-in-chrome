@@ -8,12 +8,13 @@ const mcpPath = path.join(rootDir, "src", "assets", "mcpPermissions-qqAoJjJ8.js"
 const sidepanelPath = path.join(rootDir, "src", "assets", "sidepanel-BoLm9pmH.js");
 
 const ADMIN_MESSAGE = "This site is blocked by a policy set by your browser's administrator.";
+const USER_MESSAGE = "This site is on your blocked sites list in Claw in Chrome settings.";
 
 function read(filePath) {
   return fs.readFileSync(filePath, "utf8").replace(/\r\n/g, "\n");
 }
 
-function loadGuard({ tabs, managedBlocked = [], apiCategories = {} }) {
+function loadGuard({ tabs, managedBlocked = [], userBlocked = [], apiCategories = {} }) {
   const source = read(mcpPath);
   const startMarker = "// __cp-blocked-navigation-guard:start";
   const endMarker = "// __cp-blocked-navigation-guard:end";
@@ -22,6 +23,8 @@ function loadGuard({ tabs, managedBlocked = [], apiCategories = {} }) {
   assert.notEqual(start, -1, "guard block start marker should exist");
   assert.notEqual(end, -1, "guard block end marker should exist");
   const isManagedBlocked = (url) => managedBlocked.some((pattern) => url.includes(pattern));
+  const isUserBlocked = (url) => userBlocked.some((pattern) => url.includes(pattern));
+  const blockSource = (url) => (isManagedBlocked(url) ? "managed" : isUserBlocked(url) ? "user" : null);
   const context = {
     chrome: {
       tabs: {
@@ -31,9 +34,9 @@ function loadGuard({ tabs, managedBlocked = [], apiCategories = {} }) {
         },
       },
     },
-    $: { isUrlBlockedByManagedPolicy: async (url) => isManagedBlocked(url) },
+    $: { getUrlBlockSource: async (url) => blockSource(url) },
     O: {
-      getCategory: async (url) => (isManagedBlocked(url) ? "category_org_blocked" : apiCategories[url]),
+      getCategory: async (url) => (blockSource(url) ? "category_org_blocked" : apiCategories[url]),
     },
     Ja: (category) => category === "category1" || category === "category2" || category === "category_org_blocked",
     Xa: ["tabs_context_mcp", "tabs_create_mcp", "tabs_close_mcp"],
@@ -141,9 +144,21 @@ async function testTabManagementToolsAreExemptAndInstallIsIdempotent() {
   assert.equal((await plan.execute({}, { tabId: 5 })).output, "plan");
 }
 
+async function testUserBlocklistNavigationUsesUserWording() {
+  const guard = loadGuard({ tabs: { 5: { url: "https://news.example/today" } }, userBlocked: ["news.example"] });
+  const computer = tool("computer", { output: "Clicked" });
+  guard.install([computer]);
+  const result = await computer.execute({ action: "left_click" }, { tabId: 5 });
+  assert.deepEqual({ ...result }, {
+    error: `${USER_MESSAGE} (this call's result was discarded)`,
+    errorCode: "navigation_blocked_mid_call",
+  });
+}
+
 async function testBlockedSiteMessages() {
-  const guard = loadGuard({ tabs: {}, managedBlocked: ["intranet.example"] });
+  const guard = loadGuard({ tabs: {}, managedBlocked: ["intranet.example"], userBlocked: ["news.example", "intranet.example"] });
   assert.equal(await guard.messageFor("category_org_blocked", "https://intranet.example/", "x"), ADMIN_MESSAGE);
+  assert.equal(await guard.messageFor("category_org_blocked", "https://news.example/", "x"), USER_MESSAGE);
   assert.equal(
     await guard.messageFor("category_org_blocked", "https://other.example/", "x"),
     "This site is blocked by your organization's policy.",
@@ -165,11 +180,37 @@ function testRuntimeWiring() {
     true,
     "navigate, the MCP pre-check, and the guard use the shared wording",
   );
+  assert.equal(
+    source.includes('if (await $.isUrlBlockedBySitePolicy(e)) {\n      return "category_org_blocked";'),
+    true,
+    "domain categories block both administrator and user rules",
+  );
+  assert.equal(
+    source.includes("return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).getBlockSource(e);"),
+    true,
+    "block wording asks the readable runtime which list matched",
+  );
+  assert.equal(source.includes("isUrlBlockedByManagedPolicy"), false, "no caller treats user rules as administrator policy");
   const sidepanel = read(sidepanelPath);
   assert.equal(
     sidepanel.includes('defaultMessage: "This site is blocked by a policy set by your browser\'s administrator.",\n          id: "sSc7jfY6Q4"'),
     true,
-    "blocked-site notice uses the administrator wording",
+    "blocked-site notice keeps the administrator wording",
+  );
+  assert.equal(
+    sidepanel.includes('defaultMessage: "This site is on your blocked sites list in Claw settings.",\n          id: "cpUserBlockedSite"'),
+    true,
+    "blocked-site notice has user-list wording",
+  );
+  assert.equal(
+    sidepanel.includes("const __cpBlockedNoticeSource = __cpUseSiteBlockSource(s, __cpBlockedNoticeUrl);"),
+    true,
+    "the notice resolves which list blocked the tab",
+  );
+  assert.equal(
+    sidepanel.includes('blockedUrl: (ye.blockedTabs.find(e => e.tabId === ce) || ye.blockedTabs.find(e => e.category === xn))?.url || ""'),
+    true,
+    "the notice receives the blocked tab's URL",
   );
 }
 
@@ -181,6 +222,7 @@ async function main() {
   await testOtherBlockCategoriesUseGenericWording();
   await testSafeResultsAndSentinelsPassThrough();
   await testTabManagementToolsAreExemptAndInstallIsIdempotent();
+  await testUserBlocklistNavigationUsesUserWording();
   await testBlockedSiteMessages();
   testRuntimeWiring();
   console.log("blocked navigation guard regression tests passed");

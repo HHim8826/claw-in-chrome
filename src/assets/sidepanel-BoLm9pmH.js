@@ -82057,12 +82057,44 @@ const XY = ({
     fill: "hsl(var(--text-100))"
   })]
 });
+// 语义锚点：封锁提示的来源（管理员策略 / 使用者设定页的封锁清单）。
+// 解析完成前返回 undefined，避免先闪出管理员文案。
+function __cpUseSiteBlockSource(e, n) {
+  const [s, r] = a.useState({
+    key: "",
+    source: null
+  });
+  const i = e === "category_org_blocked" && n ? n : "";
+  a.useEffect(() => {
+    if (!i) {
+      return;
+    }
+    let e = true;
+    Promise.resolve(globalThis.__CP_MANAGED_POLICY__?.getRuntime(chrome).getBlockSource(i)).catch(() => null).then(n => {
+      if (e) {
+        r({
+          key: i,
+          source: n || null
+        });
+      }
+    });
+    return () => {
+      e = false;
+    };
+  }, [i]);
+  if (!i) {
+    return null;
+  }
+  return s.key === i ? s.source : undefined;
+}
 const QY = ({
   isMainTabBlocked: n = true,
-  category: s
+  category: s,
+  blockedUrl: __cpBlockedNoticeUrl = ""
 }) => {
   const r = Ns();
   const i = t();
+  const __cpBlockedNoticeSource = __cpUseSiteBlockSource(s, __cpBlockedNoticeUrl);
   return l.jsx("div", {
     className: "flex flex-col items-center justify-center h-screen bg-bg-100 p-8",
     children: l.jsxs("div", {
@@ -82088,7 +82120,10 @@ const QY = ({
         })
       }), l.jsx("p", {
         className: "font-base text-text-300 mt-[7px]",
-        children: s === "category_org_blocked" ? i.formatMessage({
+        children: s === "category_org_blocked" ? __cpBlockedNoticeSource === undefined ? "" : __cpBlockedNoticeSource === "user" ? i.formatMessage({
+          defaultMessage: "This site is on your blocked sites list in Claw settings.",
+          id: "cpUserBlockedSite"
+        }) : i.formatMessage({
           defaultMessage: "This site is blocked by a policy set by your browser's administrator.",
           id: "sSc7jfY6Q4"
         }) : n ? i.formatMessage({
@@ -98683,7 +98718,8 @@ function o1() {
   if (be || vn) {
     return l.jsx(QY, {
       isMainTabBlocked: ye.isMainTabBlocked,
-      category: xn
+      category: xn,
+      blockedUrl: (ye.blockedTabs.find(e => e.tabId === ce) || ye.blockedTabs.find(e => e.category === xn))?.url || ""
     });
   } else {
     return l.jsxs("div", {

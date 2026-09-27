@@ -40,9 +40,12 @@ Prefer these seams when implementing behavior.
   reads the same storage record through a Chrome storage subscription and a
   narrow built-in-override reader; workflow-store writes still cross the
   background mutation boundary.
-- `managed-policy.js` owns managed URL-pattern matching and live policy updates.
-  The generated permission bundle delegates URL policy semantics to this
-  readable runtime.
+- `managed-policy.js` owns site blocking: administrator `blockedUrlPatterns`
+  from managed storage, the user's `userBlockedUrlPatterns` list in local
+  storage, user-pattern normalization, matching, and live updates from both
+  areas. `getBlockSource(url)` returns `"managed"`, `"user"`, or `null`, and an
+  administrator match wins. The generated permission bundle delegates URL
+  policy semantics to this readable runtime.
 - `mermaid-renderer.js` owns Mermaid source limits, strict renderer
   configuration, timeout handling, and SVG sanitization. The side-panel
   Markdown enhancer lazy-loads the packaged Mermaid 11.17.2 UMD asset only when
@@ -133,19 +136,28 @@ Prefer these seams when implementing behavior.
     otherwise repeat on the next call.
 
   Managed-policy matches use the browser-administrator wording everywhere.
+  User blocked-sites matches reuse `category_org_blocked`, so every existing
+  blocked-category check applies to them without new category plumbing.
+  `$.isUrlBlockedBySitePolicy` feeds `O.getCategory`, and
+  `__cpBlockedSiteErrorMessage` asks `$.getUrlBlockSource` which list matched
+  to pick the administrator or user-list wording. The side-panel notice `QY`
+  receives the blocked tab's URL, resolves the source through
+  `__cpUseSiteBlockSource`, and leaves the text empty until it resolves so the
+  administrator wording doesn't flash for a user rule.
 - `attachDebugger` wraps the raw attach in a replayable closure. When Chrome
   reports a foreign-extension URL, the tool runtime finds frames whose DOM
   iframes outnumber their navigation child frames. It removes foreign
   extension iframes, then removes at most that many unknown visible iframes,
   and retries attach with backoff. Setting
   `chrome.storage.local.cicStripExtensionInterference` to `false` disables the
-  recovery. `sendCommand` re-attaches after that error once the debugger is
-  gone.
+  recovery. The Options Browser tools card exposes this switch. `sendCommand`
+  re-attaches after that error once the debugger is gone.
 - Plain left clicks in a minimized window arm a one-shot page click guard.
   Trusted clicks on links that would open a new window are prevented, and the
   runtime opens up to three unique `http(s)` links as background tabs next to
   the source tab in its group, then reports the new tab IDs. The
-  `cicMinimizedWindowGuard` storage value `false` disables the guard.
+  `cicMinimizedWindowGuard` storage value `false` disables the guard. The
+  Options Browser tools card exposes this switch.
 - `dispatchMouseEvent` sends the contract message `UPDATE_PHANTOM_CURSOR` before
   each CDP mouse event. The indicator content script draws an `aria-hidden`
   cursor only while the agent indicator is active. It keeps the plain arrow
@@ -229,8 +241,11 @@ The current recovered layer protects these workflows.
   titles, labels, and search keys use single-line whitespace normalization.
   Context metrics skip restored assistant records whose usage fields are all
   zero so an earlier usable measurement remains visible.
-- Enterprise-managed URL patterns block matching browser targets. Missing or
-  malformed managed values preserve normal unmanaged behavior.
+- Enterprise-managed URL patterns and the user's blocked-sites list block
+  matching browser targets. Missing or malformed values preserve normal
+  unblocked behavior. The Permissions tab edits the user's list and shows
+  administrator patterns read-only through the bundle's
+  `cp-options-permissions-anchor` mount point.
 - Generic internal `OPEN_SIDE_PANEL` messages can open the current tab's side
   panel and populate a direct prompt. No external website owns this bridge.
 - Mermaid Markdown fences render as isolated SVG diagrams. Invalid, oversized,

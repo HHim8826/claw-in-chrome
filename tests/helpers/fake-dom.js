@@ -129,6 +129,20 @@ class FakeElement {
     this.parentNode = null;
   }
 
+  replaceWith(element) {
+    const parent = this.parentNode;
+    if (!parent || !element) {
+      return;
+    }
+    if (element.parentNode) {
+      element.remove();
+    }
+    const index = parent.children.indexOf(this);
+    parent.children.splice(index, 1, element);
+    element.parentNode = parent;
+    this.parentNode = null;
+  }
+
   contains(node) {
     if (!node) {
       return false;

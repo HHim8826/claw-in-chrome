@@ -37,6 +37,8 @@ options/data-insights-options.js
 options/browser-tools-options.js
 options/options-card-helpers.js
 options/data-insights-options.css
+options/site-blocklist-options.js
+options/site-blocklist-options.css
 pages/pairing.html
 shared/provider-format-adapter.js
 shared/browser-batch.js

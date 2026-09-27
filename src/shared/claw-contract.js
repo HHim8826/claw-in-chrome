@@ -76,6 +76,13 @@
     },
     browserTools: {
       BROWSER_BATCH_ENABLED_STORAGE_KEY: "browserBatchEnabled",
+      // Upstream kill switches; `false` turns the protection off.
+      STRIP_EXTENSION_INTERFERENCE_STORAGE_KEY: "cicStripExtensionInterference",
+      MINIMIZED_WINDOW_GUARD_STORAGE_KEY: "cicMinimizedWindowGuard",
+    },
+    siteBlocklist: {
+      USER_BLOCKED_URL_PATTERNS_STORAGE_KEY: "userBlockedUrlPatterns",
+      MANAGED_BLOCKED_URL_PATTERNS_KEY: "blockedUrlPatterns",
     },
     session: {
       CHAT_SCOPE_PREFIX: "claw.chat.scopes.",
