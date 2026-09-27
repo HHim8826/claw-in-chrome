@@ -360,11 +360,12 @@ const M = new (class {
   setContext(e, t) {
     if (t.viewportWidth && t.viewportHeight) {
       // 语义锚点：setContext 只登记缩放所需的 4 个尺寸字段。
+      // 带 scale 的截图会给出 frameWidth/frameHeight，坐标帧始终按全分辨率登记。
       const r = {
         viewportWidth: t.viewportWidth,
         viewportHeight: t.viewportHeight,
-        screenshotWidth: t.width,
-        screenshotHeight: t.height,
+        screenshotWidth: t.frameWidth || t.width,
+        screenshotHeight: t.frameHeight || t.height,
       };
       this.contexts.set(e, r);
     }
@@ -4105,11 +4106,18 @@ class H {
       const captureSourceHeight = Math.round(
         viewportHeight * captureDeviceScaleFactor,
       );
-      const [targetWidth, targetHeight] = C(
+      const [frameTargetWidth, frameTargetHeight] = C(
         captureSourceWidth,
         captureSourceHeight,
         o,
       );
+      const scaledCaptureTarget = __cpMcpScaleScreenshotTarget(
+        frameTargetWidth,
+        frameTargetHeight,
+        r?.scale,
+      );
+      const targetWidth = scaledCaptureTarget.width;
+      const targetHeight = scaledCaptureTarget.height;
       const captureScale =
         captureSourceWidth > 0
           ? Math.min(1, targetWidth / captureSourceWidth)
@@ -4157,6 +4165,12 @@ class H {
           format: s,
           viewportWidth,
           viewportHeight,
+          ...(scaledCaptureTarget.frameWidth
+            ? {
+                frameWidth: scaledCaptureTarget.frameWidth,
+                frameHeight: scaledCaptureTarget.frameHeight,
+              }
+            : {}),
         };
         // 语义锚点：screenshot 会把 viewport/screenshot 尺寸写进上下文，供后续坐标动作做缩放换算。
         // 原始截图直返与 content-script 压缩回退，最终都会写入同一份 M 尺寸账本。
@@ -4567,6 +4581,65 @@ function ne(e, t, r) {
 // 语义锚点：ne(...) 是截图坐标 -> 当前 viewport 坐标的缩放器。
 // 纯 coordinate 路径会先吃这层缩放，再进入 A(...) 同域 guard。
 const __cpMcpScaleScreenshotCoordinatesToViewport = ne;
+// 语义锚点：页面缩放快捷键识别（upstream 1.0.94）。ctrl/cmd(+shift)+=/+ 为放大，-/minus 为缩小，0 为重置；
+// key 动作命中时直接返回错误，引导模型改用 zoom 动作，避免改变页面缩放导致后续截图坐标失真。
+function __cpMcpDetectPageZoomShortcut(e) {
+  const t = String(e).toLowerCase().replace(/\+\+$/, "+plus").split("+");
+  const r = t.pop();
+  if (!r) {
+    return null;
+  }
+  const o = ["+", "=", "plus", "add", "numpadadd"].includes(r);
+  let a = false;
+  for (const n of t) {
+    if (["ctrl", "control", "cmd", "meta", "command", "win", "windows"].includes(n)) {
+      a = true;
+    } else if (n !== "shift" || !o) {
+      return null;
+    }
+  }
+  if (!a) {
+    return null;
+  }
+  if (o) {
+    return "in";
+  }
+  if (["-", "minus", "subtract", "numpadsubtract"].includes(r)) {
+    return "out";
+  }
+  if (["0", "numpad0"].includes(r)) {
+    return "reset";
+  }
+  return null;
+}
+function __cpMcpPageZoomShortcutError(e) {
+  return {
+    error: `"${e}" was not pressed: page zoom keyboard shortcuts are not supported. To magnify part of the page for closer inspection, use the zoom action with a region instead.`,
+    errorCode: "page_zoom_shortcut_unsupported",
+  };
+}
+// 语义锚点：screenshot / zoom 的 scale 参数（upstream 1.0.94）。只接受 [0.1, 1] 的有限数，其余一律按 1 处理。
+function __cpMcpNormalizeScreenshotScale(e) {
+  return typeof e == "number" && Number.isFinite(e) && e >= 0.1 && e <= 1
+    ? e
+    : 1;
+}
+// 语义锚点：按 scale 缩小返回图片，同时保留全分辨率坐标帧 frameWidth/frameHeight 供坐标换算。
+function __cpMcpScaleScreenshotTarget(e, t, r) {
+  const o = __cpMcpNormalizeScreenshotScale(r);
+  if (o >= 1) {
+    return {
+      width: e,
+      height: t,
+    };
+  }
+  return {
+    width: Math.max(1, Math.round(e * o)),
+    height: Math.max(1, Math.round(t * o)),
+    frameWidth: e,
+    frameHeight: t,
+  };
+}
 function se(e) {
   const [t, r] = e.split(",");
   const o = t.match(/:(.*?);/)?.[1] || "image/png";
@@ -4685,7 +4758,7 @@ const pe = {
     text: {
       type: "string",
       description:
-        'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all).',
+        'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all). Page zoom shortcuts (e.g. "cmd+=", "ctrl+-", "cmd+0") are not supported and will return an error - use the `zoom` action to magnify a region of the page instead.',
     },
     duration: {
       type: "number",
@@ -4723,6 +4796,13 @@ const pe = {
       maxItems: 4,
       description:
         "(x0, y0, x1, y1): The rectangular region to capture for `zoom`. Coordinates are in pixels from the top-left corner of the viewport. Required for `zoom` action.",
+    },
+    scale: {
+      type: "number",
+      minimum: 0.1,
+      maximum: 1,
+      description:
+        "For `screenshot` and `zoom` only. Scale factor in [0.1, 1] for the returned image; 1 (default) uses the full image token budget, 0.5 returns an image at half the width and height (~quarter of the tokens). Coordinates are ALWAYS in the full-resolution coordinate frame (reported with every scaled screenshot), never in the scaled image's own pixels.",
     },
     repeat: {
       type: "number",
@@ -4862,8 +4942,11 @@ const pe = {
           break;
         case "type":
           d = await (async function (e, t, o) {
-            if (!t.text) {
-              throw new Error("Text parameter is required for type action");
+            // 语义锚点：type 只接受非空字符串（upstream 1.0.94），避免把数字/对象直接送进 insertText。
+            if (typeof t.text != "string" || !t.text) {
+              throw new Error(
+                "Text parameter must be a non-empty string for type action",
+              );
             }
             try {
               // 语义锚点：type / key / javascript_tool 属于“页面级动作”家族。
@@ -4884,7 +4967,7 @@ const pe = {
           })(n, o, l);
           break;
         case "screenshot":
-          d = await ge(n, u);
+          d = await ge(n, { ...u, scale: o.scale });
           break;
         case "wait":
           d = await (async function (e) {
@@ -5051,6 +5134,12 @@ const pe = {
               console.info({
                 keyInputs: n,
               });
+              // 语义锚点：key 动作在派发任何按键前拒绝页面缩放快捷键（upstream 1.0.94）。
+              for (const e of n) {
+                if (__cpMcpDetectPageZoomShortcut(e)) {
+                  return __cpMcpPageZoomShortcutError(e);
+                }
+              }
               if (n.length === 1) {
                 const t = n[0].toLowerCase();
                 if (
@@ -5194,6 +5283,8 @@ const pe = {
                 "Invalid region coordinates: x0 and y0 must be non-negative, and x1 > x0, y1 > y0",
               );
             }
+            // 语义锚点：zoom 的 scale 在进入 try 之前读取，try 内的 t 会被 screenshot context 遮蔽。
+            const zoomCaptureScale = __cpMcpNormalizeScreenshotScale(t.scale);
             try {
               // 语义锚点：zoom 只消费最近一次 screenshot context，不会回写或清理这本尺寸账本。
               const t = M.getContext(e);
@@ -5248,14 +5339,16 @@ const pe = {
                   y: viewportScrollY + n,
                   width: u,
                   height: h,
-                  scale: 1,
+                  scale: zoomCaptureScale,
                 },
               });
               if (!p || !p.data) {
                 throw new Error("Failed to capture zoomed screenshot via CDP");
               }
+              const zoomScaleNote =
+                zoomCaptureScale < 1 ? ` at ${zoomCaptureScale} scale` : "";
               return {
-                output: `Successfully captured zoomed screenshot of region (${o},${n}) to (${s},${i}) - ${u}x${h} pixels`,
+                output: `Successfully captured zoomed screenshot of region (${o},${n}) to (${s},${i}) - ${u}x${h} pixels${zoomScaleNote}`,
                 base64Image: p.data,
                 imageFormat: "png",
               };
@@ -5415,7 +5508,7 @@ const pe = {
         text: {
           type: "string",
           description:
-            'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all).',
+            'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all). Page zoom shortcuts (e.g. "cmd+=", "ctrl+-", "cmd+0") are not supported and will return an error - use the `zoom` action to magnify a region of the page instead.',
         },
         duration: {
           type: "number",
@@ -5454,6 +5547,13 @@ const pe = {
           maxItems: 4,
           description:
             "(x0, y0, x1, y1): The rectangular region to capture for `zoom`. Coordinates define a rectangle from top-left (x0, y0) to bottom-right (x1, y1) in pixels from the viewport origin. Required for `zoom` action. Useful for inspecting small UI elements like icons, buttons, or text.",
+        },
+        scale: {
+          type: "number",
+          minimum: 0.1,
+          maximum: 1,
+          description:
+            "For `screenshot` and `zoom` only. Scale factor in [0.1, 1] for the returned image; 1 (default) uses the full image token budget, 0.5 returns an image at half the width and height (~quarter of the tokens). Coordinates are ALWAYS in the full-resolution coordinate frame (reported with every scaled screenshot), never in the scaled image's own pixels.",
         },
         repeat: {
           type: "number",
@@ -5661,8 +5761,13 @@ async function ge(e, t) {
       width: r.width,
       height: r.height,
     });
+    // 语义锚点：缩小后的截图在输出里声明全分辨率坐标帧，模型点击坐标仍按该帧给出。
+    const n =
+      r.frameWidth && r.frameHeight
+        ? ` — ${__cpMcpNormalizeScreenshotScale(t?.scale)}-scale view; coordinate frame: ${r.frameWidth}x${r.frameHeight}.`
+        : "";
     return {
-      output: `Successfully captured screenshot (${r.width}x${r.height}, ${r.format}) - ID: ${o}`,
+      output: `Successfully captured screenshot (${r.width}x${r.height}, ${r.format}) - ID: ${o}${n}`,
       base64Image: r.base64,
       imageFormat: r.format,
       imageId: o,

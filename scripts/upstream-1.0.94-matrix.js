@@ -20,7 +20,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "computer-scale-and-input-guards",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source computer tool accepts a screenshot scale, rejects page-zoom shortcuts, and validates type text.",
     owners: ["src/assets/mcpPermissions-qqAoJjJ8.js"],
     testTarget: "tests/unit/computer-tool-guards.regression.test.js",

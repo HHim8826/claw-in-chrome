@@ -91,6 +91,11 @@ Prefer these seams when implementing behavior.
   returned, and declarations don't leak between calls. A parse-time
   `Illegal return statement` retries once inside an async wrapper. `chrome:`
   and `chrome-extension:` pages are rejected before any permission prompt.
+- The `computer` tool normalizes `scale` to [0.1, 1] for screenshots and zoom.
+  A scaled screenshot records `frameWidth` and `frameHeight` in the coordinate
+  ledger so clicks stay in the full-resolution frame. The `key` action rejects
+  page-zoom shortcuts before dispatching keys, and `type` requires non-empty
+  string text.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

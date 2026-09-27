@@ -52,7 +52,7 @@ function main() {
 
   assertIncludes(
     source,
-    'clip: {\n                  x: viewportScrollX + o,\n                  y: viewportScrollY + n,\n                  width: u,\n                  height: h,\n                  scale: 1,\n                },',
+    'clip: {\n                  x: viewportScrollX + o,\n                  y: viewportScrollY + n,\n                  width: u,\n                  height: h,\n                  scale: zoomCaptureScale,\n                },',
     "zoom screenshot should offset CDP clip by the current scroll position",
   );
 
