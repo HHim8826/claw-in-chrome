@@ -13,7 +13,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "javascript-tool-repl-semantics",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source javascript_tool evaluates with Runtime.evaluate replMode and falls back to an async wrapper for return statements.",
     owners: ["src/assets/mcpPermissions-qqAoJjJ8.js"],
     testTarget: "tests/unit/javascript-tool-repl.regression.test.js",

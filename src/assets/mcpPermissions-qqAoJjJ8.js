@@ -5701,7 +5701,7 @@ const we = {
     text: {
       type: "string",
       description:
-        "The JavaScript code to execute. The code will be evaluated in the page context. The result of the last expression will be returned automatically. Do NOT use 'return' statements - just write the expression you want to evaluate (e.g., 'window.myData.value' not 'return window.myData.value'). You can access and modify the DOM, call page functions, and interact with page variables.",
+        "The JavaScript code to execute. Evaluated in the page context with REPL semantics: top-level `await` works, and the result of the last expression is returned automatically — write the expression you want (e.g. `window.myData.value`, or `await fetch(url).then(r=>r.json())`) rather than `return ...`. You can access and modify the DOM, call page functions, and interact with page variables.",
     },
     tabId: {
       type: "number",
@@ -5725,6 +5725,20 @@ const we = {
       const s = (await chrome.tabs.get(n)).url;
       if (!s) {
         throw new Error("No URL available for active tab");
+      }
+      // 语义锚点：javascript_tool 拒绝扩展内部页面（upstream 1.0.94），在权限提示之前直接返回可操作的错误。
+      const __cpJavascriptToolInternalScheme = (() => {
+        try {
+          const e = new URL(s).protocol;
+          return e === "chrome:" || e === "chrome-extension:" ? e : undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+      if (__cpJavascriptToolInternalScheme) {
+        return {
+          error: `JavaScript execution is not allowed on ${__cpJavascriptToolInternalScheme}// pages. Navigate to a regular web page (http:// or https://) first, then retry.`,
+        };
       }
       const i = t?.toolUseId;
       const u = await t.permissionManager.checkPermission(s, i);
@@ -5750,18 +5764,30 @@ const we = {
       if (h) {
         return h;
       }
-      const p = `\n        (function() {\n          'use strict';\n          try {\n            return eval(${JSON.stringify(o)});\n          } catch (e) {\n            throw e;\n          }\n        })()\n      `;
-      const m = await K.sendCommand(
-        n,
-        "Runtime.evaluate",
-        {
-          expression: p,
-          returnByValue: true,
-          awaitPromise: true,
-          timeout: l,
-        },
-        l + d,
-      );
+      // 语义锚点：javascript_tool 以 REPL 语义求值（upstream 1.0.94）：顶层 await 可用、最后一个表达式自动返回；
+      // 代码包在块语句里，避免 let/const 声明泄漏到后续调用。解析期的 Illegal return statement 会回退到 async 包装再执行一次。
+      const p = (e, t) =>
+        K.sendCommand(
+          n,
+          "Runtime.evaluate",
+          {
+            expression: e,
+            returnByValue: true,
+            awaitPromise: true,
+            replMode: t,
+            timeout: l,
+          },
+          l + d,
+        );
+      let m = await p(`{${o}\n}`, true);
+      const __cpJavascriptToolParseError =
+        m.exceptionDetails?.exception?.className === "SyntaxError" &&
+        !m.exceptionDetails?.stackTrace
+          ? m.exceptionDetails.exception.description ?? ""
+          : "";
+      if (/Illegal return statement/.test(__cpJavascriptToolParseError)) {
+        m = await p(`(async()=>{\n${o}\n})()`, false);
+      }
       let f = "";
       let g = false;
       let b = "";
@@ -5899,7 +5925,7 @@ const we = {
         text: {
           type: "string",
           description:
-            "The JavaScript code to execute. The code will be evaluated in the page context. The result of the last expression will be returned automatically. Do NOT use 'return' statements - just write the expression you want to evaluate (e.g., 'window.myData.value' not 'return window.myData.value'). You can access and modify the DOM, call page functions, and interact with page variables.",
+            "The JavaScript code to execute. Evaluated in the page context with REPL semantics: top-level `await` works, and the result of the last expression is returned automatically — write the expression you want (e.g. `window.myData.value`, or `await fetch(url).then(r=>r.json())`) rather than `return ...`. You can access and modify the DOM, call page functions, and interact with page variables.",
         },
         tabId: {
           type: "number",

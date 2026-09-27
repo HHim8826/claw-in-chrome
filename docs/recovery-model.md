@@ -86,6 +86,11 @@ Prefer these seams when implementing behavior.
   `__claudeElementReverseMap`, stops after 10,000 elements, and truncates
   oversized output at a line boundary with a size note instead of returning an
   error.
+- `javascript_tool` evaluates code through `Runtime.evaluate` with `replMode`
+  inside a block statement, so top-level `await` works, the last expression is
+  returned, and declarations don't leak between calls. A parse-time
+  `Illegal return statement` retries once inside an async wrapper. `chrome:`
+  and `chrome-extension:` pages are rejected before any permission prompt.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.
