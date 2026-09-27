@@ -889,6 +889,37 @@ const M = new (class {
   getContext(e) {
     return this.contexts.get(e);
   }
+  // 语义锚点：browser_batch 内的截图坐标上下文先暂存到 scope（upstream 1.0.94），
+  // 批次成功后统一提交，失败时丢弃；同一批次里的坐标始终以批次开始前的截图为准。
+  pending = new Map();
+  nextPendingScope = 1;
+  beginPendingScope() {
+    return this.nextPendingScope++;
+  }
+  stashPendingContext(e, t, r) {
+    if (r === undefined) {
+      this.setContext(e, t);
+      return;
+    }
+    let o = this.pending.get(r);
+    if (!o) {
+      o = new Map();
+      this.pending.set(r, o);
+    }
+    o.set(e, t);
+  }
+  commitPendingContexts(e) {
+    const t = this.pending.get(e);
+    this.pending.delete(e);
+    if (t) {
+      for (const [e, r] of t) {
+        this.setContext(e, r);
+      }
+    }
+  }
+  clearPendingContexts(e) {
+    this.pending.delete(e);
+  }
   // 语义锚点：clearContext / clearAllContexts 是预留的 screenshot context 清理接口。
   // 当前文件内未见显式 clear 调用；账本实际主要靠后续 screenshot 的 setContext 覆盖刷新。
   clearContext(e) {
@@ -4717,7 +4748,7 @@ class H {
         };
         // 语义锚点：screenshot 会把 viewport/screenshot 尺寸写进上下文，供后续坐标动作做缩放换算。
         // 原始截图直返与 content-script 压缩回退，最终都会写入同一份 M 尺寸账本。
-        M.setContext(e, t);
+        M.stashPendingContext(e, t, r?.pendingContextScope);
         return t;
       }
       return await this.processScreenshotInContentScript(
@@ -4729,6 +4760,7 @@ class H {
         1,
         o,
         i,
+        r?.pendingContextScope,
       );
     } finally {
       if (!r?.skipIndicator) {
@@ -4736,7 +4768,7 @@ class H {
       }
     }
   }
-  async processScreenshotInContentScript(e, t, r, o, a, n, s, i) {
+  async processScreenshotInContentScript(e, t, r, o, a, n, s, i, d) {
     const c = await x({
       target: {
         tabId: e,
@@ -4852,7 +4884,7 @@ class H {
     }
     const l = c[0].result;
     // 语义锚点：content-script 压缩回退链也会回填同一份 screenshot viewport context 账本。
-    M.setContext(e, l);
+    M.stashPendingContext(e, l, d);
     return l;
   }
 }
@@ -5477,6 +5509,7 @@ const pe = {
       const u = {
         skipIndicator: t.skipIndicator,
         span: t?.span,
+        pendingContextScope: t?.inBatch ? t.pendingContextScope : undefined,
       };
       switch (o.action) {
         case "left_click":
@@ -16027,6 +16060,61 @@ const __cpMcpTablessToolNames = [
   "turn_answer_start",
   "shortcuts_list",
 ];
+// 语义锚点：browser_batch 工具（upstream 1.0.94）。执行逻辑在 shared/browser-batch.js，
+// 这里只注入 tab 编排、封锁检测、输入归一、GIF 录制与截图坐标 scope 等运行时依赖。
+function __cpGetBrowserBatchApi() {
+  return globalThis.__CP_BROWSER_BATCH__;
+}
+const __cpBrowserBatchEnabledStorageKey =
+  globalThis.__CP_CONTRACT__?.browserTools?.BROWSER_BATCH_ENABLED_STORAGE_KEY ||
+  "browserBatchEnabled";
+const __cpBrowserBatchTool = {
+  name: "browser_batch",
+  description: __cpGetBrowserBatchApi()?.DESCRIPTION || "Execute a sequence of browser tool calls in one round trip.",
+  parameters: __cpGetBrowserBatchApi()?.toolParameters() || {},
+  execute: async (e, t) => {
+    const r = __cpGetBrowserBatchApi();
+    if (!r) {
+      return {
+        error: "browser_batch runtime is unavailable",
+        errorCode: "batch_unavailable",
+      };
+    }
+    return r.execute(e, t, {
+      defaultTools: za,
+      isEnabled: async () => {
+        try {
+          const e = await chrome.storage.local.get(__cpBrowserBatchEnabledStorageKey);
+          return r.isEnabled(e?.[__cpBrowserBatchEnabledStorageKey]);
+        } catch {
+          return true;
+        }
+      },
+      coerceInput: (e, t, r) => te(e, t, r),
+      resolveTabId: (e, t) => F.getEffectiveTabId(e, t),
+      isTabInSameGroup: (e, t) => F.isTabInSameGroup(e, t),
+      detectBlockedNavigation: (e) => __cpDetectMidCallBlockedNavigation(e),
+      getTab: (e) => chrome.tabs.get(e),
+      getTabContext: async (e) => {
+        const t = await F.getValidTabsWithMetadata(e);
+        return {
+          currentTabId: e,
+          availableTabs: t,
+          tabCount: t.length,
+        };
+      },
+      recordStep: (e, t, r) => __cpRecordGifFrameForToolCall(e, t, r),
+      beginPendingScope: () => M.beginPendingScope(),
+      commitPendingContexts: (e) => M.commitPendingContexts(e),
+      clearPendingContexts: (e) => M.clearPendingContexts(e),
+      forgetImage: (e) => __cpMcpLocalImageRegistry.delete(e),
+      now: () => Date.now(),
+      sleep: (e) => new Promise((t) => setTimeout(t, e)),
+    });
+  },
+  toAnthropicSchema: async () => __cpGetBrowserBatchApi()?.toolSchema(),
+};
+za.push(__cpBrowserBatchTool);
 // __cp-blocked-navigation-guard:start
 // 语义锚点：被封锁站点的错误文案（upstream 1.0.94）。
 // category_org_blocked 若命中浏览器管理员下发的 blockedUrlPatterns，使用专属的管理员策略文案。
@@ -16122,6 +16210,106 @@ function __cpMcpResolvePermissionNetlocFromUrl(e) {
   } catch {}
   return "";
 }
+// 语义锚点：computer / navigate 成功后为正在录制的 tab group 追加 GIF 帧；普通工具调用与 browser_batch 每一步共用。
+async function __cpRecordGifFrameForToolCall(e, t, r) {
+  try {
+    if (!["computer", "navigate"].includes(e)) {
+      return;
+    }
+    const a = await chrome.tabs.get(r);
+    if (!a) {
+      return;
+    }
+    const n = a.groupId ?? -1;
+    if (!xe.isRecording(n)) {
+      return;
+    }
+    let s;
+    let i;
+    if (e === "computer" && t.action) {
+      const e = t.action;
+      if (e === "screenshot") {
+        return;
+      }
+      s = {
+        type: e,
+        coordinate: t.coordinate,
+        start_coordinate: t.start_coordinate,
+        text: t.text,
+        timestamp: Date.now(),
+      };
+      if (e.includes("click")) {
+        s.description = "Clicked";
+      } else if (e === "type" && t.text) {
+        s.description = `Typed: "${t.text}"`;
+      } else if (e === "key" && t.text) {
+        s.description = `Pressed key: ${t.text}`;
+      } else {
+        s.description =
+          e === "scroll"
+            ? "Scrolled"
+            : e === "left_click_drag"
+              ? "Dragged"
+              : e;
+      }
+    } else if (e === "navigate" && t.url) {
+      s = {
+        type: "navigate",
+        timestamp: Date.now(),
+        description: `Navigated to ${t.url}`,
+      };
+    }
+    if (
+      s &&
+      (s.type.includes("click") || s.type === "left_click_drag")
+    ) {
+      const e = xe.getFrames(n);
+      if (e.length > 0) {
+        const t = e[e.length - 1];
+        const r = {
+          base64: t.base64,
+          action: s,
+          frameNumber: e.length,
+          timestamp: Date.now(),
+          viewportWidth: t.viewportWidth,
+          viewportHeight: t.viewportHeight,
+          devicePixelRatio: t.devicePixelRatio,
+        };
+        xe.addFrame(n, r);
+      }
+    }
+    await new Promise((e) => setTimeout(e, 100));
+    try {
+      i = await K.screenshot(r);
+    } catch (o) {
+      return;
+    }
+    let c = 1;
+    try {
+      const e = await x({
+        target: {
+          tabId: r,
+        },
+        injectImmediately: true,
+        func: () => window.devicePixelRatio,
+      });
+      if (e && e[0]?.result) {
+        c = e[0].result;
+      }
+    } catch (o) {}
+    const l = xe.getFrames(n).length;
+    const d = {
+      base64: i.base64,
+      action: s,
+      frameNumber: l,
+      timestamp: Date.now(),
+      viewportWidth: i.viewportWidth || i.width,
+      viewportHeight: i.viewportHeight || i.height,
+      devicePixelRatio: c,
+    };
+    xe.addFrame(n, d);
+  } catch (o) {}
+}
 // 语义锚点：后台 tool executor 运行时（tool_call -> tool.execute -> permission_required/tool_result）。
 class Va {
   constructor(e) {
@@ -16204,6 +16392,7 @@ class Va {
           anthropicClient: this.context.anthropicClient,
           permissionManager: i ?? this.context.permissionManager,
           createAnthropicMessage: this.createAnthropicMessage(),
+          availableTools: za,
         };
         const d = za.find((t) => t.name === e);
         if (!d) {
@@ -16254,105 +16443,7 @@ class Va {
             }
           }
           if (!("type" in o) && !o.error && !!l.tabId) {
-            await (async function (e, t, r) {
-              try {
-                if (!["computer", "navigate"].includes(e)) {
-                  return;
-                }
-                const a = await chrome.tabs.get(r);
-                if (!a) {
-                  return;
-                }
-                const n = a.groupId ?? -1;
-                if (!xe.isRecording(n)) {
-                  return;
-                }
-                let s;
-                let i;
-                if (e === "computer" && t.action) {
-                  const e = t.action;
-                  if (e === "screenshot") {
-                    return;
-                  }
-                  s = {
-                    type: e,
-                    coordinate: t.coordinate,
-                    start_coordinate: t.start_coordinate,
-                    text: t.text,
-                    timestamp: Date.now(),
-                  };
-                  if (e.includes("click")) {
-                    s.description = "Clicked";
-                  } else if (e === "type" && t.text) {
-                    s.description = `Typed: "${t.text}"`;
-                  } else if (e === "key" && t.text) {
-                    s.description = `Pressed key: ${t.text}`;
-                  } else {
-                    s.description =
-                      e === "scroll"
-                        ? "Scrolled"
-                        : e === "left_click_drag"
-                          ? "Dragged"
-                          : e;
-                  }
-                } else if (e === "navigate" && t.url) {
-                  s = {
-                    type: "navigate",
-                    timestamp: Date.now(),
-                    description: `Navigated to ${t.url}`,
-                  };
-                }
-                if (
-                  s &&
-                  (s.type.includes("click") || s.type === "left_click_drag")
-                ) {
-                  const e = xe.getFrames(n);
-                  if (e.length > 0) {
-                    const t = e[e.length - 1];
-                    const r = {
-                      base64: t.base64,
-                      action: s,
-                      frameNumber: e.length,
-                      timestamp: Date.now(),
-                      viewportWidth: t.viewportWidth,
-                      viewportHeight: t.viewportHeight,
-                      devicePixelRatio: t.devicePixelRatio,
-                    };
-                    xe.addFrame(n, r);
-                  }
-                }
-                await new Promise((e) => setTimeout(e, 100));
-                try {
-                  i = await K.screenshot(r);
-                } catch (o) {
-                  return;
-                }
-                let c = 1;
-                try {
-                  const e = await x({
-                    target: {
-                      tabId: r,
-                    },
-                    injectImmediately: true,
-                    func: () => window.devicePixelRatio,
-                  });
-                  if (e && e[0]?.result) {
-                    c = e[0].result;
-                  }
-                } catch (o) {}
-                const l = xe.getFrames(n).length;
-                const d = {
-                  base64: i.base64,
-                  action: s,
-                  frameNumber: l,
-                  timestamp: Date.now(),
-                  viewportWidth: i.viewportWidth || i.width,
-                  viewportHeight: i.viewportHeight || i.height,
-                  devicePixelRatio: c,
-                };
-                xe.addFrame(n, d);
-              } catch (o) {}
-            })(e, r, l.tabId);
+            await __cpRecordGifFrameForToolCall(e, r, l.tabId);
           }
           this.context.analytics?.track("claude_chrome.chat.tool_called", u);
           return o;
@@ -16504,6 +16595,13 @@ class Va {
   async processToolResults(e, t) {
     const r = [];
     const o = (e) => {
+      // 语义锚点：browser_batch 结果按步骤交错输出文本与截图，再附上统一的 Tab Context。
+      if (__cpGetBrowserBatchApi()?.isBatchResult(e)) {
+        return __cpGetBrowserBatchApi().toToolResultContent(e, {
+          formatTabContext: (e) =>
+            `\n\nTab Context:${e.executedOnTabId ? `\n- Executed on tabId: ${e.executedOnTabId}` : ""}\n- Available tabs:\n${e.availableTabs.map((e) => `  • tabId ${e.id}: "${e.title}" (${e.url})`).join("\n")}`,
+        });
+      }
       if (e.error) {
         return e.error;
       }
@@ -17452,6 +17550,7 @@ export {
   Te as a3,
   $a as a4,
   Oa as a5,
+  __cpBrowserBatchTool as a6,
   ie as b,
   Y as c,
   se as d,

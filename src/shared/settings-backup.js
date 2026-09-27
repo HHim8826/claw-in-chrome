@@ -34,6 +34,7 @@
     "showTraceIds",
     "showSystemReminders",
     "showToolResultDetails",
+    "browserBatchEnabled",
     "incognitoMode",
     "permissionStorage",
     "lastPermissionModePreference",

@@ -123,6 +123,15 @@ Prefer these seams when implementing behavior.
   ignores untrusted clicks. If the agent is still active 1.5 seconds later,
   the page sends `STOP_AGENT_DROPPED`, which the worker only acknowledges, and
   shows a short hint.
+- `browser_batch` is registered in the shared tool list (`za`) and exported to
+  the side panel. Both executors pass `availableTools`. The side panel also
+  passes `onBatchProgress` and `isCancelled`, and both convert `batchItems` to
+  interleaved text and image content. In-batch screenshots stash coordinate
+  contexts in a pending scope that commits only when the batch succeeds. The
+  side panel adds the tool and its system-prompt guidance only while
+  `browserBatchEnabled` isn't `false`. Its row shows live `completed/total`
+  progress from a bounded store that holds no image bytes. The GIF recorder is
+  now the named helper `__cpRecordGifFrameForToolCall`.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

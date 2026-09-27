@@ -11,6 +11,7 @@ const expectedLoaderImports = [
   "../shared/custom-provider-models.js",
   "../shared/provider-observability.js",
   "../shared/provider-format-adapter.js",
+  "../shared/browser-batch.js",
   "../shared/telemetry-disable.js",
   "../assets/service-worker.ts-H0DVM1LS.js",
   "../shared/github-update-shared.js",

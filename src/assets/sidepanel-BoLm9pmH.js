@@ -3,7 +3,7 @@ import { M as e, u as t, r as n, a as s, A as r, L as i, R as o } from "./index-
 import { r as a, j as l, R as c, a as u, b as d, g as h } from "./index-BVS4T5_D.js";
 import { b as p, a as m, _ as f, u as g, g as y, S as v, s as x, c as b, P as w, d as k, T as C, e as _, w as M, f as S, h as j, i as E, j as T, k as N, l as A, m as L, U as O, D as I, n as R, o as D } from "./PermissionManager-9s959502.js";
 import { S as P, s as F, h as z, g as V, n as $, u as H, a as B, b as U, c as Z, i as W, p as q, I as G, d as K, T as J, e as Y, f as X, B as Q, j as ee, A as te, m as ne, k as se, r as re, l as ie, o as oe, q as ae, t as le, W as ce, v as ue, w as de, E as he, M as pe, x as me, y as fe, z as ge, C as ye, D as ve, F as xe, G as be, L as we, H as ke, J as Ce, K as _e, N as Me, O as Se, P as je, U as Ee, X as Te, Q as Ne, R as Ae, V as Le, Y as Oe, Z as Ie, _ as Re, $ as De, a0 as Pe, a1 as Fe, a2 as ze, a3 as Ve, a4 as $e, a5 as He, a6 as Be, a7 as Ue, a8 as Ze, a9 as We, aa as qe, ab as Ge, ac as Ke, ad as Je, ae as Ye, af as Xe, ag as Qe, ah as et, ai as tt, aj as nt, ak as st, al as rt, am as it, an as ot, ao as at, ap as lt, aq as ct } from "./useStorageState-hbwNMVUA.js";
-import { c as ut, g as dt, e as ht, u as pt, p as mt, s as ft, t as gt, d as yt, b as vt, A as xt, n as bt, r as wt, f as kt, a as Ct, h as _t, i as Mt, j as St, k as jt, l as Et, m as Tt, o as Nt, q as At, v as Lt, w as Ot, x as It, y as Rt, z as Dt, B as Pt, C as Ft, D as zt, E as Vt, F as $t, G as Ht, H as Bt, I as Ut, J as Zt, K as Wt, L as qt, M as Gt, N as Kt, O as Jt, P as Yt, Q as Xt, R as Qt, S as en, T as tn, U as nn, V as sn, W as rn, X as on } from "./mcpPermissions-qqAoJjJ8.js";
+import { c as ut, g as dt, e as ht, u as pt, p as mt, s as ft, t as gt, d as yt, b as vt, A as xt, n as bt, r as wt, f as kt, a as Ct, h as _t, i as Mt, j as St, k as jt, l as Et, m as Tt, o as Nt, q as At, v as Lt, w as Ot, x as It, y as Rt, z as Dt, B as Pt, C as Ft, D as zt, E as Vt, F as $t, G as Ht, H as Bt, I as Ut, J as Zt, K as Wt, L as qt, M as Gt, N as Kt, O as Jt, P as Yt, Q as Xt, R as Qt, S as en, T as tn, U as nn, V as sn, W as rn, X as on, a6 as __cpBrowserBatchTool } from "./mcpPermissions-qqAoJjJ8.js";
 import { t as an } from "./punycode.es6-D49_gIz_.js";
 import { P as ln } from "./PairingPrompt-Do4C6yFu.js";
 if (globalThis.Buffer === undefined) {
@@ -32324,6 +32324,73 @@ const tb = e => l.jsx(ee, {
     fill: "currentColor"
   })
 });
+// 语义锚点：browser_batch 开关缓存（upstream 1.0.94，本地设置 browserBatchEnabled，默认开启）。
+// 发请求、生成系统提示词前会刷新；options 修改时经 storage.onChanged 同步。
+const __cpBrowserBatchEnabledStorageKey = globalThis.__CP_CONTRACT__?.browserTools?.BROWSER_BATCH_ENABLED_STORAGE_KEY || "browserBatchEnabled";
+let __cpBrowserBatchEnabledCache = true;
+function __cpRefreshBrowserBatchEnabled() {
+  return chrome.storage.local.get(__cpBrowserBatchEnabledStorageKey).then(e => {
+    __cpBrowserBatchEnabledCache = globalThis.__CP_BROWSER_BATCH__?.isEnabled(e?.[__cpBrowserBatchEnabledStorageKey]) ?? false;
+    return __cpBrowserBatchEnabledCache;
+  }).catch(() => __cpBrowserBatchEnabledCache);
+}
+try {
+  chrome.storage.onChanged.addListener((e, t) => {
+    if (t === "local" && e[__cpBrowserBatchEnabledStorageKey]) {
+      __cpBrowserBatchEnabledCache = globalThis.__CP_BROWSER_BATCH__?.isEnabled(e[__cpBrowserBatchEnabledStorageKey].newValue) ?? false;
+    }
+  });
+} catch {}
+// 语义锚点：browser_batch 逐步进度账本，按 toolUseId 存最近 50 个批次；不保存截图字节。
+const __cpBrowserBatchProgressStore = (() => {
+  const e = new Map();
+  const t = new Set();
+  const n = [];
+  return {
+    upsert(s, r) {
+      if (!s || !r || typeof r.index != "number") {
+        return;
+      }
+      const i = [...(e.get(s) || [])];
+      const {
+        base64Image: o,
+        ...a
+      } = r;
+      i[r.index] = a;
+      e.set(s, i);
+      while (e.size > 50) {
+        e.delete(e.keys().next().value);
+      }
+      for (const l of t) {
+        l();
+      }
+    },
+    get(t) {
+      return e.get(t) || n;
+    },
+    subscribe(e) {
+      t.add(e);
+      return () => t.delete(e);
+    }
+  };
+})();
+function __cpBrowserBatchRowLabel(e, t, n, s) {
+  const r = globalThis.__CP_BROWSER_BATCH__?.summarizeProgress(s, t, n);
+  if (!r) {
+    return null;
+  }
+  const i = e.formatMessage({
+    defaultMessage: "Batch — {completed}/{total} actions",
+    id: "q1/79Ks14U"
+  }, {
+    completed: r.completed,
+    total: r.total
+  });
+  return r.failed ? `${i} · ${e.formatMessage({
+    defaultMessage: "Stopped on error",
+    id: "Q7Tmii1wrQ"
+  })}` : i;
+}
 const nb = (e, t, n, s) => {
   const {
     text: r,
@@ -32884,6 +32951,19 @@ const nb = (e, t, n, s) => {
           }),
           icon: "shuffle"
         };
+      case "browser_batch":
+        {
+          const e = Array.isArray(o.actions) ? o.actions.length : 0;
+          return {
+            text: n.formatMessage({
+              defaultMessage: "Batch — {count, plural, one {# action} other {# actions}}",
+              id: "9PnBSKt3zo"
+            }, {
+              count: e
+            }),
+            icon: "computer"
+          };
+        }
       default:
         {
           const e = function (e) {
@@ -34767,7 +34847,8 @@ const $b = a.memo(function ({
   };
   const j = nb(n, c, u, M);
   const E = Xx(n) && r;
-  const T = s || j.text;
+  const __cpBrowserBatchProgress = a.useSyncExternalStore(__cpBrowserBatchProgressStore.subscribe, () => __cpBrowserBatchProgressStore.get(o));
+  const T = s || (n === "browser_batch" ? __cpBrowserBatchRowLabel(M, c, u, __cpBrowserBatchProgress) : null) || j.text;
   const N = E ? l.jsx(Fl, {
     url: i,
     size: 16,
@@ -88332,6 +88413,8 @@ function CQ({
   a.useRef(new Set());
   a.useRef(new Set());
   const ce = a.useRef([wt, kt, Ct, _t, Mt, St, jt, Et, Tt, Nt, At, Lt, Ot, It, Rt, Dt, Pt]);
+  // 语义锚点：本回合实际提供给模型的工具 = 固定工具 + 已启用时的 browser_batch。
+  const __cpActiveToolsForTurn = () => __cpBrowserBatchEnabledCache ? [...ce.current, __cpBrowserBatchTool] : ce.current;
   a.useEffect(() => {}, []);
   a.useEffect(() => {}, []);
   const {
@@ -88439,6 +88522,15 @@ function CQ({
         type: "text",
         text: Y.multipleTabsSystemPrompt
       });
+    }
+    if (await __cpRefreshBrowserBatchEnabled()) {
+      const __cpBrowserBatchGuidance = globalThis.__CP_BROWSER_BATCH__?.SYSTEM_PROMPT_GUIDANCE;
+      if (__cpBrowserBatchGuidance) {
+        l.push({
+          type: "text",
+          text: __cpBrowserBatchGuidance
+        });
+      }
     }
     const __cpTurnAnswerStartPrompt = String(Y.turnAnswerStartPrompt || __cpFallbackTurnAnswerStartPrompt);
     if (__cpTurnAnswerStartPrompt.trim()) {
@@ -88817,9 +88909,12 @@ function CQ({
         model: o.current,
         createAnthropicMessage: (e, t) => we(e, r, t),
         permissionManager: f,
-        messages: C.current
+        messages: C.current,
+        availableTools: __cpActiveToolsForTurn(),
+        onBatchProgress: e => __cpBrowserBatchProgressStore.upsert(n, e),
+        isCancelled: () => !!te.current?.signal?.aborted
       };
-      const l = ce.current.find(t => t.name === e);
+      const l = __cpActiveToolsForTurn().find(t => t.name === e);
       if (!l) {
         throw new Error(`Unknown tool: ${e}`);
       }
@@ -88842,7 +88937,7 @@ function CQ({
         }
       }
       try {
-        const n = Zt(e, t, ce.current);
+        const n = Zt(e, t, __cpActiveToolsForTurn());
         const s = await l.execute(n, a);
         if ("type" in s) {
           h.success = false;
@@ -88928,6 +89023,10 @@ function CQ({
     const s = [];
     let r;
     const i = e => {
+      // 语义锚点：browser_batch 结果按步骤交错输出文本与截图。
+      if (globalThis.__CP_BROWSER_BATCH__?.isBatchResult(e)) {
+        return globalThis.__CP_BROWSER_BATCH__.toToolResultContent(e);
+      }
       if (e.error) {
         return e.error;
       }
@@ -89054,6 +89153,17 @@ function CQ({
           error: e
         }));
       }
+    }
+    // 语义锚点：单工具回合的 browser_batch 提示（upstream 1.0.94），只在批次开启时附到该工具结果末尾。
+    if (e.length === 1 && s.length === 1) {
+      s[0] = {
+        ...s[0],
+        content: globalThis.__CP_BROWSER_BATCH__?.appendSingleCallReminder(s[0].content, e[0].name, e[0].input, {
+          enabled: __cpBrowserBatchEnabledCache,
+          isSingleToolTurn: true,
+          isError: !!s[0].is_error
+        }) ?? s[0].content
+      };
     }
     return {
       toolResults: s,
@@ -89320,7 +89430,8 @@ function CQ({
     } catch (U) {}
     let D = null;
     try {
-      D = await Bt(ce.current, {
+      await __cpRefreshBrowserBatchEnabled();
+      D = await Bt(__cpActiveToolsForTurn(), {
         tabId: c
       });
     } catch (U) {

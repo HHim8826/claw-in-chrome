@@ -62,9 +62,9 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "browser-batch-tool",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source browser_batch executes sequential tool calls in one round trip with per-item permission and blocked-site checks.",
-    owners: ["src/assets/mcpPermissions-qqAoJjJ8.js"],
+    owners: ["src/shared/browser-batch.js", "src/assets/mcpPermissions-qqAoJjJ8.js", "src/assets/sidepanel-BoLm9pmH.js", "src/options/browser-tools-options.js"],
     testTarget: "tests/unit/browser-batch.test.js",
   },
   {

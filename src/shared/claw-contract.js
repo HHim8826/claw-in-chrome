@@ -74,6 +74,9 @@
       SHOW_TOOL_RESULT_DETAILS_STORAGE_KEY: "showToolResultDetails",
       INCOGNITO_MODE_STORAGE_KEY: "incognitoMode",
     },
+    browserTools: {
+      BROWSER_BATCH_ENABLED_STORAGE_KEY: "browserBatchEnabled",
+    },
     session: {
       CHAT_SCOPE_PREFIX: "claw.chat.scopes.",
       CHAT_CLEANUP_AUDIT_KEY: "claw.chat.cleanup.audit",
