@@ -41,7 +41,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "minimized-window-click-guard",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source intercepts new-window link clicks in minimized windows and opens them as grouped tabs.",
     owners: ["src/assets/mcpPermissions-qqAoJjJ8.js"],
     testTarget: "tests/unit/minimized-window-click-guard.test.js",

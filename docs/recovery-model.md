@@ -111,6 +111,11 @@ Prefer these seams when implementing behavior.
   `chrome.storage.local.cicStripExtensionInterference` to `false` disables the
   recovery. `sendCommand` re-attaches after that error once the debugger is
   gone.
+- Plain left clicks in a minimized window arm a one-shot page click guard.
+  Trusted clicks on links that would open a new window are prevented, and the
+  runtime opens up to three unique `http(s)` links as background tabs next to
+  the source tab in its group, then reports the new tab IDs. The
+  `cicMinimizedWindowGuard` storage value `false` disables the guard.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

@@ -618,6 +618,226 @@ async function __cpRecoverDebuggerAttachFromInterference(e, t, r, o = {}) {
   throw r;
 }
 // __cp-extension-interference:end
+// __cp-minimized-window-guard:start
+// 语义锚点：最小化窗口点击防护（upstream 1.0.94）。
+// 窗口最小化时，agent 点击会新开窗口/标签的链接会把浏览器窗口拉到前台；这里在页面里拦截这类点击，
+// 改由扩展在同一窗口、同一 tab group 里以后台标签打开（最多 3 个），并把新 tab ID 回报给模型。
+// 页面内执行：布防 10 秒内的一次真实点击拦截；重复布防会清空上一轮记录。
+function __cpInstallBackgroundClickGuardInPage() {
+  const e = window;
+  const t = (e.__cicBgClickGuard ??= {
+    armed: false,
+    armedAt: 0,
+    hrefs: [],
+    installed: false,
+  });
+  t.armed = true;
+  t.armedAt = Date.now();
+  t.hrefs = [];
+  if (t.installed) {
+    return;
+  }
+  t.installed = true;
+  window.addEventListener("click", (e) => {
+    if (!t.armed || Date.now() - t.armedAt > 10000) {
+      return;
+    }
+    if (!e.isTrusted || e.defaultPrevented) {
+      return;
+    }
+    if (window.origin === "null") {
+      return;
+    }
+    const r = typeof e.composedPath == "function" ? e.composedPath() : [e.target];
+    let o = null;
+    for (const e of r) {
+      if (!(e instanceof Element)) {
+        continue;
+      }
+      if (e instanceof HTMLAnchorElement && e.hasAttribute("href")) {
+        o = e;
+        break;
+      }
+      const t = e.tagName;
+      if (
+        /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|LABEL|EMBED)$/.test(t) ||
+        ((t === "VIDEO" || t === "AUDIO") && e.controls) ||
+        (t === "OBJECT" && e.hasAttribute("usemap")) ||
+        (e instanceof HTMLElement && e.isContentEditable)
+      ) {
+        return;
+      }
+    }
+    if (!o || o.isContentEditable) {
+      return;
+    }
+    if (o.hasAttribute("download") && o.origin === location.origin) {
+      return;
+    }
+    const a = o.hasAttribute("target")
+      ? (o.getAttribute("target") ?? "").trim()
+      : (document.querySelector("base[target]")?.getAttribute("target") ?? "").trim();
+    if (!a) {
+      return;
+    }
+    const n = a.toLowerCase();
+    if (n === "_self" || n === "_parent" || n === "_top") {
+      return;
+    }
+    if (n !== "_blank") {
+      if (a === window.name) {
+        return;
+      }
+      if (typeof CSS == "undefined" || !CSS.escape) {
+        return;
+      }
+      const e = CSS.escape(a);
+      if (document.querySelector(`iframe[name="${e}"], frame[name="${e}"]`)) {
+        return;
+      }
+    }
+    const s = o.href;
+    if (/^https?:/i.test(s)) {
+      e.preventDefault();
+      t.hrefs.push(s);
+    }
+  });
+}
+// 页面内执行：解除布防并取出被拦截的链接。
+function __cpDrainBackgroundClickGuardInPage() {
+  const e = window.__cicBgClickGuard;
+  if (!e) {
+    return [];
+  }
+  e.armed = false;
+  const t = e.hrefs;
+  e.hrefs = [];
+  return t;
+}
+const __cpMinimizedWindowClickGuard = {
+  async beginClickInterception(e) {
+    try {
+      const { cicMinimizedWindowGuard: t } = await chrome.storage.local.get(
+        "cicMinimizedWindowGuard",
+      );
+      if (t === false) {
+        return null;
+      }
+      const r = await chrome.tabs.get(e);
+      if (
+        r.windowId === undefined ||
+        (await chrome.windows.get(r.windowId)).state !== "minimized"
+      ) {
+        return null;
+      }
+      await x(
+        {
+          target: {
+            tabId: e,
+          },
+          injectImmediately: true,
+          func: __cpInstallBackgroundClickGuardInPage,
+        },
+        5000,
+      );
+      return {
+        tabId: e,
+        windowId: r.windowId,
+        tabIndex: r.index,
+        groupId: r.groupId ?? chrome.tabGroups.TAB_GROUP_ID_NONE,
+      };
+    } catch {
+      return null;
+    }
+  },
+  async abortClickInterception(e) {
+    if (e) {
+      await this.drain(e);
+    }
+  },
+  async finishClickInterception(e) {
+    if (!e) {
+      return [];
+    }
+    const t = await this.drain(e);
+    if (t === null) {
+      return [];
+    }
+    const r = [...new Set(t)].filter((e) => /^https?:/i.test(e)).slice(0, 3);
+    if (r.length === 0) {
+      return [];
+    }
+    let o = true;
+    let a = false;
+    try {
+      o = (await chrome.windows.get(e.windowId)).state === "minimized";
+    } catch {
+      a = true;
+    }
+    const n = [];
+    for (const [s, i] of r.entries()) {
+      const t = !o && s === 0;
+      let r;
+      try {
+        r = await chrome.tabs.create(
+          a
+            ? {
+                url: i,
+                active: t,
+              }
+            : {
+                url: i,
+                active: t,
+                windowId: e.windowId,
+                openerTabId: e.tabId,
+                index: e.tabIndex + 1 + s,
+              },
+        );
+      } catch {
+        try {
+          r = await chrome.tabs.create({
+            url: i,
+            active: t,
+          });
+        } catch {}
+      }
+      if (r?.id === undefined || r.windowId !== e.windowId) {
+        continue;
+      }
+      if (e.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+        try {
+          await chrome.tabs.group({
+            tabIds: r.id,
+            groupId: e.groupId,
+          });
+          n.push(r.id);
+        } catch {}
+      } else {
+        n.push(r.id);
+      }
+    }
+    return n;
+  },
+  async drain(e) {
+    try {
+      return (
+        await x(
+          {
+            target: {
+              tabId: e.tabId,
+            },
+            injectImmediately: true,
+            func: __cpDrainBackgroundClickGuardInPage,
+          },
+          5000,
+        )
+      ).flatMap((e) => (Array.isArray(e.result) ? e.result : []));
+    } catch {
+      return null;
+    }
+  },
+};
+// __cp-minimized-window-guard:end
 function S(e, t) {
   return Math.floor((e - 1) / t) + 1;
 }
@@ -6034,20 +6254,36 @@ async function fe(e, t, r = 1, o, a) {
   try {
     // 语义锚点：click / double_click / triple_click 属于“定位/指针动作”家族。
     // 这条链会先把 ref/coordinate 解析成实际坐标，再过 A(...) 同域重校验，最后才发真实鼠标事件。
+    // 语义锚点：普通左键点击在最小化窗口里先布防新窗口链接拦截（upstream 1.0.94）。
+    const u =
+      i === "left" && c === 0
+        ? await __cpMinimizedWindowClickGuard.beginClickInterception(e)
+        : null;
     const l = await A(e, o, "click action");
     if (l) {
+      await __cpMinimizedWindowClickGuard.abortClickInterception(u);
       return l;
     }
-    await K.click(e, n, s, i, r, c, a);
+    try {
+      await K.click(e, n, s, i, r, c, a);
+    } catch (p) {
+      await __cpMinimizedWindowClickGuard.abortClickInterception(u);
+      throw p;
+    }
+    const h = await __cpMinimizedWindowClickGuard.finishClickInterception(u);
     const d =
       r === 1 ? "Clicked" : r === 2 ? "Double-clicked" : "Triple-clicked";
+    const p =
+      h.length > 0
+        ? ` [note: the link opened in a new tab (tab ID ${h.join(", ")}); pass that tab ID to interact with it]`
+        : "";
     if (t.ref) {
       return {
-        output: `${d} on element ${t.ref}`,
+        output: `${d} on element ${t.ref}${p}`,
       };
     } else {
       return {
-        output: `${d} at (${Math.round(t.coordinate[0])}, ${Math.round(t.coordinate[1])})`,
+        output: `${d} at (${Math.round(t.coordinate[0])}, ${Math.round(t.coordinate[1])})${p}`,
       };
     }
   } catch (l) {
