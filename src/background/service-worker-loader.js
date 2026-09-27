@@ -6,6 +6,7 @@ import "../shared/mcp-permission-popup-protocol.js";
 import "../shared/custom-provider-models.js";
 import "../shared/provider-observability.js";
 import "../shared/provider-format-adapter.js";
+import "../shared/browser-batch.js";
 import "../shared/telemetry-disable.js";
 // 先加载发行版 bundle，保留原有 background 主桥。
 import "../assets/service-worker.ts-H0DVM1LS.js";

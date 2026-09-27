@@ -9,6 +9,7 @@ const repoRoot = path.join(__dirname, "..", "..");
 const backupPath = path.join(repoRoot, "src", "shared", "settings-backup.js");
 const observabilityPath = path.join(repoRoot, "src", "shared", "provider-observability.js");
 const optionsPath = path.join(repoRoot, "src", "options", "data-insights-options.js");
+const cardHelpersPath = path.join(repoRoot, "src", "options", "options-card-helpers.js");
 
 function createHarness(options = {}) {
   const chromeMock = createChromeMock({ storageState: options.storageState || {} });
@@ -65,6 +66,7 @@ function createHarness(options = {}) {
   sandbox.globalThis = sandbox;
   runScriptInSandbox(backupPath, sandbox);
   runScriptInSandbox(observabilityPath, sandbox);
+  runScriptInSandbox(cardHelpersPath, sandbox);
   runScriptInSandbox(optionsPath, sandbox);
 
   async function flush() {

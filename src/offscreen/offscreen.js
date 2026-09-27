@@ -417,6 +417,36 @@ function applyActionIndicators(canvas, action, options, scaleFactor = 1) {
   }
 }
 
+/**
+ * Fit a canvas onto the `width × height` encoder grid: scale it by `scale`, then
+ * pad the right and bottom with white. Returns the original canvas when nothing
+ * changes. This runs after overlays so the progress bar and watermark stay on
+ * the frame's visible edge.
+ */
+function padCanvasToSize(canvas, width, height, scale = 1) {
+  if (scale === 1 && canvas.width === width && canvas.height === height) {
+    return canvas;
+  }
+  const padded = document.createElement("canvas");
+  padded.width = width;
+  padded.height = height;
+  const ctx = padded.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+  if (scale === 1) {
+    ctx.drawImage(canvas, 0, 0);
+  } else {
+    ctx.drawImage(
+      canvas,
+      0,
+      0,
+      Math.max(1, Math.round(canvas.width * scale)),
+      Math.max(1, Math.round(canvas.height * scale)),
+    );
+  }
+  return padded;
+}
+
 // ============ GIF GENERATION FUNCTION ============
 
 /**
@@ -468,8 +498,25 @@ async function generateGif(frames, options = {}) {
     images.push(img);
   }
   console.log(`[Offscreen] All ${images.length} images loaded`);
-  const width = images[0].width;
-  const height = images[0].height;
+  // gif.js encodes every frame on one fixed grid. Frames can differ in size
+  // (zoom crops, scaled screenshots, resized windows), so encode at the largest
+  // frame and pad smaller frames right/bottom after their overlays are drawn.
+  // When the padded grid would exceed the pixel budget, the whole grid scales
+  // down proportionally instead of failing the export.
+  const largestWidth = Math.max(...images.map((img) => img.width));
+  const largestHeight = Math.max(...images.map((img) => img.height));
+  const paddedPixelCount = largestWidth * largestHeight * images.length;
+  const gridScale =
+    paddedPixelCount > __cpOffscreenGifMaxTotalPixels
+      ? Math.sqrt(__cpOffscreenGifMaxTotalPixels / paddedPixelCount)
+      : 1;
+  const width = Math.max(1, Math.floor(largestWidth * gridScale));
+  const height = Math.max(1, Math.floor(largestHeight * gridScale));
+  if (gridScale < 1) {
+    console.log(
+      `[Offscreen] Scaling GIF grid by ${gridScale.toFixed(3)} to ${width}x${height} to stay within the pixel budget`,
+    );
+  }
   console.log(`[Offscreen] Enhancing frames with indicators and overlays...`);
 
   // Create enhanced canvases with all indicators and overlays
@@ -520,7 +567,7 @@ async function generateGif(frames, options = {}) {
     console.log(
       `[Offscreen] Frame ${index + 1}/${images.length} enhanced (progress: ${Math.round(progress * 100)}%)`,
     );
-    return canvas;
+    return padCanvasToSize(canvas, width, height, gridScale);
   });
   console.log(
     `[Offscreen] Creating GIF encoder: ${width}x${height}, workers: 2`,

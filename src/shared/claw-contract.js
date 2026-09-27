@@ -74,6 +74,16 @@
       SHOW_TOOL_RESULT_DETAILS_STORAGE_KEY: "showToolResultDetails",
       INCOGNITO_MODE_STORAGE_KEY: "incognitoMode",
     },
+    browserTools: {
+      BROWSER_BATCH_ENABLED_STORAGE_KEY: "browserBatchEnabled",
+      // Upstream kill switches; `false` turns the protection off.
+      STRIP_EXTENSION_INTERFERENCE_STORAGE_KEY: "cicStripExtensionInterference",
+      MINIMIZED_WINDOW_GUARD_STORAGE_KEY: "cicMinimizedWindowGuard",
+    },
+    siteBlocklist: {
+      USER_BLOCKED_URL_PATTERNS_STORAGE_KEY: "userBlockedUrlPatterns",
+      MANAGED_BLOCKED_URL_PATTERNS_KEY: "blockedUrlPatterns",
+    },
     session: {
       CHAT_SCOPE_PREFIX: "claw.chat.scopes.",
       CHAT_CLEANUP_AUDIT_KEY: "claw.chat.cleanup.audit",
@@ -123,6 +133,7 @@
         SHOW_AFTER_TOOL_USE: "SHOW_AFTER_TOOL_USE",
         SHOW_STATIC_INDICATOR: "SHOW_STATIC_INDICATOR",
         HIDE_STATIC_INDICATOR: "HIDE_STATIC_INDICATOR",
+        UPDATE_PHANTOM_CURSOR: "UPDATE_PHANTOM_CURSOR",
       },
       CURRENT_TAB_SENTINEL: "CURRENT_TAB",
       DOM_IDS: {
@@ -135,6 +146,7 @@
         STATIC_CHAT_TOOLTIP: "claude-static-chat-tooltip",
         STATIC_CLOSE_BUTTON: "claude-static-close-button",
         STATIC_CLOSE_TOOLTIP: "claude-static-close-tooltip",
+        PHANTOM_CURSOR: "claude-phantom-cursor",
       },
       HIDE_TRANSITION_DELAY_MS: 300,
       HEARTBEAT_INTERVAL_MS: 5000,
@@ -222,6 +234,7 @@
 
       // agent indicator: content script indicator <-> service worker
       STOP_AGENT: "STOP_AGENT",
+      STOP_AGENT_DROPPED: "STOP_AGENT_DROPPED",
       SWITCH_TO_MAIN_TAB: "SWITCH_TO_MAIN_TAB",
       STATIC_INDICATOR_HEARTBEAT: "STATIC_INDICATOR_HEARTBEAT",
       DISMISS_STATIC_INDICATOR_FOR_GROUP: "DISMISS_STATIC_INDICATOR_FOR_GROUP",

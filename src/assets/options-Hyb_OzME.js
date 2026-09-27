@@ -1583,6 +1583,8 @@ const ee = ({ analytics: a }) => {
 };
 const te = () => {
   const a = e();
+  // 语义锚点：权限页末尾的可读卡片挂载点（site-blocklist-options.js 挂载“封锁网站”卡片）。
+  const __cpOptionsPermissionsMountAnchorId = "cp-options-permissions-anchor";
   const [r, i] = s.useState(() => ({
     netloc: [],
     domain_transition: [],
@@ -1889,7 +1891,9 @@ const te = () => {
               }),
             ],
           }),
-        false,
+        n.jsx("div", {
+          id: __cpOptionsPermissionsMountAnchorId,
+        }),
       ],
     }),
   });

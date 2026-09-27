@@ -1,5 +1,7 @@
 (function () {
   window.__claudeElementMap ||= {};
+  // 语义锚点：element -> ref 反向索引（upstream 1.0.94）。ref 复用从全表扫描变为 O(1) 查表。
+  window.__claudeElementReverseMap ||= new WeakMap();
   window.__claudeRefCounter ||= 0;
   // 语义锚点：页面可访问性树生成器（read_page 工具的 DOM 序列化实现）
   const __cpAccessibilityTreeGlobalElementMapKey = "__claudeElementMap";
@@ -10,6 +12,61 @@
   const __cpAccessibilityTreeDefaultDepth = 15;
   const __cpAccessibilityTreeFilterAll = "all";
   const __cpAccessibilityTreeFilterInteractive = "interactive";
+  // 语义锚点：单次 read_page 最多序列化的元素数（upstream 1.0.94），超出后追加截断提示。
+  const __cpAccessibilityTreeMaxElements = 10000;
+  const __cpAccessibilityTreeRedactedValue = "[value redacted]";
+  // 语义锚点：敏感表单字段判定（password/hidden 与凭据、一次性码、信用卡 autocomplete）。
+  // 命中的字段在输出里只保留可访问名称，值统一替换为 [value redacted]。
+  const __cpAccessibilityTreeSensitiveAutocompleteTokens = [
+    "current-password",
+    "new-password",
+    "one-time-code",
+    "cc-number",
+    "cc-csc",
+    "cc-exp",
+    "cc-exp-month",
+    "cc-exp-year",
+  ];
+  const __cpAccessibilityTreeIsSensitiveField = function (e) {
+    var t = (e.getAttribute("type") || "").toLowerCase();
+    if (t === "password" || t === "hidden") {
+      return true;
+    }
+    var r = (e.getAttribute("autocomplete") || "").toLowerCase();
+    return __cpAccessibilityTreeSensitiveAutocompleteTokens.some(function (i) {
+      return r.indexOf(i) !== -1;
+    });
+  };
+  // 语义锚点：label[for] 名称收集所有后代文本（含 <span>/<abbr> 等），但跳过内嵌表单控件，
+  // 避免把 label 包住的 select 全部 option、按钮文字或输入值读进字段名称。
+  const __cpAccessibilityTreeLabelControlTags = [
+    "SELECT",
+    "OPTION",
+    "DATALIST",
+    "INPUT",
+    "TEXTAREA",
+    "BUTTON",
+  ];
+  const __cpAccessibilityTreeCollectLabelText = function (e) {
+    var t = "";
+    for (var r = 0; r < e.childNodes.length; r++) {
+      var i = e.childNodes[r];
+      if (i.nodeType === Node.TEXT_NODE) {
+        t += i.textContent;
+      } else if (
+        i.nodeType === Node.ELEMENT_NODE &&
+        __cpAccessibilityTreeLabelControlTags.indexOf(
+          String(i.tagName).toUpperCase(),
+        ) === -1
+      ) {
+        t += __cpAccessibilityTreeCollectLabelText(i);
+      }
+    }
+    return t;
+  };
+  const __cpAccessibilityTreeDirectText = function (e) {
+    return __cpAccessibilityTreeCollectLabelText(e).replace(/\s+/g, " ").trim();
+  };
   // 语义锚点：read_page 共享这组 filter/depth/ref_id 常量，避免 bundle 内部魔法字符串继续扩散。
   // 语义锚点：read_page / find 共享的 ref writer 主入口。
   // ref_X 统一在这里复用/分配，并写进 __claudeElementMap；mcpPermissions 里的 find/read_page 只是 consumer。
@@ -67,6 +124,26 @@
       let g = function (e) {
         var t = e.tagName.toLowerCase();
         if (t === "select") {
+          if (__cpAccessibilityTreeIsSensitiveField(e)) {
+            var sensitiveAriaLabel = e.getAttribute("aria-label");
+            if (sensitiveAriaLabel && sensitiveAriaLabel.trim()) {
+              return sensitiveAriaLabel.trim();
+            }
+            var sensitiveTitle = e.getAttribute("title");
+            if (sensitiveTitle && sensitiveTitle.trim()) {
+              return sensitiveTitle.trim();
+            }
+            if (e.id) {
+              var sensitiveLabel = document.querySelector('label[for="' + e.id + '"]');
+              if (sensitiveLabel) {
+                var sensitiveLabelText = __cpAccessibilityTreeDirectText(sensitiveLabel);
+                if (sensitiveLabelText) {
+                  return sensitiveLabelText;
+                }
+              }
+            }
+            return __cpAccessibilityTreeRedactedValue;
+          }
           var r = e;
           var i =
             r.querySelector("option[selected]") || r.options[r.selectedIndex];
@@ -92,8 +169,11 @@
         }
         if (e.id) {
           var u = document.querySelector('label[for="' + e.id + '"]');
-          if (u && u.textContent && u.textContent.trim()) {
-            return u.textContent.trim();
+          if (u) {
+            var labelText = __cpAccessibilityTreeDirectText(u);
+            if (labelText) {
+              return labelText;
+            }
           }
         }
         if (t === "input") {
@@ -103,9 +183,15 @@
           if (c === "submit" && f && f.trim()) {
             return f.trim();
           }
+          if (__cpAccessibilityTreeIsSensitiveField(e)) {
+            return d.value ? __cpAccessibilityTreeRedactedValue : "";
+          }
           if (d.value && d.value.length < 50 && d.value.trim()) {
             return d.value.trim();
           }
+        }
+        if (t === "textarea" && __cpAccessibilityTreeIsSensitiveField(e)) {
+          return e.value ? __cpAccessibilityTreeRedactedValue : "";
         }
         if (["button", "a", "summary"].includes(t)) {
           var h = "";
@@ -248,24 +334,38 @@
       // 语义锚点：元素是否纳入可访问性树（按 filter/aria-hidden/viewport 可见性/role/label）
       const __cpAccessibilityTreeShouldIncludeElement = w;
       let b = function (e, t, r) {
-        if (!(t > a) && e && e.tagName) {
+        if (!__cpAccessibilityTreeCapReached && !(t > a) && e && e.tagName) {
           var i = w(e, r) || (r.refId !== null && t === 0);
+          // 语义锚点：只有封顶后还遇到要序列化的元素才算截断；恰好 1 万个元素的完整遍历不追加截断提示。
+          if (
+            i &&
+            __cpAccessibilityTreeSerializedCount >=
+              __cpAccessibilityTreeMaxElements
+          ) {
+            __cpAccessibilityTreeCapReached = true;
+            return;
+          }
+          var sensitiveSelect =
+            e.tagName.toLowerCase() === "select" &&
+            __cpAccessibilityTreeIsSensitiveField(e);
           if (i) {
             var o = h(e);
             var l = g(e);
-            var u = null;
-            // 语义锚点：ref writer 会先复用旧 ref，再为首次命中的元素分配新的 ref_X。
-            for (var d in window.__claudeElementMap) {
-              if (window.__claudeElementMap[d].deref() === e) {
-                u = d;
-                break;
+            // 语义锚点：ref writer 会先经反向索引复用旧 ref（校验 WeakRef 仍指向同一元素），再为首次命中的元素分配新的 ref_X。
+            var u = window.__claudeElementReverseMap.get(e) || null;
+            if (u) {
+              var d = window.__claudeElementMap[u];
+              if (!d || d.deref() !== e) {
+                u = null;
               }
             }
             if (!u) {
               u =
                 __cpAccessibilityTreeRefIdPrefix + ++window.__claudeRefCounter;
               window.__claudeElementMap[u] = new WeakRef(e);
+              window.__claudeElementReverseMap.set(e, u);
             }
+            __cpAccessibilityTreeSerializedCount++;
             var c = " ".repeat(t) + o;
             if (l) {
               c +=
@@ -287,7 +387,8 @@
               c += ' placeholder="' + e.getAttribute("placeholder") + '"';
             }
             n.push(c);
-            if (e.tagName.toLowerCase() === "select") {
+            // 语义锚点：敏感 select 不展开 option，避免泄露可选值与当前选择。
+            if (e.tagName.toLowerCase() === "select" && !sensitiveSelect) {
               for (var f = e.options, m = 0; m < f.length; m++) {
                 var s = f[m];
                 var p = " ".repeat(t + 1) + "option";
@@ -311,7 +412,7 @@
               }
             }
           }
-          if (e.children && t < a) {
+          if (!sensitiveSelect && e.children && t < a) {
             for (var _ = 0; _ < e.children.length; _++) {
               b(e.children[_], i ? t + 1 : t, r);
             }
@@ -321,6 +422,8 @@
       // 语义锚点：DFS 遍历 + 序列化为文本行（含 ref_id 分配与 select option 展开）
       const __cpAccessibilityTreeTraverseAndSerialize = b;
       var n = [];
+      var __cpAccessibilityTreeSerializedCount = 0;
+      var __cpAccessibilityTreeCapReached = false;
       // 语义锚点：read_page 参数规约：filter 默认 all，depth 默认 15，ref_id 命中时只展开目标子树。
       var a = t ?? __cpAccessibilityTreeDefaultDepth;
       var o = {
@@ -368,26 +471,37 @@
         }
       }
       var c = n.join("\n");
+      // 语义锚点：元素数封顶后追加截断提示（upstream 1.0.94）。
+      if (__cpAccessibilityTreeCapReached) {
+        c +=
+          "\n[truncated at " +
+          __cpAccessibilityTreeMaxElements +
+          " elements — page is very large; " +
+          (i
+            ? "use a smaller depth or focus on a more specific child element"
+            : "use a refId or smaller depth to focus") +
+          "]";
+      }
+      // 语义锚点：序列化结果超限时在行边界截断正文，并附上完整长度与收窄 depth / ref_id 的提示（upstream 1.0.94），不再整体报错。
       if (r != null && c.length > r) {
-        // 语义锚点：序列化结果超限时不截断正文，而是返回收窄 depth / ref_id 的操作建议。
-        var f =
-          "Output exceeds " +
+        var f = c.length;
+        var truncateAt = c.lastIndexOf("\n", r);
+        // 语义锚点：只有首行本身就超过 max_chars（没有可用的行边界）时才在行中截断；
+        // 为了不超出调用方给的字符上限，这里不往后找下一个换行。
+        if (truncateAt <= 0) {
+          truncateAt = Math.max(0, r);
+        }
+        c =
+          c.slice(0, truncateAt) +
+          "\n[output truncated at " +
           r +
-          " character limit (" +
-          c.length +
-          " characters). ";
-        return {
-          error: (f += i
-            ? "The specified element has too much content. Try specifying a smaller depth parameter or focus on a more specific child element."
-            : t !== undefined
-              ? "Try specifying an even smaller depth parameter or use ref_id to focus on a specific element."
-              : "Try specifying a depth parameter (e.g., depth: 5) or use ref_id to focus on a specific element from the page."),
-          pageContent: "",
-          viewport: {
-            width: window.innerWidth,
-            height: window.innerHeight,
-          },
-        };
+          " of " +
+          f +
+          " characters. Pass a larger max_chars (default 50000) to see more, or " +
+          (i
+            ? "use a smaller depth or focus on a more specific child element"
+            : "use ref_id or a smaller depth to focus") +
+          ".]";
       }
       return {
         pageContent: c,

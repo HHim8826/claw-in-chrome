@@ -322,6 +322,522 @@ async function x(t, r = e) {
     }
   }
 }
+// __cp-extension-interference:start
+// 语义锚点：其他扩展注入的 iframe 会让 chrome.debugger.attach 报
+// "Cannot access a chrome-extension:// URL of different extension"（upstream 1.0.94）。
+// 恢复链：检查 kill switch -> 找出 DOM iframe 多于 webNavigation 子 frame 的容器 frame -> 移除外来扩展 iframe -> 按退避重试 attach。
+const __cpForeignExtensionAttachError =
+  "Cannot access a chrome-extension:// URL of different extension";
+function __cpIsForeignExtensionAttachError(e) {
+  return (e instanceof Error ? e.message : String(e)).includes(
+    __cpForeignExtensionAttachError,
+  );
+}
+// 页面内执行：统计当前 frame（含 open/closed shadow root）里的全部 iframe src。
+function __cpCountDomIframesInPage() {
+  const e = chrome.dom;
+  const t = new Set([
+    "ARTICLE",
+    "ASIDE",
+    "BLOCKQUOTE",
+    "BODY",
+    "DIV",
+    "FOOTER",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HEADER",
+    "MAIN",
+    "NAV",
+    "P",
+    "SECTION",
+    "SPAN",
+  ]);
+  const r = [];
+  const o = [document];
+  while (o.length) {
+    const a = o.pop();
+    for (const n of a.querySelectorAll("*")) {
+      if (n instanceof HTMLIFrameElement) {
+        r.push(n.src);
+      }
+      if (!(n instanceof HTMLElement)) {
+        continue;
+      }
+      const a = n.tagName;
+      if (!t.has(a) && !a.includes("-")) {
+        continue;
+      }
+      const s = e ? e.openOrClosedShadowRoot(n) : n.shadowRoot;
+      if (s) {
+        o.push(s);
+      }
+    }
+  }
+  return r;
+}
+// 页面内执行：先移除外来扩展 iframe，再在超出已知子 frame 的数量内移除未知来源的可见 iframe。
+// 本扩展与已知子 frame 来源的 iframe、以及视口外的懒加载 iframe 一律保留。
+function __cpRemoveInterferingIframesInPage(e, t, r) {
+  const o = chrome.dom;
+  const a = new Set([
+    "ARTICLE",
+    "ASIDE",
+    "BLOCKQUOTE",
+    "BODY",
+    "DIV",
+    "FOOTER",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HEADER",
+    "MAIN",
+    "NAV",
+    "P",
+    "SECTION",
+    "SPAN",
+  ]);
+  const n = [];
+  const s = [document];
+  while (s.length) {
+    const e = s.pop();
+    for (const t of e.querySelectorAll("*")) {
+      if (t instanceof HTMLIFrameElement) {
+        n.push(t);
+      }
+      if (!(t instanceof HTMLElement)) {
+        continue;
+      }
+      const e = t.tagName;
+      if (!a.has(e) && !e.includes("-")) {
+        continue;
+      }
+      const r = o ? o.openOrClosedShadowRoot(t) : t.shadowRoot;
+      if (r) {
+        s.push(r);
+      }
+    }
+  }
+  const i = new Set(e);
+  const c = [];
+  const l = [];
+  let d = 0;
+  for (const e of n) {
+    if (!/^(https?|chrome-extension):/.test(e.src)) {
+      continue;
+    }
+    // chrome-extension 的 origin 显式按 scheme://id 计算，不依赖 URL.origin 对非特殊 scheme 的实现差异。
+    let r = /^chrome-extension:\/\/[^/?#]+/i.exec(e.src)?.[0];
+    if (!r) {
+      try {
+        r = new URL(e.src).origin;
+      } catch {
+        continue;
+      }
+    }
+    if (r === t) {
+      d++;
+    } else if (!i.has(r)) {
+      if (e.src.startsWith("chrome-extension:")) {
+        c.push(e);
+      } else if (
+        e.loading === "lazy" &&
+        e.getBoundingClientRect().top > innerHeight
+      ) {
+        d++;
+      } else {
+        l.push(e);
+      }
+    }
+  }
+  const u = [];
+  for (const e of c) {
+    u.push(e.src);
+    e.remove();
+  }
+  const h = n.length - e.length - d;
+  let p = Math.max(0, Math.min(h, r) - u.length);
+  for (const e of l) {
+    if (p-- <= 0) {
+      break;
+    }
+    u.push(e.src);
+    e.remove();
+  }
+  return u;
+}
+async function __cpStripExtensionInterference(e) {
+  const t = {
+    containerFrameIds: [],
+    removedSrcHosts: [],
+    totalRemoved: 0,
+  };
+  let r;
+  try {
+    r = await x({
+      target: {
+        tabId: e,
+        allFrames: true,
+      },
+      injectImmediately: true,
+      func: __cpCountDomIframesInPage,
+    });
+  } catch {
+    return t;
+  }
+  const o = await chrome.webNavigation.getAllFrames({
+    tabId: e,
+  });
+  if (!o) {
+    return t;
+  }
+  const a = new Map();
+  for (const e of o) {
+    const t = a.get(e.parentFrameId);
+    if (t) {
+      t.push(e);
+    } else {
+      a.set(e.parentFrameId, [e]);
+    }
+  }
+  const n = (e) => {
+    const t = /^chrome-extension:\/\/[^/?#]+/i.exec(e)?.[0];
+    if (t) {
+      return t;
+    }
+    try {
+      return new URL(e).origin;
+    } catch {
+      return e;
+    }
+  };
+  const s = (e) => {
+    const t = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?([^/:?#]+)/i.exec(e);
+    if (!t) {
+      return "(unknown)";
+    }
+    return t[1] === "http" || t[1] === "https" ? t[2] : `${t[1]}://${t[2]}`;
+  };
+  const i = [];
+  const c = {};
+  const l = {};
+  for (const e of r ?? []) {
+    const t = e.result ?? [];
+    const r = a.get(e.frameId) ?? [];
+    if (t.length > r.length) {
+      i.push(e.frameId);
+      c[e.frameId] = r.map((e) => n(e.url));
+      l[e.frameId] = t.length - r.length;
+    }
+  }
+  if (i.length === 0) {
+    return t;
+  }
+  const d = `chrome-extension://${chrome.runtime.id}`;
+  let u = 0;
+  const h = [];
+  for (const t of i) {
+    try {
+      const [r] = await x({
+        target: {
+          tabId: e,
+          frameIds: [t],
+        },
+        injectImmediately: true,
+        args: [c[t], d, l[t]],
+        func: __cpRemoveInterferingIframesInPage,
+      });
+      for (const e of r?.result ?? []) {
+        u++;
+        h.push(s(e));
+      }
+    } catch {}
+  }
+  return {
+    containerFrameIds: i,
+    removedSrcHosts: h,
+    totalRemoved: u,
+  };
+}
+async function __cpRecoverDebuggerAttachFromInterference(e, t, r, o = {}) {
+  let a = true;
+  try {
+    const { cicStripExtensionInterference: e } = await chrome.storage.local.get(
+      "cicStripExtensionInterference",
+    );
+    a = e !== false;
+  } catch {}
+  if (!a) {
+    console.info(
+      `[stripExtensionInterference] tab ${e}: disabled via kill switch (chrome.storage.local.cicStripExtensionInterference === false)`,
+    );
+    throw r;
+  }
+  const n = o.settleMs ?? 75;
+  let s = o.maxRetries ?? 4;
+  let i;
+  try {
+    i = await __cpStripExtensionInterference(e);
+  } catch (c) {
+    console.info(`[stripExtensionInterference] tab ${e}: strip failed:`, c);
+    throw r;
+  }
+  if (i.totalRemoved === 0) {
+    s = 1;
+    console.info(
+      `[stripExtensionInterference] tab ${e}: nothing removable found — trying one re-attach in case the offending frame self-removed`,
+    );
+  } else {
+    console.info(
+      `[stripExtensionInterference] tab ${e}: removed ${i.totalRemoved} foreign-extension iframe(s) [${i.removedSrcHosts.join(", ")}] from ${i.containerFrameIds.length} parent frame(s), retrying attach…`,
+    );
+  }
+  for (let o = 0; o < s; o++) {
+    await new Promise((e) => setTimeout(e, n * (o + 1)));
+    try {
+      await t();
+      console.info(
+        `[stripExtensionInterference] tab ${e}: attach succeeded on retry ${o + 1}`,
+      );
+      return i;
+    } catch (c) {
+      if (!__cpIsForeignExtensionAttachError(c)) {
+        throw c;
+      }
+    }
+  }
+  console.info(
+    `[stripExtensionInterference] tab ${e}: ${s} retries exhausted — the offending frame is unreachable or re-injected faster than the strip`,
+  );
+  throw r;
+}
+// __cp-extension-interference:end
+// __cp-minimized-window-guard:start
+// 语义锚点：最小化窗口点击防护（upstream 1.0.94）。
+// 窗口最小化时，agent 点击会新开窗口/标签的链接会把浏览器窗口拉到前台；这里在页面里拦截这类点击，
+// 改由扩展在同一窗口、同一 tab group 里以后台标签打开（最多 3 个），并把新 tab ID 回报给模型。
+// 页面内执行：布防 10 秒内的一次真实点击拦截；重复布防会清空上一轮记录。
+function __cpInstallBackgroundClickGuardInPage() {
+  const e = window;
+  const t = (e.__cicBgClickGuard ??= {
+    armed: false,
+    armedAt: 0,
+    hrefs: [],
+    installed: false,
+  });
+  t.armed = true;
+  t.armedAt = Date.now();
+  t.hrefs = [];
+  if (t.installed) {
+    return;
+  }
+  t.installed = true;
+  window.addEventListener("click", (e) => {
+    if (!t.armed || Date.now() - t.armedAt > 10000) {
+      return;
+    }
+    if (!e.isTrusted || e.defaultPrevented) {
+      return;
+    }
+    if (window.origin === "null") {
+      return;
+    }
+    const r = typeof e.composedPath == "function" ? e.composedPath() : [e.target];
+    let o = null;
+    for (const e of r) {
+      if (!(e instanceof Element)) {
+        continue;
+      }
+      if (e instanceof HTMLAnchorElement && e.hasAttribute("href")) {
+        o = e;
+        break;
+      }
+      const t = e.tagName;
+      if (
+        /^(BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|LABEL|EMBED)$/.test(t) ||
+        ((t === "VIDEO" || t === "AUDIO") && e.controls) ||
+        (t === "OBJECT" && e.hasAttribute("usemap")) ||
+        (e instanceof HTMLElement && e.isContentEditable)
+      ) {
+        return;
+      }
+    }
+    if (!o || o.isContentEditable) {
+      return;
+    }
+    if (o.hasAttribute("download") && o.origin === location.origin) {
+      return;
+    }
+    const a = o.hasAttribute("target")
+      ? (o.getAttribute("target") ?? "").trim()
+      : (document.querySelector("base[target]")?.getAttribute("target") ?? "").trim();
+    if (!a) {
+      return;
+    }
+    const n = a.toLowerCase();
+    if (n === "_self" || n === "_parent" || n === "_top") {
+      return;
+    }
+    if (n !== "_blank") {
+      if (a === window.name) {
+        return;
+      }
+      if (typeof CSS == "undefined" || !CSS.escape) {
+        return;
+      }
+      const e = CSS.escape(a);
+      if (document.querySelector(`iframe[name="${e}"], frame[name="${e}"]`)) {
+        return;
+      }
+    }
+    const s = o.href;
+    if (/^https?:/i.test(s)) {
+      e.preventDefault();
+      t.hrefs.push(s);
+    }
+  });
+}
+// 页面内执行：解除布防并取出被拦截的链接。
+function __cpDrainBackgroundClickGuardInPage() {
+  const e = window.__cicBgClickGuard;
+  if (!e) {
+    return [];
+  }
+  e.armed = false;
+  const t = e.hrefs;
+  e.hrefs = [];
+  return t;
+}
+const __cpMinimizedWindowClickGuard = {
+  async beginClickInterception(e) {
+    try {
+      const { cicMinimizedWindowGuard: t } = await chrome.storage.local.get(
+        "cicMinimizedWindowGuard",
+      );
+      if (t === false) {
+        return null;
+      }
+      const r = await chrome.tabs.get(e);
+      if (
+        r.windowId === undefined ||
+        (await chrome.windows.get(r.windowId)).state !== "minimized"
+      ) {
+        return null;
+      }
+      await x(
+        {
+          target: {
+            tabId: e,
+          },
+          injectImmediately: true,
+          func: __cpInstallBackgroundClickGuardInPage,
+        },
+        5000,
+      );
+      return {
+        tabId: e,
+        windowId: r.windowId,
+        tabIndex: r.index,
+        groupId: r.groupId ?? chrome.tabGroups.TAB_GROUP_ID_NONE,
+      };
+    } catch {
+      return null;
+    }
+  },
+  async abortClickInterception(e) {
+    if (e) {
+      await this.drain(e);
+    }
+  },
+  async finishClickInterception(e) {
+    if (!e) {
+      return [];
+    }
+    const t = await this.drain(e);
+    if (t === null) {
+      return [];
+    }
+    const r = [...new Set(t)].filter((e) => /^https?:/i.test(e)).slice(0, 3);
+    if (r.length === 0) {
+      return [];
+    }
+    let o = true;
+    let a = false;
+    try {
+      o = (await chrome.windows.get(e.windowId)).state === "minimized";
+    } catch {
+      a = true;
+    }
+    const n = [];
+    for (const [s, i] of r.entries()) {
+      const t = !o && s === 0;
+      let r;
+      try {
+        r = await chrome.tabs.create(
+          a
+            ? {
+                url: i,
+                active: t,
+              }
+            : {
+                url: i,
+                active: t,
+                windowId: e.windowId,
+                openerTabId: e.tabId,
+                index: e.tabIndex + 1 + s,
+              },
+        );
+      } catch {
+        try {
+          r = await chrome.tabs.create({
+            url: i,
+            active: t,
+          });
+        } catch {}
+      }
+      if (r?.id === undefined || r.windowId !== e.windowId) {
+        continue;
+      }
+      if (e.groupId !== chrome.tabGroups.TAB_GROUP_ID_NONE) {
+        try {
+          await chrome.tabs.group({
+            tabIds: r.id,
+            groupId: e.groupId,
+          });
+          n.push(r.id);
+        } catch {}
+      } else {
+        n.push(r.id);
+      }
+    }
+    return n;
+  },
+  async drain(e) {
+    try {
+      return (
+        await x(
+          {
+            target: {
+              tabId: e.tabId,
+            },
+            injectImmediately: true,
+            func: __cpDrainBackgroundClickGuardInPage,
+          },
+          5000,
+        )
+      ).flatMap((e) => (Array.isArray(e.result) ? e.result : []));
+    } catch {
+      return null;
+    }
+  },
+};
+// __cp-minimized-window-guard:end
 function S(e, t) {
   return Math.floor((e - 1) / t) + 1;
 }
@@ -360,17 +876,49 @@ const M = new (class {
   setContext(e, t) {
     if (t.viewportWidth && t.viewportHeight) {
       // 语义锚点：setContext 只登记缩放所需的 4 个尺寸字段。
+      // 带 scale 的截图会给出 frameWidth/frameHeight，坐标帧始终按全分辨率登记。
       const r = {
         viewportWidth: t.viewportWidth,
         viewportHeight: t.viewportHeight,
-        screenshotWidth: t.width,
-        screenshotHeight: t.height,
+        screenshotWidth: t.frameWidth || t.width,
+        screenshotHeight: t.frameHeight || t.height,
       };
       this.contexts.set(e, r);
     }
   }
   getContext(e) {
     return this.contexts.get(e);
+  }
+  // 语义锚点：browser_batch 内的截图坐标上下文先暂存到 scope（upstream 1.0.94），
+  // 批次成功后统一提交，失败时丢弃；同一批次里的坐标始终以批次开始前的截图为准。
+  pending = new Map();
+  nextPendingScope = 1;
+  beginPendingScope() {
+    return this.nextPendingScope++;
+  }
+  stashPendingContext(e, t, r) {
+    if (r === undefined) {
+      this.setContext(e, t);
+      return;
+    }
+    let o = this.pending.get(r);
+    if (!o) {
+      o = new Map();
+      this.pending.set(r, o);
+    }
+    o.set(e, t);
+  }
+  commitPendingContexts(e) {
+    const t = this.pending.get(e);
+    this.pending.delete(e);
+    if (t) {
+      for (const [e, r] of t) {
+        this.setContext(e, r);
+      }
+    }
+  }
+  clearPendingContexts(e) {
+    this.pending.delete(e);
   }
   // 语义锚点：clearContext / clearAllContexts 是预留的 screenshot context 清理接口。
   // 当前文件内未见显式 clear 调用；账本实际主要靠后续 screenshot 的 setContext 覆盖刷新。
@@ -456,8 +1004,13 @@ function U(e, t) {
 class $ {
   static blockedUrlPatterns = null;
   static listenerRegistered = false;
-  static async isUrlBlockedByManagedPolicy(e) {
+  // 语义锚点：站点封锁 = 管理员 blockedUrlPatterns（只读）+ 使用者设定页的封锁清单。
+  static async isUrlBlockedBySitePolicy(e) {
     return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).isUrlBlocked(e);
+  }
+  // 返回 "managed" | "user" | null，决定封锁文案。
+  static async getUrlBlockSource(e) {
+    return globalThis.__CP_MANAGED_POLICY__.getRuntime(chrome).getBlockSource(e);
   }
   static registerChangeListener() {}
   static async loadBlockedUrlPatterns() {
@@ -475,7 +1028,7 @@ class O {
   static CACHE_TTL_MS = 300000;
   static pendingRequests = new Map();
   static async getCategory(e) {
-    if (await $.isUrlBlockedByManagedPolicy(e)) {
+    if (await $.isUrlBlockedBySitePolicy(e)) {
       return "category_org_blocked";
     }
     const t = R(D(e));
@@ -3472,35 +4025,46 @@ class H {
     try {
       await this.detachDebugger(e);
     } catch {}
-    const i = o();
-    let c;
-    try {
-      await Promise.race([
-        new Promise((e, r) => {
-          chrome.debugger.attach(t, "1.3", () => {
-            if (chrome.runtime.lastError) {
-              r(new Error(chrome.runtime.lastError.message));
-            } else {
-              e();
-            }
-          });
-        }),
-        new Promise((t, r) => {
-          c = setTimeout(
-            () =>
-              r(
-                new Error(
-                  `debugger_attach_error: chrome.debugger.attach timed out after ${i}ms on tab ${e}. DevTools may be open on this tab, or the renderer may have crashed.`,
+    // 语义锚点：raw attach 抽成可重放闭包，供外来扩展 iframe 干扰恢复链重试（upstream 1.0.94）。
+    const i = async () => {
+      const r = o();
+      let c;
+      try {
+        await Promise.race([
+          new Promise((e, r) => {
+            chrome.debugger.attach(t, "1.3", () => {
+              if (chrome.runtime.lastError) {
+                r(new Error(chrome.runtime.lastError.message));
+              } else {
+                e();
+              }
+            });
+          }),
+          new Promise((t, o) => {
+            c = setTimeout(
+              () =>
+                o(
+                  new Error(
+                    `debugger_attach_error: chrome.debugger.attach timed out after ${r}ms on tab ${e}. DevTools may be open on this tab, or the renderer may have crashed.`,
+                  ),
                 ),
-              ),
-            i,
-          );
-        }),
-      ]);
-    } finally {
-      if (c !== undefined) {
-        clearTimeout(c);
+              r,
+            );
+          }),
+        ]);
+      } finally {
+        if (c !== undefined) {
+          clearTimeout(c);
+        }
       }
+    };
+    try {
+      await i();
+    } catch (u) {
+      if (!__cpIsForeignExtensionAttachError(u)) {
+        throw u;
+      }
+      await __cpRecoverDebuggerAttachFromInterference(e, i, u);
     }
     this.registerDebuggerEventHandlers();
     if (s) {
@@ -3610,10 +4174,12 @@ class H {
     try {
       return await this.sendCommandOnce(e, t, r, o);
     } catch (a) {
+      const n = (a instanceof Error ? a.message : String(a)).toLowerCase();
+      // 语义锚点：debugger 被外来扩展 frame 挤掉或在命令中途被分离时，重新 attach 后重放一次命令（upstream 1.0.94）。
       if (
-        (a instanceof Error ? a.message : String(a))
-          .toLowerCase()
-          .includes("debugger is not attached")
+        n.includes("debugger is not attached") ||
+        n.includes("detached while handling command") ||
+        (__cpIsForeignExtensionAttachError(a) && !(await this.isDebuggerAttached(e)))
       ) {
         await this.attachDebugger(e);
         return this.sendCommandOnce(e, t, r, o);
@@ -3658,6 +4224,20 @@ class H {
     return t;
   }
   async dispatchMouseEvent(e, t) {
+    // 语义锚点：每个鼠标事件先把页面 phantom cursor 移到目标坐标（upstream 1.0.94）。
+    // 移动/滚轮事件在目标 tab 处于前台时最多等 250ms，让光标动画先于真实事件完成。
+    const o = chrome.tabs
+      .sendMessage(e, {
+        type: __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor,
+        x: Math.round(t.x),
+        y: Math.round(t.y),
+      })
+      .catch(() => {});
+    if ((t.type === "mouseMoved" || t.type === "mouseWheel") && !t.skipCursorWait) {
+      if ((await chrome.tabs.get(e).catch(() => {}))?.active) {
+        await Promise.race([o, new Promise((e) => setTimeout(e, 250))]);
+      }
+    }
     const r = {
       type: t.type,
       x: Math.round(t.x),
@@ -4105,11 +4685,18 @@ class H {
       const captureSourceHeight = Math.round(
         viewportHeight * captureDeviceScaleFactor,
       );
-      const [targetWidth, targetHeight] = C(
+      const [frameTargetWidth, frameTargetHeight] = C(
         captureSourceWidth,
         captureSourceHeight,
         o,
       );
+      const scaledCaptureTarget = __cpMcpScaleScreenshotTarget(
+        frameTargetWidth,
+        frameTargetHeight,
+        r?.scale,
+      );
+      const targetWidth = scaledCaptureTarget.width;
+      const targetHeight = scaledCaptureTarget.height;
       const captureScale =
         captureSourceWidth > 0
           ? Math.min(1, targetWidth / captureSourceWidth)
@@ -4157,10 +4744,16 @@ class H {
           format: s,
           viewportWidth,
           viewportHeight,
+          ...(scaledCaptureTarget.frameWidth
+            ? {
+                frameWidth: scaledCaptureTarget.frameWidth,
+                frameHeight: scaledCaptureTarget.frameHeight,
+              }
+            : {}),
         };
         // 语义锚点：screenshot 会把 viewport/screenshot 尺寸写进上下文，供后续坐标动作做缩放换算。
         // 原始截图直返与 content-script 压缩回退，最终都会写入同一份 M 尺寸账本。
-        M.setContext(e, t);
+        M.stashPendingContext(e, t, r?.pendingContextScope);
         return t;
       }
       return await this.processScreenshotInContentScript(
@@ -4172,6 +4765,13 @@ class H {
         1,
         o,
         i,
+        r?.pendingContextScope,
+        scaledCaptureTarget.frameWidth
+          ? {
+              frameWidth: scaledCaptureTarget.frameWidth,
+              frameHeight: scaledCaptureTarget.frameHeight,
+            }
+          : undefined,
       );
     } finally {
       if (!r?.skipIndicator) {
@@ -4179,7 +4779,7 @@ class H {
       }
     }
   }
-  async processScreenshotInContentScript(e, t, r, o, a, n, s, i) {
+  async processScreenshotInContentScript(e, t, r, o, a, n, s, i, d, f) {
     const c = await x({
       target: {
         tabId: e,
@@ -4294,8 +4894,13 @@ class H {
       throw new Error("Failed to process screenshot in content script");
     }
     const l = c[0].result;
+    // 语义锚点：回退链收到的已是按 scale 截取的图片；这里补回全分辨率坐标帧，坐标换算与 scale 说明保持一致。
+    if (f?.frameWidth && f?.frameHeight) {
+      l.frameWidth = f.frameWidth;
+      l.frameHeight = f.frameHeight;
+    }
     // 语义锚点：content-script 压缩回退链也会回填同一份 screenshot viewport context 账本。
-    M.setContext(e, l);
+    M.stashPendingContext(e, l, d);
     return l;
   }
 }
@@ -4567,6 +5172,65 @@ function ne(e, t, r) {
 // 语义锚点：ne(...) 是截图坐标 -> 当前 viewport 坐标的缩放器。
 // 纯 coordinate 路径会先吃这层缩放，再进入 A(...) 同域 guard。
 const __cpMcpScaleScreenshotCoordinatesToViewport = ne;
+// 语义锚点：页面缩放快捷键识别（upstream 1.0.94）。ctrl/cmd(+shift)+=/+ 为放大，-/minus 为缩小，0 为重置；
+// key 动作命中时直接返回错误，引导模型改用 zoom 动作，避免改变页面缩放导致后续截图坐标失真。
+function __cpMcpDetectPageZoomShortcut(e) {
+  const t = String(e).toLowerCase().replace(/\+\+$/, "+plus").split("+");
+  const r = t.pop();
+  if (!r) {
+    return null;
+  }
+  const o = ["+", "=", "plus", "add", "numpadadd"].includes(r);
+  let a = false;
+  for (const n of t) {
+    if (["ctrl", "control", "cmd", "meta", "command", "win", "windows"].includes(n)) {
+      a = true;
+    } else if (n !== "shift" || !o) {
+      return null;
+    }
+  }
+  if (!a) {
+    return null;
+  }
+  if (o) {
+    return "in";
+  }
+  if (["-", "minus", "subtract", "numpadsubtract"].includes(r)) {
+    return "out";
+  }
+  if (["0", "numpad0"].includes(r)) {
+    return "reset";
+  }
+  return null;
+}
+function __cpMcpPageZoomShortcutError(e) {
+  return {
+    error: `"${e}" was not pressed: page zoom keyboard shortcuts are not supported. To magnify part of the page for closer inspection, use the zoom action with a region instead.`,
+    errorCode: "page_zoom_shortcut_unsupported",
+  };
+}
+// 语义锚点：screenshot / zoom 的 scale 参数（upstream 1.0.94）。只接受 [0.1, 1] 的有限数，其余一律按 1 处理。
+function __cpMcpNormalizeScreenshotScale(e) {
+  return typeof e == "number" && Number.isFinite(e) && e >= 0.1 && e <= 1
+    ? e
+    : 1;
+}
+// 语义锚点：按 scale 缩小返回图片，同时保留全分辨率坐标帧 frameWidth/frameHeight 供坐标换算。
+function __cpMcpScaleScreenshotTarget(e, t, r) {
+  const o = __cpMcpNormalizeScreenshotScale(r);
+  if (o >= 1) {
+    return {
+      width: e,
+      height: t,
+    };
+  }
+  return {
+    width: Math.max(1, Math.round(e * o)),
+    height: Math.max(1, Math.round(t * o)),
+    frameWidth: e,
+    frameHeight: t,
+  };
+}
 function se(e) {
   const [t, r] = e.split(",");
   const o = t.match(/:(.*?);/)?.[1] || "image/png";
@@ -4685,7 +5349,7 @@ const pe = {
     text: {
       type: "string",
       description:
-        'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all).',
+        'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all). Page zoom shortcuts (e.g. "cmd+=", "ctrl+-", "cmd+0") are not supported and will return an error - use the `zoom` action to magnify a region of the page instead.',
     },
     duration: {
       type: "number",
@@ -4723,6 +5387,13 @@ const pe = {
       maxItems: 4,
       description:
         "(x0, y0, x1, y1): The rectangular region to capture for `zoom`. Coordinates are in pixels from the top-left corner of the viewport. Required for `zoom` action.",
+    },
+    scale: {
+      type: "number",
+      minimum: 0.1,
+      maximum: 1,
+      description:
+        "For `screenshot` and `zoom` only. Scale factor in [0.1, 1] for the returned image; 1 (default) uses the full image token budget, 0.5 returns an image at half the width and height (~quarter of the tokens). Coordinates are ALWAYS in the full-resolution coordinate frame (reported with every scaled screenshot), never in the scaled image's own pixels.",
     },
     repeat: {
       type: "number",
@@ -4854,6 +5525,7 @@ const pe = {
       const u = {
         skipIndicator: t.skipIndicator,
         span: t?.span,
+        pendingContextScope: t?.inBatch ? t.pendingContextScope : undefined,
       };
       switch (o.action) {
         case "left_click":
@@ -4862,8 +5534,11 @@ const pe = {
           break;
         case "type":
           d = await (async function (e, t, o) {
-            if (!t.text) {
-              throw new Error("Text parameter is required for type action");
+            // 语义锚点：type 只接受非空字符串（upstream 1.0.94），避免把数字/对象直接送进 insertText。
+            if (typeof t.text != "string" || !t.text) {
+              throw new Error(
+                "Text parameter must be a non-empty string for type action",
+              );
             }
             try {
               // 语义锚点：type / key / javascript_tool 属于“页面级动作”家族。
@@ -4884,7 +5559,7 @@ const pe = {
           })(n, o, l);
           break;
         case "screenshot":
-          d = await ge(n, u);
+          d = await ge(n, { ...u, scale: o.scale });
           break;
         case "wait":
           d = await (async function (e) {
@@ -5051,6 +5726,12 @@ const pe = {
               console.info({
                 keyInputs: n,
               });
+              // 语义锚点：key 动作在派发任何按键前拒绝页面缩放快捷键（upstream 1.0.94）。
+              for (const e of n) {
+                if (__cpMcpDetectPageZoomShortcut(e)) {
+                  return __cpMcpPageZoomShortcutError(e);
+                }
+              }
               if (n.length === 1) {
                 const t = n[0].toLowerCase();
                 if (
@@ -5194,6 +5875,8 @@ const pe = {
                 "Invalid region coordinates: x0 and y0 must be non-negative, and x1 > x0, y1 > y0",
               );
             }
+            // 语义锚点：zoom 的 scale 在进入 try 之前读取，try 内的 t 会被 screenshot context 遮蔽。
+            const zoomCaptureScale = __cpMcpNormalizeScreenshotScale(t.scale);
             try {
               // 语义锚点：zoom 只消费最近一次 screenshot context，不会回写或清理这本尺寸账本。
               const t = M.getContext(e);
@@ -5248,14 +5931,16 @@ const pe = {
                   y: viewportScrollY + n,
                   width: u,
                   height: h,
-                  scale: 1,
+                  scale: zoomCaptureScale,
                 },
               });
               if (!p || !p.data) {
                 throw new Error("Failed to capture zoomed screenshot via CDP");
               }
+              const zoomScaleNote =
+                zoomCaptureScale < 1 ? ` at ${zoomCaptureScale} scale` : "";
               return {
-                output: `Successfully captured zoomed screenshot of region (${o},${n}) to (${s},${i}) - ${u}x${h} pixels`,
+                output: `Successfully captured zoomed screenshot of region (${o},${n}) to (${s},${i}) - ${u}x${h} pixels${zoomScaleNote}`,
                 base64Image: p.data,
                 imageFormat: "png",
               };
@@ -5415,7 +6100,7 @@ const pe = {
         text: {
           type: "string",
           description:
-            'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all).',
+            'The text to type (for `type` action) or the key(s) to press (for `key` action). For `key` action: Provide space-separated keys (e.g., "Backspace Backspace Delete"). Supports keyboard shortcuts using the platform\'s modifier key (use "cmd" on Mac, "ctrl" on Windows/Linux, e.g., "cmd+a" or "ctrl+a" for select all). Page zoom shortcuts (e.g. "cmd+=", "ctrl+-", "cmd+0") are not supported and will return an error - use the `zoom` action to magnify a region of the page instead.',
         },
         duration: {
           type: "number",
@@ -5454,6 +6139,13 @@ const pe = {
           maxItems: 4,
           description:
             "(x0, y0, x1, y1): The rectangular region to capture for `zoom`. Coordinates define a rectangle from top-left (x0, y0) to bottom-right (x1, y1) in pixels from the viewport origin. Required for `zoom` action. Useful for inspecting small UI elements like icons, buttons, or text.",
+        },
+        scale: {
+          type: "number",
+          minimum: 0.1,
+          maximum: 1,
+          description:
+            "For `screenshot` and `zoom` only. Scale factor in [0.1, 1] for the returned image; 1 (default) uses the full image token budget, 0.5 returns an image at half the width and height (~quarter of the tokens). Coordinates are ALWAYS in the full-resolution coordinate frame (reported with every scaled screenshot), never in the scaled image's own pixels.",
         },
         repeat: {
           type: "number",
@@ -5625,20 +6317,36 @@ async function fe(e, t, r = 1, o, a) {
   try {
     // 语义锚点：click / double_click / triple_click 属于“定位/指针动作”家族。
     // 这条链会先把 ref/coordinate 解析成实际坐标，再过 A(...) 同域重校验，最后才发真实鼠标事件。
+    // 语义锚点：普通左键点击在最小化窗口里先布防新窗口链接拦截（upstream 1.0.94）。
+    const u =
+      i === "left" && c === 0
+        ? await __cpMinimizedWindowClickGuard.beginClickInterception(e)
+        : null;
     const l = await A(e, o, "click action");
     if (l) {
+      await __cpMinimizedWindowClickGuard.abortClickInterception(u);
       return l;
     }
-    await K.click(e, n, s, i, r, c, a);
+    try {
+      await K.click(e, n, s, i, r, c, a);
+    } catch (p) {
+      await __cpMinimizedWindowClickGuard.abortClickInterception(u);
+      throw p;
+    }
+    const h = await __cpMinimizedWindowClickGuard.finishClickInterception(u);
     const d =
       r === 1 ? "Clicked" : r === 2 ? "Double-clicked" : "Triple-clicked";
+    const p =
+      h.length > 0
+        ? ` [note: the link opened in a new tab (tab ID ${h.join(", ")}); pass that tab ID to interact with it]`
+        : "";
     if (t.ref) {
       return {
-        output: `${d} on element ${t.ref}`,
+        output: `${d} on element ${t.ref}${p}`,
       };
     } else {
       return {
-        output: `${d} at (${Math.round(t.coordinate[0])}, ${Math.round(t.coordinate[1])})`,
+        output: `${d} at (${Math.round(t.coordinate[0])}, ${Math.round(t.coordinate[1])})${p}`,
       };
     }
   } catch (l) {
@@ -5661,8 +6369,13 @@ async function ge(e, t) {
       width: r.width,
       height: r.height,
     });
+    // 语义锚点：缩小后的截图在输出里声明全分辨率坐标帧，模型点击坐标仍按该帧给出。
+    const n =
+      r.frameWidth && r.frameHeight
+        ? ` — ${__cpMcpNormalizeScreenshotScale(t?.scale)}-scale view; coordinate frame: ${r.frameWidth}x${r.frameHeight}.`
+        : "";
     return {
-      output: `Successfully captured screenshot (${r.width}x${r.height}, ${r.format}) - ID: ${o}`,
+      output: `Successfully captured screenshot (${r.width}x${r.height}, ${r.format}) - ID: ${o}${n}`,
       base64Image: r.base64,
       imageFormat: r.format,
       imageId: o,
@@ -5701,7 +6414,7 @@ const we = {
     text: {
       type: "string",
       description:
-        "The JavaScript code to execute. The code will be evaluated in the page context. The result of the last expression will be returned automatically. Do NOT use 'return' statements - just write the expression you want to evaluate (e.g., 'window.myData.value' not 'return window.myData.value'). You can access and modify the DOM, call page functions, and interact with page variables.",
+        "The JavaScript code to execute. Evaluated in the page context with REPL semantics: top-level `await` works, and the result of the last expression is returned automatically — write the expression you want (e.g. `window.myData.value`, or `await fetch(url).then(r=>r.json())`) rather than `return ...`. You can access and modify the DOM, call page functions, and interact with page variables.",
     },
     tabId: {
       type: "number",
@@ -5725,6 +6438,20 @@ const we = {
       const s = (await chrome.tabs.get(n)).url;
       if (!s) {
         throw new Error("No URL available for active tab");
+      }
+      // 语义锚点：javascript_tool 拒绝扩展内部页面（upstream 1.0.94），在权限提示之前直接返回可操作的错误。
+      const __cpJavascriptToolInternalScheme = (() => {
+        try {
+          const e = new URL(s).protocol;
+          return e === "chrome:" || e === "chrome-extension:" ? e : undefined;
+        } catch {
+          return undefined;
+        }
+      })();
+      if (__cpJavascriptToolInternalScheme) {
+        return {
+          error: `JavaScript execution is not allowed on ${__cpJavascriptToolInternalScheme}// pages. Navigate to a regular web page (http:// or https://) first, then retry.`,
+        };
       }
       const i = t?.toolUseId;
       const u = await t.permissionManager.checkPermission(s, i);
@@ -5750,18 +6477,30 @@ const we = {
       if (h) {
         return h;
       }
-      const p = `\n        (function() {\n          'use strict';\n          try {\n            return eval(${JSON.stringify(o)});\n          } catch (e) {\n            throw e;\n          }\n        })()\n      `;
-      const m = await K.sendCommand(
-        n,
-        "Runtime.evaluate",
-        {
-          expression: p,
-          returnByValue: true,
-          awaitPromise: true,
-          timeout: l,
-        },
-        l + d,
-      );
+      // 语义锚点：javascript_tool 以 REPL 语义求值（upstream 1.0.94）：顶层 await 可用、最后一个表达式自动返回；
+      // 代码包在块语句里，避免 let/const 声明泄漏到后续调用。解析期的 Illegal return statement 会回退到 async 包装再执行一次。
+      const p = (e, t) =>
+        K.sendCommand(
+          n,
+          "Runtime.evaluate",
+          {
+            expression: e,
+            returnByValue: true,
+            awaitPromise: true,
+            replMode: t,
+            timeout: l,
+          },
+          l + d,
+        );
+      let m = await p(`{${o}\n}`, true);
+      const __cpJavascriptToolParseError =
+        m.exceptionDetails?.exception?.className === "SyntaxError" &&
+        !m.exceptionDetails?.stackTrace
+          ? m.exceptionDetails.exception.description ?? ""
+          : "";
+      if (/Illegal return statement/.test(__cpJavascriptToolParseError)) {
+        m = await p(`(async()=>{\n${o}\n})()`, false);
+      }
       let f = "";
       let g = false;
       let b = "";
@@ -5899,7 +6638,7 @@ const we = {
         text: {
           type: "string",
           description:
-            "The JavaScript code to execute. The code will be evaluated in the page context. The result of the last expression will be returned automatically. Do NOT use 'return' statements - just write the expression you want to evaluate (e.g., 'window.myData.value' not 'return window.myData.value'). You can access and modify the DOM, call page functions, and interact with page variables.",
+            "The JavaScript code to execute. Evaluated in the page context with REPL semantics: top-level `await` works, and the result of the last expression is returned automatically — write the expression you want (e.g. `window.myData.value`, or `await fetch(url).then(r=>r.json())`) rather than `return ...`. You can access and modify the DOM, call page functions, and interact with page variables.",
         },
         tabId: {
           type: "number",
@@ -7795,10 +8534,11 @@ const De = {
               e === "category_org_blocked")
           ) {
             return {
-              error:
-                e === "category_org_blocked"
-                  ? "This site is blocked by your organization's policy."
-                  : "This site is not allowed due to safety restrictions.",
+              error: await __cpBlockedSiteErrorMessage(
+                e,
+                o,
+                "This site is not allowed due to safety restrictions.",
+              ),
             };
           }
         } catch {}
@@ -8243,7 +8983,7 @@ const Ae = {
 const Pe = {
   name: "read_page",
   description:
-    "Get an accessibility tree representation of elements on the page. By default returns all elements including non-visible ones. Can optionally filter for only interactive elements, limit tree depth, or focus on a specific element. Returns a structured tree that represents how screen readers see the page content. If you don't have a valid tab ID, use tabs_context first to get available tabs. Output is limited to 50000 characters - if exceeded, specify a depth limit or ref_id to focus on a specific element.",
+    "Get an accessibility tree representation of elements on the page. By default returns all elements including non-visible ones. Can optionally filter for only interactive elements, limit tree depth, or focus on a specific element. Returns a structured tree that represents how screen readers see the page content. If you don't have a valid tab ID, use tabs_context first to get available tabs. Output is limited to 50000 characters - if exceeded, the tree is truncated at a line boundary with a note giving the full size; pass a larger max_chars, or use depth/ref_id to focus.",
   parameters: {
     filter: {
       type: "string",
@@ -14509,6 +15249,9 @@ const __cpAgentIndicatorContract =
   globalThis.__CP_CONTRACT__?.agentIndicator || {};
 const __cpAgentIndicatorRuntimeMessageTypes =
   __cpAgentIndicatorContract.RUNTIME_MESSAGE_TYPES || {};
+const __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor =
+  __cpAgentIndicatorRuntimeMessageTypes.UPDATE_PHANTOM_CURSOR ||
+  "UPDATE_PHANTOM_CURSOR";
 const __cpMcpBridgeRuntimeMessageTypePairingConfirmed =
   __cpMcpBridgeContractMessages.pairing_confirmed || "pairing_confirmed";
 const __cpMcpBridgeRuntimeMessageTypePairingDismissed =
@@ -15333,6 +16076,171 @@ const __cpMcpTablessToolNames = [
   "turn_answer_start",
   "shortcuts_list",
 ];
+// 语义锚点：browser_batch 工具（upstream 1.0.94）。执行逻辑在 shared/browser-batch.js，
+// 这里只注入 tab 编排、封锁检测、输入归一、GIF 录制与截图坐标 scope 等运行时依赖。
+function __cpGetBrowserBatchApi() {
+  return globalThis.__CP_BROWSER_BATCH__;
+}
+const __cpBrowserBatchEnabledStorageKey =
+  globalThis.__CP_CONTRACT__?.browserTools?.BROWSER_BATCH_ENABLED_STORAGE_KEY ||
+  "browserBatchEnabled";
+const __cpBrowserBatchTool = {
+  name: "browser_batch",
+  description: __cpGetBrowserBatchApi()?.DESCRIPTION || "Execute a sequence of browser tool calls in one round trip.",
+  parameters: __cpGetBrowserBatchApi()?.toolParameters() || {},
+  execute: async (e, t) => {
+    const r = __cpGetBrowserBatchApi();
+    if (!r) {
+      return {
+        error: "browser_batch runtime is unavailable",
+        errorCode: "batch_unavailable",
+      };
+    }
+    return r.execute(e, t, {
+      defaultTools: za,
+      isEnabled: async () => {
+        try {
+          const e = await chrome.storage.local.get(__cpBrowserBatchEnabledStorageKey);
+          return r.isEnabled(e?.[__cpBrowserBatchEnabledStorageKey]);
+        } catch {
+          return true;
+        }
+      },
+      coerceInput: (e, t, r) => te(e, t, r),
+      resolveTabId: (e, t) => F.getEffectiveTabId(e, t),
+      isTabInSameGroup: (e, t) => F.isTabInSameGroup(e, t),
+      detectBlockedNavigation: (e) => __cpDetectMidCallBlockedNavigation(e),
+      getTab: (e) => chrome.tabs.get(e),
+      getTabContext: async (e) => {
+        const t = await F.getValidTabsWithMetadata(e);
+        return {
+          currentTabId: e,
+          availableTabs: t,
+          tabCount: t.length,
+        };
+      },
+      recordStep: (e, t, r) => __cpRecordGifFrameForToolCall(e, t, r),
+      beginPendingScope: () => M.beginPendingScope(),
+      commitPendingContexts: (e) => M.commitPendingContexts(e),
+      clearPendingContexts: (e) => M.clearPendingContexts(e),
+      forgetImage: (e) => __cpMcpLocalImageRegistry.delete(e),
+      now: () => Date.now(),
+      sleep: (e) => new Promise((t) => setTimeout(t, e)),
+    });
+  },
+  toAnthropicSchema: async () => __cpGetBrowserBatchApi()?.toolSchema(),
+};
+za.push(__cpBrowserBatchTool);
+// __cp-blocked-navigation-guard:start
+// 语义锚点：被封锁站点的错误文案（upstream 1.0.94）。
+// category_org_blocked 若命中浏览器管理员下发的 blockedUrlPatterns，使用专属的管理员策略文案；
+// 命中使用者在设定页加入的封锁清单时，说明是使用者自己封锁的。
+async function __cpBlockedSiteErrorMessage(e, t, r) {
+  if (e === "category_org_blocked") {
+    try {
+      const o = await $.getUrlBlockSource(t);
+      if (o === "managed") {
+        return "This site is blocked by a policy set by your browser's administrator.";
+      }
+      if (o === "user") {
+        return "This site is on your blocked sites list in Claw in Chrome settings.";
+      }
+    } catch {}
+    return "This site is blocked by your organization's policy.";
+  }
+  return r;
+}
+// 语义锚点：工具执行中途导航到被封锁站点的检测（upstream 1.0.94）。
+// 成功返回后再检查目标 tab 的 url 与 pendingUrl；命中则丢弃本次结果（含截图），返回 navigation_blocked_mid_call。
+// MCP tool-use IDs whose blocked navigation was already reported in their own result;
+// the MCP executor consumes the entry so webNavigation doesn't repeat it on the next call.
+const __cpBlockedNavigationReportedToolUses = new Set();
+const __cpBlockedNavigationErrorCodes = new Set([
+  "navigation_blocked_mid_call",
+  "batch_domain_blocked",
+  "batch_navigation_blocked",
+]);
+function __cpMarkBlockedNavigationReported(e) {
+  if (e?.trackBlockedNavigation && e.toolUseId) {
+    __cpBlockedNavigationReportedToolUses.add(e.toolUseId);
+  }
+}
+async function __cpDetectMidCallBlockedNavigation(e) {
+  let t;
+  try {
+    t = await chrome.tabs.get(e);
+  } catch {
+    return null;
+  }
+  for (const r of [t?.url, t?.pendingUrl]) {
+    if (!r) {
+      continue;
+    }
+    const e = await O.getCategory(r);
+    if (Ja(e)) {
+      return await __cpBlockedSiteErrorMessage(e, r, "This site is blocked.");
+    }
+  }
+  return null;
+}
+function __cpInstallBlockedNavigationGuard(e) {
+  const t = new Set([
+    ...Xa,
+    ...__cpMcpTablessToolNames,
+    "tabs_context",
+    "tabs_create",
+    "shortcuts_execute",
+  ]);
+  for (const r of e) {
+    if (
+      !r ||
+      typeof r.execute != "function" ||
+      r.__cpBlockedNavigationGuarded ||
+      t.has(r.name)
+    ) {
+      continue;
+    }
+    const o = r.execute;
+    r.execute = async (e, t) => {
+      const a = await o(e, t);
+      // browser_batch checks every item itself (inner tools run with inBatch), so the
+      // guard only records a block the batch already reported.
+      if (t?.inBatch) {
+        return a;
+      }
+      if (r.name === "browser_batch") {
+        if (a && __cpBlockedNavigationErrorCodes.has(a.errorCode)) {
+          __cpMarkBlockedNavigationReported(t);
+        }
+        return a;
+      }
+      if (!a || typeof a != "object" || "type" in a || a.error) {
+        return a;
+      }
+      const n = a.tabContext?.executedOnTabId ?? t?.tabId;
+      if (typeof n != "number") {
+        return a;
+      }
+      const s = await __cpDetectMidCallBlockedNavigation(n);
+      if (!s) {
+        return a;
+      }
+      for (const e of [a.imageId, ...(a.mintedImageIds ?? [])]) {
+        if (e) {
+          __cpMcpLocalImageRegistry.delete(e);
+        }
+      }
+      __cpMarkBlockedNavigationReported(t);
+      return {
+        error: `${s} (this call's result was discarded)`,
+        errorCode: "navigation_blocked_mid_call",
+      };
+    };
+    r.__cpBlockedNavigationGuarded = true;
+  }
+}
+// __cp-blocked-navigation-guard:end
+__cpInstallBlockedNavigationGuard(za);
 function __cpMcpResolvePermissionNetlocFromUrl(e) {
   try {
     const t = new URL(e);
@@ -15344,6 +16252,106 @@ function __cpMcpResolvePermissionNetlocFromUrl(e) {
     }
   } catch {}
   return "";
+}
+// 语义锚点：computer / navigate 成功后为正在录制的 tab group 追加 GIF 帧；普通工具调用与 browser_batch 每一步共用。
+async function __cpRecordGifFrameForToolCall(e, t, r) {
+  try {
+    if (!["computer", "navigate"].includes(e)) {
+      return;
+    }
+    const a = await chrome.tabs.get(r);
+    if (!a) {
+      return;
+    }
+    const n = a.groupId ?? -1;
+    if (!xe.isRecording(n)) {
+      return;
+    }
+    let s;
+    let i;
+    if (e === "computer" && t.action) {
+      const e = t.action;
+      if (e === "screenshot") {
+        return;
+      }
+      s = {
+        type: e,
+        coordinate: t.coordinate,
+        start_coordinate: t.start_coordinate,
+        text: t.text,
+        timestamp: Date.now(),
+      };
+      if (e.includes("click")) {
+        s.description = "Clicked";
+      } else if (e === "type" && t.text) {
+        s.description = `Typed: "${t.text}"`;
+      } else if (e === "key" && t.text) {
+        s.description = `Pressed key: ${t.text}`;
+      } else {
+        s.description =
+          e === "scroll"
+            ? "Scrolled"
+            : e === "left_click_drag"
+              ? "Dragged"
+              : e;
+      }
+    } else if (e === "navigate" && t.url) {
+      s = {
+        type: "navigate",
+        timestamp: Date.now(),
+        description: `Navigated to ${t.url}`,
+      };
+    }
+    if (
+      s &&
+      (s.type.includes("click") || s.type === "left_click_drag")
+    ) {
+      const e = xe.getFrames(n);
+      if (e.length > 0) {
+        const t = e[e.length - 1];
+        const r = {
+          base64: t.base64,
+          action: s,
+          frameNumber: e.length,
+          timestamp: Date.now(),
+          viewportWidth: t.viewportWidth,
+          viewportHeight: t.viewportHeight,
+          devicePixelRatio: t.devicePixelRatio,
+        };
+        xe.addFrame(n, r);
+      }
+    }
+    await new Promise((e) => setTimeout(e, 100));
+    try {
+      i = await K.screenshot(r);
+    } catch (o) {
+      return;
+    }
+    let c = 1;
+    try {
+      const e = await x({
+        target: {
+          tabId: r,
+        },
+        injectImmediately: true,
+        func: () => window.devicePixelRatio,
+      });
+      if (e && e[0]?.result) {
+        c = e[0].result;
+      }
+    } catch (o) {}
+    const l = xe.getFrames(n).length;
+    const d = {
+      base64: i.base64,
+      action: s,
+      frameNumber: l,
+      timestamp: Date.now(),
+      viewportWidth: i.viewportWidth || i.width,
+      viewportHeight: i.viewportHeight || i.height,
+      devicePixelRatio: c,
+    };
+    xe.addFrame(n, d);
+  } catch (o) {}
 }
 // 语义锚点：后台 tool executor 运行时（tool_call -> tool.execute -> permission_required/tool_result）。
 class Va {
@@ -15427,6 +16435,8 @@ class Va {
           anthropicClient: this.context.anthropicClient,
           permissionManager: i ?? this.context.permissionManager,
           createAnthropicMessage: this.createAnthropicMessage(),
+          availableTools: za,
+          trackBlockedNavigation: true,
         };
         const d = za.find((t) => t.name === e);
         if (!d) {
@@ -15477,105 +16487,7 @@ class Va {
             }
           }
           if (!("type" in o) && !o.error && !!l.tabId) {
-            await (async function (e, t, r) {
-              try {
-                if (!["computer", "navigate"].includes(e)) {
-                  return;
-                }
-                const a = await chrome.tabs.get(r);
-                if (!a) {
-                  return;
-                }
-                const n = a.groupId ?? -1;
-                if (!xe.isRecording(n)) {
-                  return;
-                }
-                let s;
-                let i;
-                if (e === "computer" && t.action) {
-                  const e = t.action;
-                  if (e === "screenshot") {
-                    return;
-                  }
-                  s = {
-                    type: e,
-                    coordinate: t.coordinate,
-                    start_coordinate: t.start_coordinate,
-                    text: t.text,
-                    timestamp: Date.now(),
-                  };
-                  if (e.includes("click")) {
-                    s.description = "Clicked";
-                  } else if (e === "type" && t.text) {
-                    s.description = `Typed: "${t.text}"`;
-                  } else if (e === "key" && t.text) {
-                    s.description = `Pressed key: ${t.text}`;
-                  } else {
-                    s.description =
-                      e === "scroll"
-                        ? "Scrolled"
-                        : e === "left_click_drag"
-                          ? "Dragged"
-                          : e;
-                  }
-                } else if (e === "navigate" && t.url) {
-                  s = {
-                    type: "navigate",
-                    timestamp: Date.now(),
-                    description: `Navigated to ${t.url}`,
-                  };
-                }
-                if (
-                  s &&
-                  (s.type.includes("click") || s.type === "left_click_drag")
-                ) {
-                  const e = xe.getFrames(n);
-                  if (e.length > 0) {
-                    const t = e[e.length - 1];
-                    const r = {
-                      base64: t.base64,
-                      action: s,
-                      frameNumber: e.length,
-                      timestamp: Date.now(),
-                      viewportWidth: t.viewportWidth,
-                      viewportHeight: t.viewportHeight,
-                      devicePixelRatio: t.devicePixelRatio,
-                    };
-                    xe.addFrame(n, r);
-                  }
-                }
-                await new Promise((e) => setTimeout(e, 100));
-                try {
-                  i = await K.screenshot(r);
-                } catch (o) {
-                  return;
-                }
-                let c = 1;
-                try {
-                  const e = await x({
-                    target: {
-                      tabId: r,
-                    },
-                    injectImmediately: true,
-                    func: () => window.devicePixelRatio,
-                  });
-                  if (e && e[0]?.result) {
-                    c = e[0].result;
-                  }
-                } catch (o) {}
-                const l = xe.getFrames(n).length;
-                const d = {
-                  base64: i.base64,
-                  action: s,
-                  frameNumber: l,
-                  timestamp: Date.now(),
-                  viewportWidth: i.viewportWidth || i.width,
-                  viewportHeight: i.viewportHeight || i.height,
-                  devicePixelRatio: c,
-                };
-                xe.addFrame(n, d);
-              } catch (o) {}
-            })(e, r, l.tabId);
+            await __cpRecordGifFrameForToolCall(e, r, l.tabId);
           }
           this.context.analytics?.track("claude_chrome.chat.tool_called", u);
           return o;
@@ -15727,6 +16639,13 @@ class Va {
   async processToolResults(e, t) {
     const r = [];
     const o = (e) => {
+      // 语义锚点：browser_batch 结果按步骤交错输出文本与截图，再附上统一的 Tab Context。
+      if (__cpGetBrowserBatchApi()?.isBatchResult(e)) {
+        return __cpGetBrowserBatchApi().toToolResultContent(e, {
+          formatTabContext: (e) =>
+            `\n\nTab Context:${e.executedOnTabId ? `\n- Executed on tabId: ${e.executedOnTabId}` : ""}\n- Available tabs:\n${e.availableTabs.map((e) => `  • tabId ${e.id}: "${e.title}" (${e.url})`).join("\n")}`,
+        });
+      }
       if (e.error) {
         return e.error;
       }
@@ -16190,11 +17109,7 @@ async function wn(e) {
       };
       m("claude_chrome.mcp.tool_called", o);
       __cpBackgroundDebugTrack("claude_chrome.mcp.tool_called", o, "warn");
-      return bn(
-        t === "category_org_blocked"
-          ? "This site is blocked by your organization's policy."
-          : "This site is blocked.",
-      );
+      return bn(await __cpBlockedSiteErrorMessage(t, u, "This site is blocked."));
     }
   }
   if (l !== undefined && a()) {
@@ -16322,6 +17237,11 @@ async function wn(e) {
     );
     i("tool_execute_ms");
     f = h?.is_error === true;
+    // 语义锚点：本次调用已因中途导航到封锁站点而报错时，清掉 webNavigation 留给下一次调用的同一条错误。
+    if (__cpBlockedNavigationReportedToolUses.delete(t)) {
+      cn = undefined;
+      ln = undefined;
+    }
   } catch (v) {
     if (g) {
       i("tool_execute_ms");
@@ -16674,6 +17594,7 @@ export {
   Te as a3,
   $a as a4,
   Oa as a5,
+  __cpBrowserBatchTool as a6,
   ie as b,
   Y as c,
   se as d,

@@ -1,0 +1,93 @@
+.cp-site-blocklist-form {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cp-site-blocklist-form .cp-site-blocklist-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0.5px solid hsl(var(--border-300) / 0.4);
+  border-radius: 12px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.cp-site-blocklist-form .cp-site-blocklist-input:focus {
+  outline: 2px solid hsl(var(--accent-100));
+  outline-offset: 1px;
+}
+
+.cp-site-blocklist-form .cp-site-blocklist-add {
+  flex: 0 0 auto;
+  border-radius: 12px;
+}
+
+.cp-site-blocklist-list,
+.cp-site-blocklist-managed {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cp-site-blocklist-managed {
+  padding-top: 16px;
+  border-top: 0.5px solid hsl(var(--border-300) / 0.28);
+}
+
+.cp-site-blocklist-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 0.5px solid hsl(var(--border-300) / 0.28);
+  border-radius: 12px;
+  background: hsl(var(--bg-000) / 0.72);
+}
+
+.cp-site-blocklist-pattern {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: hsl(var(--text-100));
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cp-site-blocklist-remove {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: hsl(var(--danger-000, var(--danger-100)));
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.cp-site-blocklist-remove:hover {
+  background: hsl(var(--danger-000, var(--danger-100)) / 0.1);
+}
+
+.cp-site-blocklist-remove:focus-visible {
+  outline: 2px solid hsl(var(--accent-100));
+  outline-offset: 2px;
+}
+
+.cp-site-blocklist-badge {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: hsl(var(--bg-300));
+  color: hsl(var(--text-300));
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+@media (max-width: 640px) {
+  .cp-site-blocklist-form {
+    flex-direction: column;
+  }
+}

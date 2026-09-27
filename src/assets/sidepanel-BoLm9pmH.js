@@ -3,7 +3,7 @@ import { M as e, u as t, r as n, a as s, A as r, L as i, R as o } from "./index-
 import { r as a, j as l, R as c, a as u, b as d, g as h } from "./index-BVS4T5_D.js";
 import { b as p, a as m, _ as f, u as g, g as y, S as v, s as x, c as b, P as w, d as k, T as C, e as _, w as M, f as S, h as j, i as E, j as T, k as N, l as A, m as L, U as O, D as I, n as R, o as D } from "./PermissionManager-9s959502.js";
 import { S as P, s as F, h as z, g as V, n as $, u as H, a as B, b as U, c as Z, i as W, p as q, I as G, d as K, T as J, e as Y, f as X, B as Q, j as ee, A as te, m as ne, k as se, r as re, l as ie, o as oe, q as ae, t as le, W as ce, v as ue, w as de, E as he, M as pe, x as me, y as fe, z as ge, C as ye, D as ve, F as xe, G as be, L as we, H as ke, J as Ce, K as _e, N as Me, O as Se, P as je, U as Ee, X as Te, Q as Ne, R as Ae, V as Le, Y as Oe, Z as Ie, _ as Re, $ as De, a0 as Pe, a1 as Fe, a2 as ze, a3 as Ve, a4 as $e, a5 as He, a6 as Be, a7 as Ue, a8 as Ze, a9 as We, aa as qe, ab as Ge, ac as Ke, ad as Je, ae as Ye, af as Xe, ag as Qe, ah as et, ai as tt, aj as nt, ak as st, al as rt, am as it, an as ot, ao as at, ap as lt, aq as ct } from "./useStorageState-hbwNMVUA.js";
-import { c as ut, g as dt, e as ht, u as pt, p as mt, s as ft, t as gt, d as yt, b as vt, A as xt, n as bt, r as wt, f as kt, a as Ct, h as _t, i as Mt, j as St, k as jt, l as Et, m as Tt, o as Nt, q as At, v as Lt, w as Ot, x as It, y as Rt, z as Dt, B as Pt, C as Ft, D as zt, E as Vt, F as $t, G as Ht, H as Bt, I as Ut, J as Zt, K as Wt, L as qt, M as Gt, N as Kt, O as Jt, P as Yt, Q as Xt, R as Qt, S as en, T as tn, U as nn, V as sn, W as rn, X as on } from "./mcpPermissions-qqAoJjJ8.js";
+import { c as ut, g as dt, e as ht, u as pt, p as mt, s as ft, t as gt, d as yt, b as vt, A as xt, n as bt, r as wt, f as kt, a as Ct, h as _t, i as Mt, j as St, k as jt, l as Et, m as Tt, o as Nt, q as At, v as Lt, w as Ot, x as It, y as Rt, z as Dt, B as Pt, C as Ft, D as zt, E as Vt, F as $t, G as Ht, H as Bt, I as Ut, J as Zt, K as Wt, L as qt, M as Gt, N as Kt, O as Jt, P as Yt, Q as Xt, R as Qt, S as en, T as tn, U as nn, V as sn, W as rn, X as on, a6 as __cpBrowserBatchTool } from "./mcpPermissions-qqAoJjJ8.js";
 import { t as an } from "./punycode.es6-D49_gIz_.js";
 import { P as ln } from "./PairingPrompt-Do4C6yFu.js";
 if (globalThis.Buffer === undefined) {
@@ -28151,6 +28151,38 @@ const Qy = ({
     defaultMessage: "This link contains an internationalized domain name that may be deceptive. The domain appears as:",
     id: "n2uO4zTmwR"
   });
+  const __cpCredentialsWarning = r.formatMessage({
+    defaultMessage: "This link contains embedded credentials, which may be an attempt to disguise its destination. You will actually be sent to:",
+    id: "DrFn3Jpzg4"
+  });
+  // 语义锚点：外链确认框的嵌入凭据检测（upstream 1.0.94）：user:pass@host 形式的链接额外提示真实目的地。
+  const __cpLinkUserinfo = a.useMemo(() => globalThis.__CP_LINK_SAFETY__?.inspectUserinfo(t) ?? {
+    hasUserinfo: false,
+    host: null
+  }, [t]);
+  // 语义锚点：外链确认框打开按钮的激活延迟（upstream 1.0.94）：对话框可见满 400ms 后才可确认，面板隐藏再显示会重新计时。
+  const [__cpOpenLinkReady, __cpSetOpenLinkReady] = a.useState(false);
+  a.useEffect(() => {
+    __cpSetOpenLinkReady(false);
+    if (!e) {
+      return;
+    }
+    const n = globalThis.__CP_LINK_SAFETY__?.OPEN_LINK_ACTIVATION_DELAY_MS ?? 400;
+    let s;
+    const r = () => {
+      clearTimeout(s);
+      __cpSetOpenLinkReady(false);
+      if (document.visibilityState !== "hidden") {
+        s = setTimeout(() => __cpSetOpenLinkReady(true), n);
+      }
+    };
+    r();
+    document.addEventListener("visibilitychange", r);
+    return () => {
+      clearTimeout(s);
+      document.removeEventListener("visibilitychange", r);
+    };
+  }, [e, t]);
   const h = a.useMemo(() => function (e) {
     try {
       const t = new URL(e);
@@ -28188,10 +28220,29 @@ const Qy = ({
     cancelText: u,
     onClose: n,
     onConfirm: s,
-    autoFocus: true,
+    autoFocus: false,
+    disabled: !__cpOpenLinkReady,
     children: [l.jsx("div", {
       className: "break-all bg-bg-000 border-0.5 border-border-300 rounded-lg text-text-100 max-h-40 overflow-y-scroll py-3 px-4 mt-3",
       children: p
+    }), __cpLinkUserinfo.hasUserinfo && l.jsx("div", {
+      className: "mt-3 p-3 bg-danger-900 border-0.5 border-danger-200 rounded-lg",
+      children: l.jsxs("div", {
+        className: "flex items-start gap-2",
+        children: [l.jsx(ce, {
+          size: 16,
+          className: "text-danger-000 mt-0.5 flex-shrink-0"
+        }), l.jsxs("div", {
+          className: "text-sm text-danger-000",
+          children: [l.jsx("p", {
+            className: "font-medium",
+            children: __cpCredentialsWarning
+          }), l.jsx("p", {
+            className: "mt-1 font-mono break-all",
+            children: __cpLinkUserinfo.host
+          })]
+        })]
+      })
     }), h.hasPunycode && l.jsx("div", {
       className: "mt-3 p-3 bg-danger-900 border-0.5 border-danger-200 rounded-lg",
       children: l.jsxs("div", {
@@ -32324,6 +32375,79 @@ const tb = e => l.jsx(ee, {
     fill: "currentColor"
   })
 });
+// 语义锚点：browser_batch 开关缓存（upstream 1.0.94，本地设置 browserBatchEnabled，默认开启）。
+// 发请求、生成系统提示词前会刷新；options 修改时经 storage.onChanged 同步。
+const __cpBrowserBatchEnabledStorageKey = globalThis.__CP_CONTRACT__?.browserTools?.BROWSER_BATCH_ENABLED_STORAGE_KEY || "browserBatchEnabled";
+let __cpBrowserBatchEnabledCache = true;
+function __cpRefreshBrowserBatchEnabled() {
+  return chrome.storage.local.get(__cpBrowserBatchEnabledStorageKey).then(e => {
+    __cpBrowserBatchEnabledCache = globalThis.__CP_BROWSER_BATCH__?.isEnabled(e?.[__cpBrowserBatchEnabledStorageKey]) ?? false;
+    return __cpBrowserBatchEnabledCache;
+  }).catch(() => __cpBrowserBatchEnabledCache);
+}
+try {
+  chrome.storage.onChanged.addListener((e, t) => {
+    if (t === "local" && e[__cpBrowserBatchEnabledStorageKey]) {
+      __cpBrowserBatchEnabledCache = globalThis.__CP_BROWSER_BATCH__?.isEnabled(e[__cpBrowserBatchEnabledStorageKey].newValue) ?? false;
+    }
+  });
+} catch {}
+// 语义锚点：browser_batch 逐步进度账本，按 toolUseId 存最近 50 个批次；不保存截图字节。
+const __cpBrowserBatchProgressStore = (() => {
+  const e = new Map();
+  const t = new Set();
+  const n = [];
+  return {
+    upsert(s, r) {
+      if (!s || !r || typeof r.index != "number") {
+        return;
+      }
+      const i = [...(e.get(s) || [])];
+      const {
+        base64Image: o,
+        ...a
+      } = r;
+      i[r.index] = a;
+      e.set(s, i);
+      while (e.size > 50) {
+        e.delete(e.keys().next().value);
+      }
+      for (const l of t) {
+        l();
+      }
+    },
+    get(t) {
+      return e.get(t) || n;
+    },
+    subscribe(e) {
+      t.add(e);
+      return () => t.delete(e);
+    }
+  };
+})();
+function __cpBrowserBatchRowLabel(e, t, n, s) {
+  const r = globalThis.__CP_BROWSER_BATCH__?.summarizeProgress(s, t, n);
+  if (!r) {
+    return null;
+  }
+  // 没有进度事件（重新打开面板或恢复历史会话）的失败批次，只显示动作总数，不虚报完成数。
+  const i = r.completed === null ? e.formatMessage({
+    defaultMessage: "Batch — {count, plural, one {# action} other {# actions}}",
+    id: "9PnBSKt3zo"
+  }, {
+    count: r.total
+  }) : e.formatMessage({
+    defaultMessage: "Batch — {completed}/{total} actions",
+    id: "q1/79Ks14U"
+  }, {
+    completed: r.completed,
+    total: r.total
+  });
+  return r.failed ? `${i} · ${e.formatMessage({
+    defaultMessage: "Stopped on error",
+    id: "Q7Tmii1wrQ"
+  })}` : i;
+}
 const nb = (e, t, n, s) => {
   const {
     text: r,
@@ -32332,6 +32456,11 @@ const nb = (e, t, n, s) => {
     const r = e.split("__");
     const i = r.length >= 3 ? r[2] : e;
     const o = t ?? {};
+    // 语义锚点：浏览器工具行优先使用进行中/完成/失败三态标签（upstream 1.0.94，shared/tool-activity-labels.js）；未覆盖的工具沿用下方旧标签。
+    const __cpToolActivityLabel = globalThis.__CP_TOOL_ACTIVITY_LABELS__?.describe(i, o, s, n);
+    if (__cpToolActivityLabel) {
+      return __cpToolActivityLabel;
+    }
     if (i === "computer") {
       const e = o.action;
       switch (e) {
@@ -32884,6 +33013,19 @@ const nb = (e, t, n, s) => {
           }),
           icon: "shuffle"
         };
+      case "browser_batch":
+        {
+          const e = Array.isArray(o.actions) ? o.actions.length : 0;
+          return {
+            text: n.formatMessage({
+              defaultMessage: "Batch — {count, plural, one {# action} other {# actions}}",
+              id: "9PnBSKt3zo"
+            }, {
+              count: e
+            }),
+            icon: "computer"
+          };
+        }
       default:
         {
           const e = function (e) {
@@ -34767,7 +34909,8 @@ const $b = a.memo(function ({
   };
   const j = nb(n, c, u, M);
   const E = Xx(n) && r;
-  const T = s || j.text;
+  const __cpBrowserBatchProgress = a.useSyncExternalStore(__cpBrowserBatchProgressStore.subscribe, () => __cpBrowserBatchProgressStore.get(o));
+  const T = s || (n === "browser_batch" ? __cpBrowserBatchRowLabel(M, c, u, __cpBrowserBatchProgress) : null) || j.text;
   const N = E ? l.jsx(Fl, {
     url: i,
     size: 16,
@@ -81914,12 +82057,44 @@ const XY = ({
     fill: "hsl(var(--text-100))"
   })]
 });
+// 语义锚点：封锁提示的来源（管理员策略 / 使用者设定页的封锁清单）。
+// 解析完成前返回 undefined，避免先闪出管理员文案。
+function __cpUseSiteBlockSource(e, n) {
+  const [s, r] = a.useState({
+    key: "",
+    source: null
+  });
+  const i = e === "category_org_blocked" && n ? n : "";
+  a.useEffect(() => {
+    if (!i) {
+      return;
+    }
+    let e = true;
+    Promise.resolve(globalThis.__CP_MANAGED_POLICY__?.getRuntime(chrome).getBlockSource(i)).catch(() => null).then(n => {
+      if (e) {
+        r({
+          key: i,
+          source: n || null
+        });
+      }
+    });
+    return () => {
+      e = false;
+    };
+  }, [i]);
+  if (!i) {
+    return null;
+  }
+  return s.key === i ? s.source : undefined;
+}
 const QY = ({
   isMainTabBlocked: n = true,
-  category: s
+  category: s,
+  blockedUrl: __cpBlockedNoticeUrl = ""
 }) => {
   const r = Ns();
   const i = t();
+  const __cpBlockedNoticeSource = __cpUseSiteBlockSource(s, __cpBlockedNoticeUrl);
   return l.jsx("div", {
     className: "flex flex-col items-center justify-center h-screen bg-bg-100 p-8",
     children: l.jsxs("div", {
@@ -81945,9 +82120,12 @@ const QY = ({
         })
       }), l.jsx("p", {
         className: "font-base text-text-300 mt-[7px]",
-        children: s === "category_org_blocked" ? i.formatMessage({
-          defaultMessage: "This site is blocked by your organization's policy.",
-          id: "Rc2RmGjQRw"
+        children: s === "category_org_blocked" ? __cpBlockedNoticeSource === undefined ? "" : __cpBlockedNoticeSource === "user" ? i.formatMessage({
+          defaultMessage: "This site is on your blocked sites list in Claw settings.",
+          id: "cpUserBlockedSite"
+        }) : i.formatMessage({
+          defaultMessage: "This site is blocked by a policy set by your browser's administrator.",
+          id: "sSc7jfY6Q4"
         }) : n ? i.formatMessage({
           defaultMessage: "Claw cannot assist with the content on this page.",
           id: "WDCnAlgy2l"
@@ -88332,6 +88510,8 @@ function CQ({
   a.useRef(new Set());
   a.useRef(new Set());
   const ce = a.useRef([wt, kt, Ct, _t, Mt, St, jt, Et, Tt, Nt, At, Lt, Ot, It, Rt, Dt, Pt]);
+  // 语义锚点：本回合实际提供给模型的工具 = 固定工具 + 已启用时的 browser_batch。
+  const __cpActiveToolsForTurn = () => __cpBrowserBatchEnabledCache ? [...ce.current, __cpBrowserBatchTool] : ce.current;
   a.useEffect(() => {}, []);
   a.useEffect(() => {}, []);
   const {
@@ -88439,6 +88619,15 @@ function CQ({
         type: "text",
         text: Y.multipleTabsSystemPrompt
       });
+    }
+    if (await __cpRefreshBrowserBatchEnabled()) {
+      const __cpBrowserBatchGuidance = globalThis.__CP_BROWSER_BATCH__?.SYSTEM_PROMPT_GUIDANCE;
+      if (__cpBrowserBatchGuidance) {
+        l.push({
+          type: "text",
+          text: __cpBrowserBatchGuidance
+        });
+      }
     }
     const __cpTurnAnswerStartPrompt = String(Y.turnAnswerStartPrompt || __cpFallbackTurnAnswerStartPrompt);
     if (__cpTurnAnswerStartPrompt.trim()) {
@@ -88817,9 +89006,12 @@ function CQ({
         model: o.current,
         createAnthropicMessage: (e, t) => we(e, r, t),
         permissionManager: f,
-        messages: C.current
+        messages: C.current,
+        availableTools: __cpActiveToolsForTurn(),
+        onBatchProgress: e => __cpBrowserBatchProgressStore.upsert(n, e),
+        isCancelled: () => !!te.current?.signal?.aborted
       };
-      const l = ce.current.find(t => t.name === e);
+      const l = __cpActiveToolsForTurn().find(t => t.name === e);
       if (!l) {
         throw new Error(`Unknown tool: ${e}`);
       }
@@ -88842,7 +89034,7 @@ function CQ({
         }
       }
       try {
-        const n = Zt(e, t, ce.current);
+        const n = Zt(e, t, __cpActiveToolsForTurn());
         const s = await l.execute(n, a);
         if ("type" in s) {
           h.success = false;
@@ -88928,6 +89120,10 @@ function CQ({
     const s = [];
     let r;
     const i = e => {
+      // 语义锚点：browser_batch 结果按步骤交错输出文本与截图。
+      if (globalThis.__CP_BROWSER_BATCH__?.isBatchResult(e)) {
+        return globalThis.__CP_BROWSER_BATCH__.toToolResultContent(e);
+      }
       if (e.error) {
         return e.error;
       }
@@ -89054,6 +89250,17 @@ function CQ({
           error: e
         }));
       }
+    }
+    // 语义锚点：单工具回合的 browser_batch 提示（upstream 1.0.94），只在批次开启时附到该工具结果末尾。
+    if (e.length === 1 && s.length === 1) {
+      s[0] = {
+        ...s[0],
+        content: globalThis.__CP_BROWSER_BATCH__?.appendSingleCallReminder(s[0].content, e[0].name, e[0].input, {
+          enabled: __cpBrowserBatchEnabledCache,
+          isSingleToolTurn: true,
+          isError: !!s[0].is_error
+        }) ?? s[0].content
+      };
     }
     return {
       toolResults: s,
@@ -89320,7 +89527,8 @@ function CQ({
     } catch (U) {}
     let D = null;
     try {
-      D = await Bt(ce.current, {
+      await __cpRefreshBrowserBatchEnabled();
+      D = await Bt(__cpActiveToolsForTurn(), {
         tabId: c
       });
     } catch (U) {
@@ -98510,7 +98718,8 @@ function o1() {
   if (be || vn) {
     return l.jsx(QY, {
       isMainTabBlocked: ye.isMainTabBlocked,
-      category: xn
+      category: xn,
+      blockedUrl: (ye.blockedTabs.find(e => e.tabId === ce) || ye.blockedTabs.find(e => e.category === xn))?.url || ""
     });
   } else {
     return l.jsxs("div", {

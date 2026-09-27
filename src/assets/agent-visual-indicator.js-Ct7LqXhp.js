@@ -9,6 +9,15 @@
     let o = false;
     let l = null;
     let r = false;
+    // 语义锚点：phantom cursor 状态（upstream 1.0.94）：容器/高亮层 DOM、最近一次请求坐标与已绘制坐标；
+    // __cpStopDeliveryTimer 在 Stop 点击后 1.5s 检查停止是否真正送达。
+    let __cpPhantomCursor = null;
+    let __cpPhantomCursorStyled = null;
+    let __cpPhantomCursorRequestedX = null;
+    let __cpPhantomCursorRequestedY = null;
+    let __cpPhantomCursorDrawnX = null;
+    let __cpPhantomCursorDrawnY = null;
+    let __cpStopDeliveryTimer = null;
     // 语义锚点：e/n/t 分别缓存执行态边框、Stop 容器、静态 tab group 提示条 DOM；i/a 是当前显示态；s/o 记录 tool_use 临时隐藏前的显示态；l 是静态提示条心跳定时器；r 表示 MCP 模式下不展示 Stop 按钮。
     // 语义锚点：执行态边框 / Stop 按钮 / tab group 常驻提示条共享的后台消息协议。
     const __cpAgentIndicatorContractMessages =
@@ -84,6 +93,133 @@
       __cpAgentIndicatorContract.HIDE_TRANSITION_DELAY_MS || 300;
     const __cpStaticIndicatorHeartbeatIntervalMs =
       __cpAgentIndicatorContract.HEARTBEAT_INTERVAL_MS || 5000;
+    const __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor =
+      __cpAgentIndicatorRuntimeMessageTypes.UPDATE_PHANTOM_CURSOR ||
+      "UPDATE_PHANTOM_CURSOR";
+    const __cpAgentIndicatorMessageTypeStopAgentDropped =
+      __cpAgentIndicatorContractMessages.STOP_AGENT_DROPPED ||
+      "STOP_AGENT_DROPPED";
+    const __cpPhantomCursorId =
+      __cpAgentIndicatorDomIds.PHANTOM_CURSOR || "claude-phantom-cursor";
+    const __cpStopDeliveryCheckDelayMs = 1500;
+    // 语义锚点：phantom cursor 绘制/移动（upstream 1.0.94）。只在执行态指示器显示时绘制；
+    // 已存在时用 transform 过渡到新坐标，并等待 transitionend（最多 220ms）后回包，供后台在真实鼠标事件前对齐动画。
+    function __cpUpdatePhantomCursor(e, t) {
+      const r =
+        __cpPhantomCursor !== null &&
+        e === __cpPhantomCursorDrawnX &&
+        t === __cpPhantomCursorDrawnY;
+      __cpPhantomCursorRequestedX = e;
+      __cpPhantomCursorRequestedY = t;
+      if (!i) {
+        return Promise.resolve();
+      }
+      if (!__cpPhantomCursor) {
+        if (document.hidden) {
+          return Promise.resolve();
+        }
+        const r = document.createElement("div");
+        r.id = __cpPhantomCursorId;
+        r.setAttribute("aria-hidden", "true");
+        r.style.cssText = `\n      position: fixed;\n      top: 0;\n      left: 0;\n      pointer-events: none;\n      z-index: 2147483646;\n      transform: translate3d(${e}px, ${t}px, 0);\n      transition: transform 180ms cubic-bezier(0.2, 0, 0, 1);\n      will-change: transform;\n    `;
+        const o = "http://www.w3.org/2000/svg";
+        const a = (e) => {
+          const t = document.createElementNS(o, "path");
+          t.setAttribute("d", "M0 0 L0 18 L4.5 14 L7.5 21.5 L11 20 L8 13 L14 13 Z");
+          for (const [r, o] of Object.entries(e)) {
+            t.setAttribute(r, o);
+          }
+          return t;
+        };
+        const n = (e, t, r, n) => {
+          const s = document.createElementNS(o, "svg");
+          s.id = e;
+          s.setAttribute("width", "20");
+          s.setAttribute("height", "26");
+          s.setAttribute("viewBox", "0 0 20 26");
+          s.style.cssText = `position:absolute; top:0; left:0; overflow:visible; ${n}`;
+          s.appendChild(
+            a({
+              stroke: t,
+              "stroke-width": "3",
+              "stroke-linejoin": "round",
+              fill: t,
+            }),
+          );
+          s.appendChild(
+            a({
+              fill: r,
+            }),
+          );
+          return s;
+        };
+        // 普通箭头层在截图期间保留，高亮层在 HIDE_FOR_TOOL_USE 时隐藏。
+        r.appendChild(n(`${__cpPhantomCursorId}-plain`, "white", "#111", ""));
+        __cpPhantomCursorStyled = n(
+          `${__cpPhantomCursorId}-styled`,
+          "#D97757",
+          "#FAF9F5",
+          "filter: drop-shadow(0 0 4px rgba(217,119,87,0.9)) drop-shadow(0 0 10px rgba(217,119,87,0.45));",
+        );
+        r.appendChild(__cpPhantomCursorStyled);
+        __cpPhantomCursor = r;
+        document.body.appendChild(r);
+        __cpPhantomCursorDrawnX = e;
+        __cpPhantomCursorDrawnY = t;
+        return Promise.resolve();
+      }
+      __cpPhantomCursor.style.transform = `translate3d(${e}px, ${t}px, 0)`;
+      __cpPhantomCursorDrawnX = e;
+      __cpPhantomCursorDrawnY = t;
+      if (r || document.hidden) {
+        return Promise.resolve();
+      }
+      return new Promise((e) => {
+        let t = false;
+        const r = () => {
+          if (!t) {
+            t = true;
+            __cpPhantomCursor?.removeEventListener("transitionend", r);
+            e();
+          }
+        };
+        __cpPhantomCursor.addEventListener("transitionend", r, {
+          once: true,
+        });
+        setTimeout(r, 220);
+      });
+    }
+    function __cpRemovePhantomCursor() {
+      if (__cpPhantomCursor && __cpPhantomCursor.parentNode) {
+        __cpPhantomCursor.parentNode.removeChild(__cpPhantomCursor);
+      }
+      __cpPhantomCursor = null;
+      __cpPhantomCursorStyled = null;
+    }
+    // 语义锚点：Stop 未送达提示（upstream 1.0.94）：closed shadow root 内的短暂 toast，3 秒后淡出。
+    function __cpShowStopDroppedToast() {
+      try {
+        const e = document.createElement("div");
+        e.style.cssText =
+          "position:fixed;bottom:88px;left:50%;transform:translateX(-50%);z-index:2147483646;pointer-events:none;";
+        const t = e.attachShadow({
+          mode: "closed",
+        });
+        const r = document.createElement("div");
+        r.textContent = "Stop didn't reach Claw — close the side panel to stop.";
+        r.style.cssText =
+          "font:500 13px/1.3 system-ui,-apple-system,sans-serif;color:#141413;background:#FAF9F5;padding:8px 14px;border-radius:18px;box-shadow:0 4px 14px rgba(217,119,87,0.24);opacity:0;transition:opacity .15s ease-out;";
+        t.appendChild(r);
+        document.body.appendChild(e);
+        requestAnimationFrame(() => {
+          r.style.opacity = "1";
+        });
+        setTimeout(() => {
+          r.style.opacity = "0";
+          setTimeout(() => e.remove(), 200);
+        }, 3000);
+      } catch (e) {}
+    }
     // 语义锚点：active agent indicator 显示主链：注入动画样式 -> 创建 glow border -> 非 MCP 模式挂载 Stop 按钮 -> requestAnimationFrame 做入场动画。
     function p() {
       i = true;
@@ -140,11 +276,36 @@
             });
             // 语义锚点：Stop 按钮上报链：内容脚本只发送 STOP_AGENT + CURRENT_TAB 哨兵，真正的停止执行逻辑由后台收口。
             // 语义锚点：indicator Stop 只负责上报，不直接消费 sidepanel 输入桥协议。
-            n.addEventListener("click", async () => {
-              await chrome.runtime.sendMessage({
-                type: __cpAgentIndicatorMessageTypeStopAgent,
-                fromTabId: __cpAgentIndicatorCurrentTabSentinel,
-              });
+            // 语义锚点：Stop 只接受真实用户点击（upstream 1.0.94），页面脚本合成的 click 无法停止 agent；
+            // 1.5s 后执行态仍在则上报 STOP_AGENT_DROPPED 并提示用户关闭侧边栏。
+            n.addEventListener("click", async (t) => {
+              if (!t?.isTrusted) {
+                return;
+              }
+              try {
+                await chrome.runtime.sendMessage({
+                  type: __cpAgentIndicatorMessageTypeStopAgent,
+                  fromTabId: __cpAgentIndicatorCurrentTabSentinel,
+                });
+              } catch (e) {}
+              if (__cpStopDeliveryTimer) {
+                clearTimeout(__cpStopDeliveryTimer);
+              }
+              __cpStopDeliveryTimer = setTimeout(() => {
+                __cpStopDeliveryTimer = null;
+                if (!i) {
+                  return;
+                }
+                try {
+                  chrome.runtime
+                    .sendMessage({
+                      type: __cpAgentIndicatorMessageTypeStopAgentDropped,
+                      fromTabId: __cpAgentIndicatorCurrentTabSentinel,
+                    })
+                    .catch(() => {});
+                } catch (e) {}
+                __cpShowStopDroppedToast();
+              }, __cpStopDeliveryCheckDelayMs);
             });
             e.appendChild(n);
             return e;
@@ -152,6 +313,17 @@
           document.body.appendChild(n);
         }
       }
+      try {
+        if (!__cpPhantomCursor) {
+          __cpUpdatePhantomCursor(
+            __cpPhantomCursorRequestedX ?? Math.round(window.innerWidth / 2),
+            __cpPhantomCursorRequestedY ?? Math.round(window.innerHeight / 2),
+          );
+        }
+        if (__cpPhantomCursorStyled) {
+          __cpPhantomCursorStyled.style.display = "";
+        }
+      } catch (e) {}
       requestAnimationFrame(() => {
         if (e) {
           e.style.opacity = "1";
@@ -167,6 +339,10 @@
     }
     // 语义锚点：active agent indicator 隐藏主链：先做离场动画，再延迟回收 DOM，避免快速切换时闪烁。
     function c() {
+      if (__cpStopDeliveryTimer) {
+        clearTimeout(__cpStopDeliveryTimer);
+        __cpStopDeliveryTimer = null;
+      }
       if (i) {
         i = false;
         if (e) {
@@ -189,6 +365,7 @@
               n.parentNode.removeChild(n);
               n = null;
             }
+            __cpRemovePhantomCursor();
           }
         }, __cpAgentIndicatorHideTransitionDelayMs);
       }
@@ -321,6 +498,9 @@
         if (t && a) {
           t.style.display = "none";
         }
+        if (__cpPhantomCursorStyled) {
+          __cpPhantomCursorStyled.style.display = "none";
+        }
         y({
           success: true,
         });
@@ -335,6 +515,9 @@
         }
         if (o && t) {
           t.style.display = "";
+        }
+        if (__cpPhantomCursorStyled) {
+          __cpPhantomCursorStyled.style.display = "";
         }
         s = false;
         o = false;
@@ -355,12 +538,23 @@
         y({
           success: true,
         });
+      } else if (
+        l.type === __cpAgentIndicatorRuntimeMessageUpdatePhantomCursor
+      ) {
+        // 语义锚点：UPDATE_PHANTOM_CURSOR 异步回包，等光标动画结束再让后台派发真实鼠标事件。
+        __cpUpdatePhantomCursor(l.x, l.y).then(() =>
+          y({
+            success: true,
+          }),
+        );
+        return true;
       }
     });
     // 语义锚点：页面卸载时强制收口动态/静态 indicator，避免残留定时器和悬空 DOM。
     window.addEventListener("beforeunload", () => {
       c();
       L();
+      __cpRemovePhantomCursor();
     });
   })();
 })();

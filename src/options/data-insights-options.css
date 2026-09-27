@@ -44,7 +44,6 @@
   padding: 20px;
   border: 0.5px solid hsl(var(--border-300) / 0.24);
   border-radius: 14px;
-  background: hsl(var(--bg-000) / 0.72);
 }
 
 .cp-data-insights-section .cp-page-subtitle {
@@ -143,7 +142,7 @@
   padding: 14px 16px;
   border: 1px solid hsl(var(--border-300) / 0.22);
   border-radius: 16px;
-  background: hsl(var(--bg-000) / 0.58);
+  background: rgba(248, 250, 252, 0.55);
 }
 
 .cp-data-insights-metric-label {
