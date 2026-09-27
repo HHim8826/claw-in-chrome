@@ -34,7 +34,7 @@ const UPSTREAM_1_0_94_BEHAVIOR_MATRIX = Object.freeze([
   },
   {
     id: "extension-interference-recovery",
-    status: "missing",
+    status: "equivalent",
     evidence: "Source strips foreign-extension frames and retries debugger attach behind cicStripExtensionInterference.",
     owners: ["src/assets/mcpPermissions-qqAoJjJ8.js"],
     testTarget: "tests/unit/extension-interference-recovery.test.js",

@@ -103,6 +103,14 @@ Prefer these seams when implementing behavior.
   `navigation_blocked_mid_call`. The MCP executor then clears the
   webNavigation error that would otherwise repeat on the next call.
   Managed-policy matches use the browser-administrator wording everywhere.
+- `attachDebugger` wraps the raw attach in a replayable closure. When Chrome
+  reports a foreign-extension URL, the tool runtime finds frames whose DOM
+  iframes outnumber their navigation child frames. It removes foreign
+  extension iframes, then removes at most that many unknown visible iframes,
+  and retries attach with backoff. Setting
+  `chrome.storage.local.cicStripExtensionInterference` to `false` disables the
+  recovery. `sendCommand` re-attaches after that error once the debugger is
+  gone.
 - The MCP bridge uses `nativeMessaging`; it doesn't require Chrome Identity.
   Diagnostic sanitizers continue to redact access and refresh tokens because
   configured providers may use those fields.

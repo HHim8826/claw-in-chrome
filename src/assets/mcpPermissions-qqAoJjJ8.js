@@ -322,6 +322,302 @@ async function x(t, r = e) {
     }
   }
 }
+// __cp-extension-interference:start
+// 语义锚点：其他扩展注入的 iframe 会让 chrome.debugger.attach 报
+// "Cannot access a chrome-extension:// URL of different extension"（upstream 1.0.94）。
+// 恢复链：检查 kill switch -> 找出 DOM iframe 多于 webNavigation 子 frame 的容器 frame -> 移除外来扩展 iframe -> 按退避重试 attach。
+const __cpForeignExtensionAttachError =
+  "Cannot access a chrome-extension:// URL of different extension";
+function __cpIsForeignExtensionAttachError(e) {
+  return (e instanceof Error ? e.message : String(e)).includes(
+    __cpForeignExtensionAttachError,
+  );
+}
+// 页面内执行：统计当前 frame（含 open/closed shadow root）里的全部 iframe src。
+function __cpCountDomIframesInPage() {
+  const e = chrome.dom;
+  const t = new Set([
+    "ARTICLE",
+    "ASIDE",
+    "BLOCKQUOTE",
+    "BODY",
+    "DIV",
+    "FOOTER",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HEADER",
+    "MAIN",
+    "NAV",
+    "P",
+    "SECTION",
+    "SPAN",
+  ]);
+  const r = [];
+  const o = [document];
+  while (o.length) {
+    const a = o.pop();
+    for (const n of a.querySelectorAll("*")) {
+      if (n instanceof HTMLIFrameElement) {
+        r.push(n.src);
+      }
+      if (!(n instanceof HTMLElement)) {
+        continue;
+      }
+      const a = n.tagName;
+      if (!t.has(a) && !a.includes("-")) {
+        continue;
+      }
+      const s = e ? e.openOrClosedShadowRoot(n) : n.shadowRoot;
+      if (s) {
+        o.push(s);
+      }
+    }
+  }
+  return r;
+}
+// 页面内执行：先移除外来扩展 iframe，再在超出已知子 frame 的数量内移除未知来源的可见 iframe。
+// 本扩展与已知子 frame 来源的 iframe、以及视口外的懒加载 iframe 一律保留。
+function __cpRemoveInterferingIframesInPage(e, t, r) {
+  const o = chrome.dom;
+  const a = new Set([
+    "ARTICLE",
+    "ASIDE",
+    "BLOCKQUOTE",
+    "BODY",
+    "DIV",
+    "FOOTER",
+    "H1",
+    "H2",
+    "H3",
+    "H4",
+    "H5",
+    "H6",
+    "HEADER",
+    "MAIN",
+    "NAV",
+    "P",
+    "SECTION",
+    "SPAN",
+  ]);
+  const n = [];
+  const s = [document];
+  while (s.length) {
+    const e = s.pop();
+    for (const t of e.querySelectorAll("*")) {
+      if (t instanceof HTMLIFrameElement) {
+        n.push(t);
+      }
+      if (!(t instanceof HTMLElement)) {
+        continue;
+      }
+      const e = t.tagName;
+      if (!a.has(e) && !e.includes("-")) {
+        continue;
+      }
+      const r = o ? o.openOrClosedShadowRoot(t) : t.shadowRoot;
+      if (r) {
+        s.push(r);
+      }
+    }
+  }
+  const i = new Set(e);
+  const c = [];
+  const l = [];
+  let d = 0;
+  for (const e of n) {
+    if (!/^(https?|chrome-extension):/.test(e.src)) {
+      continue;
+    }
+    // chrome-extension 的 origin 显式按 scheme://id 计算，不依赖 URL.origin 对非特殊 scheme 的实现差异。
+    let r = /^chrome-extension:\/\/[^/?#]+/i.exec(e.src)?.[0];
+    if (!r) {
+      try {
+        r = new URL(e.src).origin;
+      } catch {
+        continue;
+      }
+    }
+    if (r === t) {
+      d++;
+    } else if (!i.has(r)) {
+      if (e.src.startsWith("chrome-extension:")) {
+        c.push(e);
+      } else if (
+        e.loading === "lazy" &&
+        e.getBoundingClientRect().top > innerHeight
+      ) {
+        d++;
+      } else {
+        l.push(e);
+      }
+    }
+  }
+  const u = [];
+  for (const e of c) {
+    u.push(e.src);
+    e.remove();
+  }
+  const h = n.length - e.length - d;
+  let p = Math.max(0, Math.min(h, r) - u.length);
+  for (const e of l) {
+    if (p-- <= 0) {
+      break;
+    }
+    u.push(e.src);
+    e.remove();
+  }
+  return u;
+}
+async function __cpStripExtensionInterference(e) {
+  const t = {
+    containerFrameIds: [],
+    removedSrcHosts: [],
+    totalRemoved: 0,
+  };
+  let r;
+  try {
+    r = await x({
+      target: {
+        tabId: e,
+        allFrames: true,
+      },
+      injectImmediately: true,
+      func: __cpCountDomIframesInPage,
+    });
+  } catch {
+    return t;
+  }
+  const o = await chrome.webNavigation.getAllFrames({
+    tabId: e,
+  });
+  if (!o) {
+    return t;
+  }
+  const a = new Map();
+  for (const e of o) {
+    const t = a.get(e.parentFrameId);
+    if (t) {
+      t.push(e);
+    } else {
+      a.set(e.parentFrameId, [e]);
+    }
+  }
+  const n = (e) => {
+    const t = /^chrome-extension:\/\/[^/?#]+/i.exec(e)?.[0];
+    if (t) {
+      return t;
+    }
+    try {
+      return new URL(e).origin;
+    } catch {
+      return e;
+    }
+  };
+  const s = (e) => {
+    const t = /^([a-z][a-z0-9+.-]*):\/\/(?:[^@/?#]*@)?([^/:?#]+)/i.exec(e);
+    if (!t) {
+      return "(unknown)";
+    }
+    return t[1] === "http" || t[1] === "https" ? t[2] : `${t[1]}://${t[2]}`;
+  };
+  const i = [];
+  const c = {};
+  const l = {};
+  for (const e of r ?? []) {
+    const t = e.result ?? [];
+    const r = a.get(e.frameId) ?? [];
+    if (t.length > r.length) {
+      i.push(e.frameId);
+      c[e.frameId] = r.map((e) => n(e.url));
+      l[e.frameId] = t.length - r.length;
+    }
+  }
+  if (i.length === 0) {
+    return t;
+  }
+  const d = `chrome-extension://${chrome.runtime.id}`;
+  let u = 0;
+  const h = [];
+  for (const t of i) {
+    try {
+      const [r] = await x({
+        target: {
+          tabId: e,
+          frameIds: [t],
+        },
+        injectImmediately: true,
+        args: [c[t], d, l[t]],
+        func: __cpRemoveInterferingIframesInPage,
+      });
+      for (const e of r?.result ?? []) {
+        u++;
+        h.push(s(e));
+      }
+    } catch {}
+  }
+  return {
+    containerFrameIds: i,
+    removedSrcHosts: h,
+    totalRemoved: u,
+  };
+}
+async function __cpRecoverDebuggerAttachFromInterference(e, t, r, o = {}) {
+  let a = true;
+  try {
+    const { cicStripExtensionInterference: e } = await chrome.storage.local.get(
+      "cicStripExtensionInterference",
+    );
+    a = e !== false;
+  } catch {}
+  if (!a) {
+    console.info(
+      `[stripExtensionInterference] tab ${e}: disabled via kill switch (chrome.storage.local.cicStripExtensionInterference === false)`,
+    );
+    throw r;
+  }
+  const n = o.settleMs ?? 75;
+  let s = o.maxRetries ?? 4;
+  let i;
+  try {
+    i = await __cpStripExtensionInterference(e);
+  } catch (c) {
+    console.info(`[stripExtensionInterference] tab ${e}: strip failed:`, c);
+    throw r;
+  }
+  if (i.totalRemoved === 0) {
+    s = 1;
+    console.info(
+      `[stripExtensionInterference] tab ${e}: nothing removable found — trying one re-attach in case the offending frame self-removed`,
+    );
+  } else {
+    console.info(
+      `[stripExtensionInterference] tab ${e}: removed ${i.totalRemoved} foreign-extension iframe(s) [${i.removedSrcHosts.join(", ")}] from ${i.containerFrameIds.length} parent frame(s), retrying attach…`,
+    );
+  }
+  for (let o = 0; o < s; o++) {
+    await new Promise((e) => setTimeout(e, n * (o + 1)));
+    try {
+      await t();
+      console.info(
+        `[stripExtensionInterference] tab ${e}: attach succeeded on retry ${o + 1}`,
+      );
+      return i;
+    } catch (c) {
+      if (!__cpIsForeignExtensionAttachError(c)) {
+        throw c;
+      }
+    }
+  }
+  console.info(
+    `[stripExtensionInterference] tab ${e}: ${s} retries exhausted — the offending frame is unreachable or re-injected faster than the strip`,
+  );
+  throw r;
+}
+// __cp-extension-interference:end
 function S(e, t) {
   return Math.floor((e - 1) / t) + 1;
 }
@@ -3473,35 +3769,46 @@ class H {
     try {
       await this.detachDebugger(e);
     } catch {}
-    const i = o();
-    let c;
-    try {
-      await Promise.race([
-        new Promise((e, r) => {
-          chrome.debugger.attach(t, "1.3", () => {
-            if (chrome.runtime.lastError) {
-              r(new Error(chrome.runtime.lastError.message));
-            } else {
-              e();
-            }
-          });
-        }),
-        new Promise((t, r) => {
-          c = setTimeout(
-            () =>
-              r(
-                new Error(
-                  `debugger_attach_error: chrome.debugger.attach timed out after ${i}ms on tab ${e}. DevTools may be open on this tab, or the renderer may have crashed.`,
+    // 语义锚点：raw attach 抽成可重放闭包，供外来扩展 iframe 干扰恢复链重试（upstream 1.0.94）。
+    const i = async () => {
+      const r = o();
+      let c;
+      try {
+        await Promise.race([
+          new Promise((e, r) => {
+            chrome.debugger.attach(t, "1.3", () => {
+              if (chrome.runtime.lastError) {
+                r(new Error(chrome.runtime.lastError.message));
+              } else {
+                e();
+              }
+            });
+          }),
+          new Promise((t, o) => {
+            c = setTimeout(
+              () =>
+                o(
+                  new Error(
+                    `debugger_attach_error: chrome.debugger.attach timed out after ${r}ms on tab ${e}. DevTools may be open on this tab, or the renderer may have crashed.`,
+                  ),
                 ),
-              ),
-            i,
-          );
-        }),
-      ]);
-    } finally {
-      if (c !== undefined) {
-        clearTimeout(c);
+              r,
+            );
+          }),
+        ]);
+      } finally {
+        if (c !== undefined) {
+          clearTimeout(c);
+        }
       }
+    };
+    try {
+      await i();
+    } catch (u) {
+      if (!__cpIsForeignExtensionAttachError(u)) {
+        throw u;
+      }
+      await __cpRecoverDebuggerAttachFromInterference(e, i, u);
     }
     this.registerDebuggerEventHandlers();
     if (s) {
@@ -3611,10 +3918,12 @@ class H {
     try {
       return await this.sendCommandOnce(e, t, r, o);
     } catch (a) {
+      const n = (a instanceof Error ? a.message : String(a)).toLowerCase();
+      // 语义锚点：debugger 被外来扩展 frame 挤掉或在命令中途被分离时，重新 attach 后重放一次命令（upstream 1.0.94）。
       if (
-        (a instanceof Error ? a.message : String(a))
-          .toLowerCase()
-          .includes("debugger is not attached")
+        n.includes("debugger is not attached") ||
+        n.includes("detached while handling command") ||
+        (__cpIsForeignExtensionAttachError(a) && !(await this.isDebuggerAttached(e)))
       ) {
         await this.attachDebugger(e);
         return this.sendCommandOnce(e, t, r, o);
